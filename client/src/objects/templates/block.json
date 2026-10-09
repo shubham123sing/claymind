@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "block", "name": "Block", "category": "toy",
+  "materialPriors": { "wood": 0.55, "plastic": 0.2, "stone": 0.15, "foam": 0.1 },
+  "tags": ["stackable"],
+  "sdf": { "prim": "box", "size": [0.06, 0.06, 0.06], "round": 0.004, "at": [0, 0.03, 0] }
+}

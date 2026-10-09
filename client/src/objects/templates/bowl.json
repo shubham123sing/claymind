@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1, "id": "bowl", "name": "Bowl", "category": "container",
+  "materialPriors": { "ceramic": 0.55, "wood": 0.2, "plastic": 0.15, "glass": 0.1 },
+  "tags": ["hollow", "holds-liquid"],
+  "sdf": {
+    "op": "intersect",
+    "children": [
+      {
+        "op": "subtract", "k": 0.002,
+        "a": { "prim": "sphere", "r": 0.07, "at": [0, 0.07, 0] },
+        "b": { "prim": "sphere", "r": 0.064, "at": [0, 0.07, 0] }
+      },
+      { "prim": "box", "size": [0.2, 0.065, 0.2], "at": [0, 0.0325, 0] }
+    ]
+  }
+}

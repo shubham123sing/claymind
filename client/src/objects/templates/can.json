@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "can", "name": "Can", "category": "container",
+  "materialPriors": { "aluminium": 0.6, "steel": 0.25, "plastic": 0.15 },
+  "tags": ["cylinder", "rolls"],
+  "sdf": { "prim": "cylinder", "r": 0.033, "h": 0.12, "round": 0.004, "at": [0, 0.06, 0] }
+}

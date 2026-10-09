@@ -4,7 +4,7 @@
  * cannot keep up on this device (budget from the brief: keep sculpting smooth).
  */
 import type { LumpSpec, Stroke } from './sculpt-engine.js';
-import type { SculptRequest, SculptResponse } from './sdf-worker.js';
+import type { BakeResponse, SculptRequest, SculptResponse, WorkerResponse } from './sdf-worker.js';
 
 const DOWNGRADE_MS = 14; // worker p90 above ~one Quest frame -> lower resolution
 const RES_STEPS = [64, 56, 48, 40, 32];
@@ -23,10 +23,14 @@ export class SculptClient {
   stats = { workerP50: 0, workerP90: 0, rttP50: 0, strokesQueued: 0, downgrades: 0 };
   private rtt: number[] = [];
   last: SculptResponse | null = null;
+  private bakeWaiters: { msg: SculptRequest; resolve: (m: BakeResponse) => void }[] = [];
 
   constructor(res: number, size: number, lump: LumpSpec, private onMesh: (m: SculptResponse, resChanged: boolean) => void) {
     this.res = res;
-    this.worker.onmessage = (e: MessageEvent<SculptResponse>) => this.receive(e.data);
+    this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
+      if (e.data.type === 'baked') this.receiveBake(e.data);
+      else this.receive(e.data);
+    };
     this.post({ type: 'init', id: this.nextId++, res, size, lump });
   }
 
@@ -55,6 +59,28 @@ export class SculptClient {
   }
 
   /** Keep ordering: strokes queued before an undo must reach the worker first. */
+  /**
+   * Bake the current sculpt into an object (template match or the sculpt itself).
+   * Queued behind pending strokes so it sees the latest shape.
+   */
+  bake(opts: { scale: number; threshold: number; pieces: number; seed: number }): Promise<BakeResponse> {
+    return new Promise((resolve) => {
+      this.flushPendingAsControl();
+      const msg: SculptRequest = { type: 'bake', id: 0, ...opts };
+      this.bakeWaiters.push({ msg, resolve });
+      this.control.push(msg);
+      this.flush();
+    });
+  }
+
+  private receiveBake(m: BakeResponse): void {
+    this.inFlight--;
+    this.sentAt.delete(m.id);
+    const i = this.bakeWaiters.findIndex((w) => w.msg.id === m.id);
+    if (i >= 0) this.bakeWaiters.splice(i, 1)[0].resolve(m);
+    this.flush();
+  }
+
   private flushPendingAsControl(): void {
     for (const p of this.pending) this.control.push({ type: 'strokes', id: 0, action: p.action, strokes: p.strokes });
     this.pending = [];

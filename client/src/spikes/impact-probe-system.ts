@@ -45,7 +45,7 @@ export class ImpactProbeSystem extends createSystem({
         this.impacts++;
         this.maxImpulse = Math.max(this.maxImpulse, impulse);
         const o = e.object3D!;
-        bus.emit('physics:impact', { entityIndex: e.index, impulse, deltaV: dv, x: o.position.x, y: o.position.y, z: o.position.z });
+        bus.emit('physics:impact', { entityIndex: e.index, materialId: 'spike', piece: false, impulse, deltaV: dv, x: o.position.x, y: o.position.y, z: o.position.z });
         spike.hud?.set('impact', `#${this.impacts} v=${speedBefore.toFixed(2)} dv=${dv.toFixed(2)} m/s J=${impulse.toFixed(3)} Ns (max ${this.maxImpulse.toFixed(3)})`);
         if (e.getValue(SpikeBody, 'fastShot') === 1) {
           e.setValue(SpikeBody, 'fastShot', 2);

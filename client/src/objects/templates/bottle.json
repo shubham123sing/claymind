@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1, "id": "bottle", "name": "Bottle", "category": "container",
+  "materialPriors": { "glass": 0.6, "plastic": 0.3, "aluminium": 0.1 },
+  "tags": ["tall", "narrow-neck", "holds-liquid"],
+  "sdf": {
+    "op": "union", "k": 0.02,
+    "children": [
+      { "prim": "cylinder", "r": 0.032, "h": 0.12, "round": 0.006, "at": [0, 0.06, 0] },
+      { "prim": "cone", "r1": 0.03, "r2": 0.013, "h": 0.04, "at": [0, 0.135, 0] },
+      { "prim": "cylinder", "r": 0.012, "h": 0.04, "at": [0, 0.17, 0] }
+    ]
+  }
+}

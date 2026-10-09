@@ -1,8 +1,12 @@
 import { CameraSystem, World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
+import { bus } from './core/event-bus.js';
 import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
+import { InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
+import { ObjectSystem } from './objects/object-system.js';
+import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
 import { BallSpawnerSystem } from './spikes/ball-spawner-system.js';
 import { ImpactProbeSystem } from './spikes/impact-probe-system.js';
@@ -10,7 +14,7 @@ import { PinchProbeSystem } from './spikes/pinch-probe-system.js';
 import { spike } from './spikes/spike-state.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) (window as unknown as { __world: World }).__world = world;
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
   if (new URLSearchParams(location.search).has('spikes')) {
@@ -22,6 +26,11 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(BallSpawnerSystem);
     world.registerSystem(ImpactProbeSystem);
   } else {
+    // order matters (same priority = registration order): input first, then
+    // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
+    world.registerSystem(InputHubSystem);
+    world.registerSystem(ObjectSystem);
+    world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
   }
 });

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "plank", "name": "Plank", "category": "building",
+  "materialPriors": { "wood": 0.6, "steel": 0.15, "plastic": 0.15, "stone": 0.1 },
+  "tags": ["long", "flat", "bridge"],
+  "sdf": { "prim": "box", "size": [0.2, 0.02, 0.05], "round": 0.003, "at": [0, 0.01, 0] }
+}

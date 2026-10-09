@@ -2,8 +2,10 @@
  * Procedural sculpt audio (no asset files): a looping filtered-noise "squish"
  * whose loudness and pitch follow sculpting intensity and hand speed, plus
  * short UI ticks. Spatialised at the clay with a PannerNode.
- * The AudioContext is unlocked on the first user gesture (click / Enter XR).
+ * Uses the shared AudioContext (unlocked on the first user gesture).
  */
+import { audioContext, unlockAudio } from './audio-context.js';
+
 export class SculptAudio {
   private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
@@ -13,21 +15,11 @@ export class SculptAudio {
   private target = 0;
   private speed = 0;
 
-  constructor() {
-    const unlock = () => this.ensure();
-    addEventListener('pointerdown', unlock);
-    addEventListener('keydown', unlock);
-  }
-
-  /** Create / resume the context. Safe to call repeatedly. */
+  /** Create the squish graph once the shared context exists. Safe to call repeatedly. */
   ensure(): void {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
-      return;
-    }
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
+    unlockAudio();
+    const ctx = audioContext();
+    if (!ctx || this.ctx) return;
     this.ctx = ctx;
     // 2 s of brown-ish noise = soft, wet clay texture
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
@@ -59,6 +51,7 @@ export class SculptAudio {
 
   /** Per-frame: smooth the squish envelope and update 3D positions. */
   tick(dt: number, clay: { x: number; y: number; z: number }, head: { x: number; y: number; z: number; fx: number; fy: number; fz: number }): void {
+    if (!this.ctx && audioContext()) this.ensure();
     if (!this.ctx || !this.gain || !this.filter || !this.panner) return;
     const k = this.target > this.level ? 1 - Math.exp(-dt * 25) : 1 - Math.exp(-dt * 8); // fast attack, soft release
     this.level += (this.target - this.level) * k;
@@ -83,6 +76,7 @@ export class SculptAudio {
 
   /** Short UI tick. `pitch` 1 = normal. */
   tickSound(pitch = 1, volume = 0.15): void {
+    this.ensure();
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();

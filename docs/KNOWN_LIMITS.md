@@ -1,6 +1,6 @@
 # Known limits and spike results
 
-Last updated: 2026-10-09 (Phase 1). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
+Last updated: 2026-10-09 (Phase 2). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
 
 Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/emulator, needs a Quest number · **FALLBACK** = use the plan-B path.
 
@@ -45,6 +45,16 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - **Mouse sculpting:** dragging aims at the surface *as it was when the press began* (snapshot raycast). Aiming at the live surface drilled holes (carve) or grew towers toward the camera (add).
 - **Resolution:** 48³ (5.3 mm voxels). Carved edges show slight scalloping at grazing angles. 64³ costs about the same per stroke on desktop (`?res=64`); pick the default once Quest numbers are in. The client lowers resolution automatically if worker p90 > 14 ms.
 - **Not yet verified on a real Quest:** hand tracking feel, 72 fps while sculpting, wrist-menu reachability, real-table placement.
+
+### Phase 2 findings (objects + physics)
+- **Sleeping bodies:** a body that is teleported every frame with zero velocity (held / hovering) gets put to sleep by Havok, and setting `gravityFactor` back to 1 does **not** wake it. On release we always set a velocity via `PhysicsManipulation`, at least `[0, -0.01, 0]`.
+- **Entity index reuse:** disposing an entity and creating another soon after reuses the index. The physics worker and index-keyed maps then confuse the two bodies (seen as sinking through the table, no impacts, disappearing). Rules: create the replacement **before** disposing the old one, and debounce body rebuilds (material changes rebuild 400 ms after the last click; visuals change instantly).
+- **Convex hull mass:** Havok computes mass from the hull volume. We set `density = ρ × V_mesh / V_hull` so mass = ρ × true volume (a mug is not weighed as a full cylinder).
+- **Shape changes need a new body:** `PhysicsShape` fields (density, friction, restitution) are not reactive in IWSDK 1.0.1.
+- **Matching is shape-only:** features are proportions, fill, a 5-slice profile, open top and through-holes. A sculpted mug *without* a closed handle loop reads as mug, bowl or vase depending on proportions. Below 0.7 similarity the user's own sculpt is kept and labelled "a bit like a (template)?".
+- **Browser lifting:** the default browser view tops out near eye height, so the mouse wheel lifts a held object (up to 1.6 m) to allow breaking drops.
+- **Seated reach:** creations resting out of reach (floor, beyond 0.9 m) float back to the table after 1.5 s.
+- **Not verified on Quest:** hold/throw feel, bake time (desktop 76-192 ms), impact sound latency.
 
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).

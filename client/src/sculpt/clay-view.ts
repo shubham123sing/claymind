@@ -22,6 +22,10 @@ export class ClayView {
   private labelCanvas = document.createElement('canvas');
   private labelTex: CanvasTexture;
   private labelText = '';
+  private status: Sprite;
+  private statusCanvas = document.createElement('canvas');
+  private statusTex: CanvasTexture;
+  private statusText = '';
   triangles = 0;
 
   constructor() {
@@ -50,6 +54,16 @@ export class ClayView {
     this.label.scale.set(0.12, 0.03, 1); // ~2.5 cm text height at arm's length
     this.label.renderOrder = 5;
     this.ground.add(this.label);
+
+    this.statusCanvas.width = 768;
+    this.statusCanvas.height = 128;
+    this.statusTex = new CanvasTexture(this.statusCanvas);
+    this.statusTex.colorSpace = SRGBColorSpace;
+    this.status = new Sprite(new SpriteMaterial({ map: this.statusTex, transparent: true, depthWrite: false, depthTest: false }));
+    this.status.scale.set(0.18, 0.03, 1);
+    this.status.renderOrder = 6;
+    this.status.visible = false;
+    this.ground.add(this.status);
 
     for (let i = 0; i < 2; i++) {
       const c = new Mesh(
@@ -128,6 +142,7 @@ export class ClayView {
     this.shadow.scale.set(radius * 2.6, radius * 2.6, 1);
     this.ring.scale.set(radius + 0.012, radius + 0.012, 1);
     this.label.position.set(0, height + 0.035, 0);
+    this.status.position.set(0, height + 0.075, 0);
     const text = `${sizeCm[0].toFixed(1)} × ${sizeCm[1].toFixed(1)} × ${sizeCm[2].toFixed(1)} cm`;
     if (text === this.labelText) return;
     this.labelText = text;
@@ -143,6 +158,39 @@ export class ClayView {
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 256, 66);
     this.labelTex.needsUpdate = true;
+  }
+
+  /** One-line status above the clay ("Looking…", "Mug? · Ceramic 65%"); null hides it. */
+  setStatus(text: string | null, accent = '#e2733b'): void {
+    this.status.visible = text !== null;
+    if (text === null || text === this.statusText) return;
+    this.statusText = text;
+    const ctx = this.statusCanvas.getContext('2d')!;
+    ctx.clearRect(0, 0, 768, 128);
+    ctx.fillStyle = 'rgba(16,18,22,0.8)';
+    ctx.beginPath();
+    ctx.roundRect(8, 16, 752, 96, 48);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(64, 64, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#f4f1ec';
+    ctx.font = '600 46px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 96, 66, 640);
+    this.statusTex.needsUpdate = true;
+  }
+
+  /** Clay fade for the bring-to-life hand-off (0 = invisible). */
+  setOpacity(a: number): void {
+    const t = a < 0.999;
+    if (this.material.transparent !== t) {
+      this.material.transparent = t;
+      this.material.needsUpdate = true;
+    }
+    this.material.opacity = a;
+    this.material.depthWrite = !t;
   }
 
   setCursor(i: number, visible: boolean, x = 0, y = 0, z = 0, r = 0.01, color = 0xffffff): void {

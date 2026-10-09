@@ -1,14 +1,17 @@
 /**
- * Phase 1 sculpting: clay lump on the work surface, hand/mouse tools, mirror,
- * undo/redo, two-hand rotate/scale, size readout, squish audio, wrist menu.
+ * Sculpting: clay lump on the work surface, hand/mouse tools, mirror,
+ * undo/redo, two-hand rotate/scale, size readout, squish audio, wrist menu,
+ * and "Bring to life" (bake the sculpt into a physical object, all local).
  */
-import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Vector3 } from '@iwsdk/core';
+import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
-import type { Handedness } from '../core/event-bus.js';
+import { bus, Handedness } from '../core/event-bus.js';
 import { Hud } from '../devtools/hud.js';
-import { createHandState, HandState, InputProvider, Vec3 } from '../platform/input/hand-state.js';
-import { PointerProvider } from '../platform/input/pointer-provider.js';
-import { XrHandsProvider } from '../platform/input/xr-hands-provider.js';
+import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
+import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
+import { getTemplate } from '../objects/templates.js';
+import type { HandState, Vec3 } from '../platform/input/hand-state.js';
+import { input } from '../platform/input/input-system.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
 import { MenuItem, WristMenu } from '../ui/wrist-menu.js';
@@ -18,6 +21,11 @@ import type { BrushOp } from './sdf-grid.js';
 import { createHandToolState, HandToolState, SculptTool, ToolContext, TOOLS } from './tools.js';
 
 const GRID_SIZE = 0.25;
+/**
+ * Similarity needed before a template replaces the sculpt. A clean ball sculpt
+ * scores ~0.9; a dented lump scored 0.58 for "ball" and should stay the user's own.
+ */
+const TEMPLATE_THRESHOLD = 0.7;
 const SIDES: Handedness[] = ['left', 'right'];
 
 export class SculptSystem extends createSystem({}) {
@@ -27,11 +35,13 @@ export class SculptSystem extends createSystem({}) {
   private client!: SculptClient;
   private audio = new SculptAudio();
   private hud: Hud | null = null;
-  private hands: Record<Handedness, HandState> = { left: createHandState('left'), right: createHandState('right') };
+  private hands = input.hands;
   private toolState: Record<Handedness, HandToolState> = { left: createHandToolState(), right: createHandToolState() };
   private pinchOnClay: Record<Handedness, boolean> = { left: false, right: false };
-  private providers: InputProvider[] = [];
-  private pointer!: PointerProvider;
+  /** Bring-to-life state: while baking the clay "breathes" and tools pause. */
+  private baking = false;
+  private fade: { from: number; to: number; t0: number; ms: number } | null = null;
+  private statusUntil = 0;
   private tool: SculptTool = TOOLS[0];
   private mirror = false;
   private dominant: Handedness = 'right';
@@ -77,24 +87,18 @@ export class SculptSystem extends createSystem({}) {
       this.updateMeasure();
     });
 
-    this.pointer = new PointerProvider(
-      this.world.renderer.domElement,
-      this.world.camera,
-      (ray, dragging) => {
-        if (!dragging) this.dragSnapshot = null;
-        else if (!this.dragSnapshot) this.dragSnapshot = this.view.snapshot();
-        return ray.intersectObjects(this.dragSnapshot ?? this.view.meshes(), false)[0]?.point ?? null;
-      },
-      () => this.world.session != null,
-    );
-    this.providers = [new XrHandsProvider(this.world), this.pointer];
+    input.clayRaycast = (ray, dragging) => {
+      if (!dragging) this.dragSnapshot = null;
+      else if (!this.dragSnapshot) this.dragSnapshot = this.view.snapshot();
+      return ray.intersectObjects(this.dragSnapshot ?? this.view.meshes(), false)[0]?.point ?? null;
+    };
 
     const items = this.menuItems();
     this.menu = new WristMenu(items, () => this.audio.tickSound());
     this.world.createTransformEntity(this.menu.root);
     this.toolbar = new Toolbar(
       items,
-      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · Ctrl+Z undo',
+      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · Enter: bring to life · drag objects (wheel lifts) and release to drop',
       () => this.audio.tickSound(),
     );
 
@@ -117,10 +121,12 @@ export class SculptSystem extends createSystem({}) {
       },
     }));
     return [
+      { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
       ...tools,
       { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
       { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
+      { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
         selected: () => performance.now() - this.resetArmed < 2500,
@@ -197,7 +203,7 @@ export class SculptSystem extends createSystem({}) {
   update(delta: number): void {
     const dt = Math.min(delta, 0.1);
     this.frameMs = this.frameMs * 0.95 + delta * 1000 * 0.05;
-    for (const p of this.providers) if (p.active()) p.update(this.hands, dt);
+    this.updateFadeAndStatus();
 
     if (this.surfaceVersion !== surface.version) {
       this.surfaceVersion = surface.version;
@@ -206,7 +212,8 @@ export class SculptSystem extends createSystem({}) {
     this.handleKeys();
 
     const root = this.view.root;
-    if (this.pointer.active() && this.pointer.orbitDx !== 0) root.rotation.y += this.pointer.orbitDx * 0.008;
+    const pointer = input.pointer;
+    if (pointer?.active() && pointer.orbitDx !== 0) root.rotation.y += pointer.orbitDx * 0.008;
     root.updateMatrixWorld(true);
     this.inv.copy(root.matrixWorld).invert();
     if (this.aabb) {
@@ -217,12 +224,15 @@ export class SculptSystem extends createSystem({}) {
 
     const xr = this.world.session != null;
     const offHand: Handedness = this.dominant === 'right' ? 'left' : 'right';
-    const menuOpen = xr && this.menu.update(this.hands[offHand], this.hands[this.dominant], this.world.camera, dt, performance.now());
-    if (!xr) this.menu.root.visible = false;
+    // the off hand's palm-up menu is unavailable while that hand holds an object
+    const offBusy = input.claims[offHand] === 'object';
+    const menuOpen = xr && !offBusy && this.menu.update(this.hands[offHand], this.hands[this.dominant], this.world.camera, dt, performance.now());
+    if (!xr || offBusy) this.menu.root.visible = false;
+    if (!offBusy) input.claims[offHand] = menuOpen ? 'menu' : null;
 
     for (const side of SIDES) {
       const h = this.hands[side];
-      if (h.pinchStarted) this.pinchOnClay[side] = this.ctx.nearClay(h.pinchPoint, 0.015);
+      if (h.pinchStarted && !input.claims[side]) this.pinchOnClay[side] = this.ctx.nearClay(h.pinchPoint, 0.015);
     }
     const transforming = xr && this.updateTwoHand();
 
@@ -230,7 +240,7 @@ export class SculptSystem extends createSystem({}) {
     let speed = 0;
     for (const side of SIDES) {
       const h = this.hands[side];
-      const usable = h.tracked && h.stableFrames > 3 && !(menuOpen && side === offHand) && !transforming;
+      const usable = h.tracked && h.stableFrames > 3 && !input.claims[side] && !transforming && !this.baking;
       if (!usable) {
         this.toolState[side].mode = 'idle';
         this.view.setCursor(side === 'left' ? 0 : 1, false);
@@ -258,6 +268,97 @@ export class SculptSystem extends createSystem({}) {
     }
   }
 
+  // ---------- bring to life ----------
+
+  /**
+   * Bake the sculpt (worker): match a template or keep the sculpt, estimate the
+   * material, hand the object to the object system, then give the user fresh
+   * clay (the reset is an undoable action, so Undo brings the sculpt back).
+   */
+  async bringToLife(): Promise<void> {
+    if (this.baking) return;
+    this.baking = true;
+    const t0 = performance.now();
+    this.view.setStatus('Looking at your sculpt…');
+    this.statusUntil = Infinity;
+    this.audio.tickSound(1.2);
+    const root = this.view.root;
+    const res = await this.client.bake({ scale: root.scale.x, threshold: TEMPLATE_THRESHOLD, pieces: 6, seed: Math.floor(Math.random() * 1e9) });
+    if (!res.ok || !res.baked || !res.descriptor) {
+      this.showStatus('Shape some clay first, then bring it to life', 3000, '#d9534f');
+      this.baking = false;
+      return;
+    }
+    const d = res.descriptor;
+    const top = res.ranking[0];
+    const tmpl = res.templateId ? getTemplate(res.templateId) : undefined;
+    const best = top ? getTemplate(top.id) : undefined;
+    const sources = tmpl
+      ? [{ priors: tmpl.materialPriors, weight: 1 }, { priors: shapePriors(d), weight: 0.3 }]
+      : [{ priors: shapePriors(d), weight: 1 }, ...(best && top.similarity > 0.3 ? [{ priors: best.materialPriors, weight: top.similarity }] : [])];
+    const guesses = estimateMaterial(sources);
+    const mat = getMaterial(guesses[0].id);
+    const b = res.baked;
+    const creation: Creation = {
+      schemaVersion: CREATION_SCHEMA_VERSION,
+      id: newCreationId(),
+      createdAt: Date.now(),
+      descriptor: d,
+      name: tmpl ? tmpl.name : 'Sculpt',
+      category: tmpl?.category ?? 'sculpt',
+      source: tmpl ? 'template' : 'sculpt-only',
+      templateId: tmpl?.id ?? null,
+      matchScore: top?.similarity ?? 0,
+      bestGuess: best && top.similarity > 0.25 ? { id: best.id, name: best.name, similarity: top.similarity } : null,
+      materialId: mat.id,
+      materialConfidence: guesses[0].prob,
+      materialGuesses: guesses.slice(0, 4),
+      massKg: mat.density * b.volume,
+      sizeCm: [b.size[0] * 100, b.size[1] * 100, b.size[2] * 100],
+      volumeCm3: b.volume * 1e6,
+      timeToObject: (performance.now() - t0) / 1000,
+      kgNodeIds: [],
+    };
+    // object pose: sculpt bbox centre in world, clay orientation
+    root.updateMatrixWorld(true);
+    const p = new Vector3(...d.center).applyMatrix4(root.matrixWorld);
+    const q = root.getWorldQuaternion(new Quaternion());
+    const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name} ${Math.round(creation.materialConfidence * 100)}%`;
+    this.showStatus(guess, 3500, mat.visual.color);
+    bus.emit('creation:baked', { creation, baked: b, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w] });
+    console.info(
+      `[life] ${creation.name} (${creation.source}, match ${(creation.matchScore * 100).toFixed(0)}%) ${mat.id} ` +
+        `${(creation.massKg * 1000).toFixed(0)} g, ${res.ms.toFixed(0)} ms bake`,
+      res.ranking.slice(0, 3),
+    );
+    // the clay hands off to the object, then a fresh lump fades in
+    this.fade = { from: 1, to: 0, t0: performance.now(), ms: 250 };
+    setTimeout(() => {
+      this.client.beginAction();
+      this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
+      this.fade = { from: 0, to: 1, t0: performance.now(), ms: 600 };
+      this.baking = false;
+    }, 1400);
+  }
+
+  private showStatus(text: string, ms: number, accent?: string): void {
+    this.view.setStatus(text, accent);
+    this.statusUntil = performance.now() + ms;
+  }
+
+  private updateFadeAndStatus(): void {
+    const now = performance.now();
+    if (now > this.statusUntil) this.view.setStatus(null);
+    if (this.fade) {
+      const t = Math.min(1, (now - this.fade.t0) / this.fade.ms);
+      this.view.setOpacity(this.fade.from + (this.fade.to - this.fade.from) * t);
+      if (t >= 1 && this.fade.to === 1) this.fade = null;
+    }
+    // gentle "breathing" while the sculpt is being looked at
+    const breathe = this.baking && !this.fade ? 1 + Math.sin(now / 180) * 0.015 : 1;
+    for (const c of this.view.root.children) c.scale.setScalar(breathe);
+  }
+
   private updateCursor(side: Handedness, h: HandState): void {
     const idx = side === 'left' ? 0 : 1;
     const p = h.pointing ? h.indexTip : h.aimPoint;
@@ -268,7 +369,8 @@ export class SculptSystem extends createSystem({}) {
   /** Both hands pinching away from the clay: rotate (yaw) and scale the sculpt. */
   private updateTwoHand(): boolean {
     const l = this.hands.left, r = this.hands.right;
-    const active = l.tracked && r.tracked && l.pinching && r.pinching && !this.pinchOnClay.left && !this.pinchOnClay.right;
+    const active = l.tracked && r.tracked && l.pinching && r.pinching && !this.pinchOnClay.left && !this.pinchOnClay.right &&
+      !input.claims.left && !input.claims.right;
     if (!active) {
       this.twoHand = null;
       return false;
@@ -299,6 +401,7 @@ export class SculptSystem extends createSystem({}) {
       if (kb.getKeyDown(`Digit${i + 1}`)) this.tool = t;
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
+    if (kb.getKeyDown('Enter')) void this.bringToLife();
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);

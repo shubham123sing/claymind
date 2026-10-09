@@ -31,3 +31,13 @@ Notes:
 Notes:
 - Dirty marking now uses only the samples that actually changed, plus one sample for normals: 27 → 8-12 chunks per stroke.
 - Chunk meshes are separate draw calls (about 40-60 for a typical sculpt). If Quest is draw-call bound, merge idle chunks (IDEAS.md).
+
+## Phase 2 (2026-10-09)
+
+| Measurement | Device | Result |
+|---|---|---|
+| Bake (describe + match + fit + 56³ mesh + 6 fracture pieces) | Desktop browser worker | 76-192 ms |
+| Template library descriptors (10 templates, once) | Desktop | computed in the worker in the background while sculpting |
+| Dynamic bodies | - | ≤ 4 creations + ≤ 24 pieces (pieces live 7 s) |
+| Draw calls per creation | - | 3 (mesh, shadow, label); shards: one instanced mesh for all |
+| Quest 3: bake time, physics with 4 objects + pieces | Quest 3 | _pending device run_ |

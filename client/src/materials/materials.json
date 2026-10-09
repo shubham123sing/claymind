@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "materials": [
+    {
+      "id": "ceramic", "name": "Ceramic", "density": 2300, "friction": 0.55, "restitution": 0.12,
+      "fragility": { "breakSpeed": 2.4, "pieces": 6 }, "hardness": 0.8,
+      "sound": { "partials": [1, 2.76, 5.4], "base": 1900, "decay": 0.12, "noise": 0.25, "gain": 0.9 },
+      "visual": { "color": "#efe9df", "roughness": 0.25, "metalness": 0, "opacity": 1 },
+      "tags": ["hard", "brittle"]
+    },
+    {
+      "id": "glass", "name": "Glass", "density": 2500, "friction": 0.4, "restitution": 0.15,
+      "fragility": { "breakSpeed": 1.9, "pieces": 8 }, "hardness": 0.9,
+      "sound": { "partials": [1, 2.32, 4.25, 6.63], "base": 2600, "decay": 0.35, "noise": 0.12, "gain": 0.8 },
+      "visual": { "color": "#bfe3ea", "roughness": 0.05, "metalness": 0, "opacity": 0.45 },
+      "tags": ["hard", "brittle", "transparent"]
+    },
+    {
+      "id": "steel", "name": "Steel", "density": 7850, "friction": 0.45, "restitution": 0.3,
+      "fragility": null, "hardness": 1.0,
+      "sound": { "partials": [1, 2.92, 5.41, 8.93], "base": 1100, "decay": 0.9, "noise": 0.08, "gain": 1.0 },
+      "visual": { "color": "#a9b1b9", "roughness": 0.3, "metalness": 1, "opacity": 1 },
+      "tags": ["hard", "metal", "heavy"]
+    },
+    {
+      "id": "aluminium", "name": "Aluminium", "density": 2700, "friction": 0.42, "restitution": 0.28,
+      "fragility": null, "hardness": 0.7,
+      "sound": { "partials": [1, 2.71, 5.15], "base": 1500, "decay": 0.45, "noise": 0.15, "gain": 0.8 },
+      "visual": { "color": "#d3d8dd", "roughness": 0.35, "metalness": 1, "opacity": 1 },
+      "tags": ["metal", "light"]
+    },
+    {
+      "id": "wood", "name": "Wood", "density": 650, "friction": 0.6, "restitution": 0.25,
+      "fragility": null, "hardness": 0.5,
+      "sound": { "partials": [1, 2.4, 3.9], "base": 420, "decay": 0.06, "noise": 0.45, "gain": 0.9 },
+      "visual": { "color": "#a8784f", "roughness": 0.7, "metalness": 0, "opacity": 1 },
+      "tags": ["natural", "floats"]
+    },
+    {
+      "id": "plastic", "name": "Plastic", "density": 1050, "friction": 0.45, "restitution": 0.4,
+      "fragility": null, "hardness": 0.4,
+      "sound": { "partials": [1, 2.1, 3.3], "base": 900, "decay": 0.05, "noise": 0.5, "gain": 0.7 },
+      "visual": { "color": "#4f8fe0", "roughness": 0.4, "metalness": 0, "opacity": 1 },
+      "tags": ["light"]
+    },
+    {
+      "id": "rubber", "name": "Rubber", "density": 1150, "friction": 0.95, "restitution": 0.82,
+      "fragility": null, "hardness": 0.15,
+      "sound": { "partials": [1, 1.6], "base": 180, "decay": 0.05, "noise": 0.3, "gain": 0.9 },
+      "visual": { "color": "#e2733b", "roughness": 0.85, "metalness": 0, "opacity": 1 },
+      "tags": ["soft", "bouncy"]
+    },
+    {
+      "id": "stone", "name": "Stone", "density": 2600, "friction": 0.75, "restitution": 0.08,
+      "fragility": { "breakSpeed": 6.5, "pieces": 4 }, "hardness": 0.95,
+      "sound": { "partials": [1, 1.93, 3.3], "base": 520, "decay": 0.05, "noise": 0.6, "gain": 1.0 },
+      "visual": { "color": "#8d8a85", "roughness": 0.95, "metalness": 0, "opacity": 1 },
+      "tags": ["hard", "heavy", "natural"]
+    },
+    {
+      "id": "clay", "name": "Clay", "density": 1800, "friction": 0.85, "restitution": 0.02,
+      "fragility": null, "hardness": 0.1,
+      "sound": { "partials": [1], "base": 140, "decay": 0.04, "noise": 0.7, "gain": 0.8 },
+      "visual": { "color": "#c98a5e", "roughness": 0.85, "metalness": 0, "opacity": 1 },
+      "tags": ["soft", "natural"]
+    },
+    {
+      "id": "foam", "name": "Foam", "density": 60, "friction": 0.8, "restitution": 0.3,
+      "fragility": null, "hardness": 0.05,
+      "sound": { "partials": [1], "base": 220, "decay": 0.03, "noise": 0.5, "gain": 0.5 },
+      "visual": { "color": "#f2d65c", "roughness": 0.95, "metalness": 0, "opacity": 1 },
+      "tags": ["soft", "light", "floats"]
+    },
+    {
+      "id": "cloth", "name": "Cloth (rigid approx.)", "density": 300, "friction": 0.9, "restitution": 0.05,
+      "fragility": null, "hardness": 0.05,
+      "sound": { "partials": [1], "base": 160, "decay": 0.03, "noise": 0.8, "gain": 0.4 },
+      "visual": { "color": "#9c5a7d", "roughness": 1, "metalness": 0, "opacity": 1 },
+      "tags": ["soft", "light"]
+    },
+    {
+      "id": "paper", "name": "Paper", "density": 700, "friction": 0.6, "restitution": 0.1,
+      "fragility": null, "hardness": 0.1,
+      "sound": { "partials": [1, 3.1], "base": 650, "decay": 0.03, "noise": 0.85, "gain": 0.5 },
+      "visual": { "color": "#f3efe6", "roughness": 0.9, "metalness": 0, "opacity": 1 },
+      "tags": ["light"]
+    }
+  ],
+  "shapePriors": [
+    { "when": { "openTop": [0.55, 1] }, "priors": { "ceramic": 0.55, "glass": 0.15, "plastic": 0.2, "clay": 0.1 } },
+    { "when": { "aspect": [0, 0.25] }, "priors": { "ceramic": 0.35, "wood": 0.3, "plastic": 0.2, "clay": 0.15 } },
+    { "when": { "aspect": [0.8, 1.25], "elong": [0.8, 1], "fill": [0.4, 0.62] }, "priors": { "rubber": 0.5, "plastic": 0.2, "stone": 0.15, "clay": 0.15 } },
+    { "when": { "elong": [0, 0.35] }, "priors": { "wood": 0.5, "steel": 0.2, "plastic": 0.15, "clay": 0.15 } },
+    { "when": {}, "priors": { "clay": 0.45, "stone": 0.2, "plastic": 0.2, "wood": 0.15 } }
+  ]
+}

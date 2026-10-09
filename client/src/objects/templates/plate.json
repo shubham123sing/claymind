@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1, "id": "plate", "name": "Plate", "category": "container",
+  "materialPriors": { "ceramic": 0.65, "plastic": 0.15, "wood": 0.1, "glass": 0.1 },
+  "tags": ["flat", "thin"],
+  "sdf": {
+    "op": "subtract", "k": 0.003,
+    "a": { "prim": "cone", "r1": 0.085, "r2": 0.1, "h": 0.018, "at": [0, 0.009, 0] },
+    "b": { "prim": "cylinder", "r": 0.075, "h": 0.02, "at": [0, 0.019, 0] }
+  }
+}

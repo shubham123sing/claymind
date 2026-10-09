@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "ball", "name": "Ball", "category": "toy",
+  "materialPriors": { "rubber": 0.6, "plastic": 0.2, "foam": 0.1, "steel": 0.1 },
+  "tags": ["round", "bouncy", "rolls"],
+  "sdf": { "prim": "sphere", "r": 0.04, "at": [0, 0.04, 0] }
+}

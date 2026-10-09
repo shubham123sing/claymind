@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1, "id": "ring", "name": "Ring", "category": "toy",
+  "materialPriors": { "rubber": 0.45, "foam": 0.25, "plastic": 0.2, "wood": 0.1 },
+  "tags": ["ring", "hole", "rolls"],
+  "sdf": { "prim": "torus", "R": 0.045, "r": 0.018, "at": [0, 0.018, 0] }
+}
