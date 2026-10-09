@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "material-property",
+      "label": "things share the properties of what they are made of",
+      "if": [
+        { "s": "?x", "r": "made_of", "o": "?m" },
+        { "s": "?m", "r": "has_property", "o": "?p" }
+      ],
+      "then": { "s": "?x", "r": "has_property", "o": "?p" },
+      "factor": 1
+    },
+    {
+      "id": "concept-property",
+      "label": "things share the properties of what they are",
+      "if": [
+        { "s": "?x", "r": "is_a", "o": "?c" },
+        { "s": "?c", "r": "has_property", "o": "?p" }
+      ],
+      "then": { "s": "?x", "r": "has_property", "o": "?p" },
+      "factor": 0.95
+    },
+    {
+      "id": "concept-feature",
+      "label": "things have the typical features of what they are",
+      "if": [
+        { "s": "?x", "r": "is_a", "o": "?c" },
+        { "s": "?c", "r": "has_feature", "o": "?f" }
+      ],
+      "then": { "s": "?x", "r": "has_feature", "o": "?f" },
+      "factor": 0.9
+    },
+    {
+      "id": "feature-property",
+      "label": "a shape feature implies a property",
+      "if": [
+        { "s": "?x", "r": "has_feature", "o": "?f" },
+        { "s": "?f", "r": "implies", "o": "?p" }
+      ],
+      "then": { "s": "?x", "r": "has_property", "o": "?p" },
+      "factor": 1
+    },
+    {
+      "id": "property-behavior",
+      "label": "a property causes a behaviour",
+      "if": [
+        { "s": "?x", "r": "has_property", "o": "?p" },
+        { "s": "?p", "r": "causes", "o": "?b" }
+      ],
+      "then": { "s": "?x", "r": "has_behavior", "o": "?b" },
+      "factor": 1
+    },
+    {
+      "id": "feature-behavior",
+      "label": "a shape feature causes a behaviour",
+      "if": [
+        { "s": "?x", "r": "has_feature", "o": "?f" },
+        { "s": "?f", "r": "causes", "o": "?b" }
+      ],
+      "then": { "s": "?x", "r": "has_behavior", "o": "?b" },
+      "factor": 1
+    }
+  ]
+}

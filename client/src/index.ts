@@ -5,6 +5,7 @@ import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
 import { InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
+import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
@@ -29,6 +30,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
+    world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);

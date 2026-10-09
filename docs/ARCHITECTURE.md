@@ -1,4 +1,4 @@
-# Architecture (as built, Phase 2)
+# Architecture (as built, Phase 3)
 
 ```
 client/src
@@ -32,6 +32,17 @@ client/src
   physics/impact-system.ts    impacts from velocity deltas (no engine contact events)
   audio/impact-audio.ts       modal impact synthesis per material
   fx/shards.ts                instanced debris
+  kg/schema.ts, graph.ts      KG types; store with undoable change log + snapshot (see docs/KG_SCHEMA.md)
+  kg/reasoner.ts              forward chaining with provenance -> reasoning paths; contradictions
+  kg/rules/core.json          generic rules; kg/seed/knowledge.json: domain beliefs (editable)
+  kg/seed.ts, brain.ts        seeding (incl. from materials/templates); Brain facade: predictions, edits, creations
+  kg/migrations.ts            snapshot upgrades
+  storage/idb.ts, kg-repo.ts  IndexedDB (memory fallback), debounced autosave
+  kgview/focus.ts, layout.ts  which subgraph to show; layered layout
+  kgview/kg-view.ts           3D nodes/edges/handles, rubber band, path playback
+  kgview/brain-card.ts        predictions + "Why?" + Undo / Reset / Overview (poke or click)
+  kgview/kg-system.ts         placement, hand & mouse gestures (cut, connect, select), edit diffs
+  audio/ui-sounds.ts          tick / snip / chime
   ui/wrist-menu.ts            palm-up menu, poke-to-press (XR)
   ui/toolbar.ts               same menu items as HTML (browser)
   audio/sculpt-audio.ts       procedural squish + UI ticks (WebAudio, spatialised)
@@ -46,3 +57,5 @@ client/src
 **Bring to life:** `SculptSystem.bringToLife()` → worker `bake` (describe the sculpt; rank templates; if the best is ≥ 0.7, fit that template to the sculpt's footprint, size and orientation, else keep the sculpt; mesh; fracture into 6 pieces) → material estimate (template priors + shape rules) → `creation:baked` event → `ObjectSystem` spawns it (materialize → fly to the hand in XR / hover beside the clay in the browser) → the clay resets to a fresh lump (undoable).
 
 **Physics loop:** held objects are teleported with gravity off; on release they get the hand's velocity. `ImpactSystem` turns velocity jumps into `physics:impact` events → impact sound; above the material's `breakSpeed` the object is swapped for its pre-baked pieces plus shards.
+
+**Brain loop:** `creation:baked` → `Brain.addCreation` (is_a concept by shape match, made_of material by estimate, features and heaviness by measurement) → reasoner → predictions + paths → `focusGraph` → `layoutGraph` → `KGView`. User edits (cut / connect / material change via `object:material-set`) go through `Brain` as user-sourced, undoable changes. The card shows the before → after effect on the predictions. Autosave writes the snapshot to IndexedDB.

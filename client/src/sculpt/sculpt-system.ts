@@ -47,7 +47,7 @@ export class SculptSystem extends createSystem({}) {
   private dominant: Handedness = 'right';
   private menu!: WristMenu;
   private toolbar!: Toolbar;
-  private resetArmed = 0;
+  private resetArmed = -Infinity;
   private surfaceVersion = -1;
   /** Local AABB of the clay surface from the last mesh update. */
   private aabb: number[] | null = null;
@@ -127,6 +127,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
+      { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
         selected: () => performance.now() - this.resetArmed < 2500,
@@ -225,7 +226,8 @@ export class SculptSystem extends createSystem({}) {
     const xr = this.world.session != null;
     const offHand: Handedness = this.dominant === 'right' ? 'left' : 'right';
     // the off hand's palm-up menu is unavailable while that hand holds an object
-    const offBusy = input.claims[offHand] === 'object';
+    const offClaim = input.claims[offHand];
+    const offBusy = offClaim !== null && offClaim !== 'menu';
     const menuOpen = xr && !offBusy && this.menu.update(this.hands[offHand], this.hands[this.dominant], this.world.camera, dt, performance.now());
     if (!xr || offBusy) this.menu.root.visible = false;
     if (!offBusy) input.claims[offHand] = menuOpen ? 'menu' : null;
@@ -402,6 +404,7 @@ export class SculptSystem extends createSystem({}) {
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
     if (kb.getKeyDown('Enter')) void this.bringToLife();
+    if (kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);

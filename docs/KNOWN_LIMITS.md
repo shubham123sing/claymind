@@ -1,6 +1,6 @@
 # Known limits and spike results
 
-Last updated: 2026-10-09 (Phase 2). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
+Last updated: 2026-10-09 (Phase 3). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
 
 Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/emulator, needs a Quest number · **FALLBACK** = use the plan-B path.
 
@@ -55,6 +55,15 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - **Browser lifting:** the default browser view tops out near eye height, so the mouse wheel lifts a held object (up to 1.6 m) to allow breaking drops.
 - **Seated reach:** creations resting out of reach (floor, beyond 0.9 m) float back to the table after 1.5 s.
 - **Not verified on Quest:** hold/throw feel, bake time (desktop 76-192 ms), impact sound latency.
+
+### Phase 3 findings (Knowledge Graph)
+- **Layout:** a deterministic **layered** layout (creation → concept/material/feature → property → behaviour, with barycentre ordering) replaces the force layout in the brief. It reads as a reasoning chain, never jitters and needs no worker. Positions glide on changes.
+- **Connect relation:** instead of a radial relation menu, dragging node A onto node B picks the relation from the node types (e.g. Material → Property = `has_property`, Property → Behavior = `causes`). Impossible pairs are refused with a message. A radial menu can come in Phase 7 polish if needed.
+- **Pinch grace window:** when a pinch starts, the thumb-index midpoint is still moving (fingers closing + 1€ smoothing), so the first frame misses small targets. Brain grabs accept a target during the first 200 ms of a pinch. Object grabs have larger margins and did not need it.
+- **Multiple reasons:** cutting one belief may not change a prediction if another, stronger path supports it. The card says so ("predictions unchanged (stronger beliefs still support them)" or "… still 67% because Ball → bouncy").
+- **Browser camera:** while the brain is open in the browser, the camera eases back and up to frame the clay, graph and card; it returns when the brain closes. XR is unaffected.
+- **Storage:** IndexedDB, falling back to memory. A stuck database (e.g. a pending delete) times out after 1.5 s and the game starts from the seed brain.
+- **Not verified on Quest:** label readability at arm's length, reach to the graph (placed 36 cm above the table, 8 cm behind the clay), card poke comfort.
 
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).

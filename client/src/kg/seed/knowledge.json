@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "properties": {
+    "fragile": "fragile",
+    "hard": "hard",
+    "bouncy": "bouncy",
+    "flexible": "flexible",
+    "dense": "denser than water",
+    "buoyant": "lighter than water",
+    "heavy": "heavy",
+    "light": "light",
+    "can_hold_liquid": "can hold liquid",
+    "rolls_easily": "rolls easily",
+    "stackable": "stackable"
+  },
+  "behaviors": {
+    "breaks_when_dropped": "breaks when dropped",
+    "bounces": "bounces",
+    "sinks": "sinks in water",
+    "floats": "floats in water",
+    "rolls": "rolls",
+    "holds_liquid": "holds liquid",
+    "stacks": "stacks",
+    "falls_faster": "falls faster"
+  },
+  "features": {
+    "hollow": "hollow",
+    "round": "round",
+    "flat": "flat",
+    "thin": "thin-walled",
+    "tall": "tall",
+    "ring": "has a hole",
+    "long": "long"
+  },
+  "edges": [
+    ["prop:fragile", "causes", "beh:breaks_when_dropped", 0.85, "breakage"],
+    ["prop:bouncy", "causes", "beh:bounces", 0.9, "bounce"],
+    ["prop:rolls_easily", "causes", "beh:rolls", 0.9, "bounce"],
+    ["prop:dense", "causes", "beh:sinks", 0.9, "buoyancy"],
+    ["prop:buoyant", "causes", "beh:floats", 0.9, "buoyancy"],
+    ["prop:can_hold_liquid", "causes", "beh:holds_liquid", 0.85, "containers"],
+    ["prop:stackable", "causes", "beh:stacks", 0.8, "building"],
+    ["prop:heavy", "causes", "beh:falls_faster", 0.75, "planted"],
+    ["feat:hollow", "implies", "prop:can_hold_liquid", 0.8, "containers"],
+    ["feat:round", "implies", "prop:rolls_easily", 0.9, "bounce"],
+    ["feat:ring", "implies", "prop:rolls_easily", 0.5, "bounce"],
+    ["feat:flat", "implies", "prop:stackable", 0.8, "building"],
+    ["feat:long", "implies", "prop:stackable", 0.4, "building"],
+    ["feat:thin", "implies", "prop:fragile", 0.4, "breakage"],
+    ["prop:flexible", "contradicts", "prop:fragile", 0.9, "breakage"]
+  ],
+  "tagMap": {
+    "hollow": "feat:hollow",
+    "round": "feat:round",
+    "flat": "feat:flat",
+    "thin": "feat:thin",
+    "tall": "feat:tall",
+    "ring": "feat:ring",
+    "hole": "feat:ring",
+    "long": "feat:long",
+    "holds-liquid": "prop:can_hold_liquid",
+    "bouncy": "prop:bouncy",
+    "rolls": "prop:rolls_easily",
+    "stackable": "prop:stackable",
+    "brittle": "prop:fragile",
+    "soft": "prop:flexible"
+  },
+  "planted": [
+    {
+      "edge": "prop:heavy|causes|beh:falls_faster",
+      "truth": "In air, objects of any mass fall at the same rate (ignoring air drag). Phase 5's agent tests this with a drop experiment."
+    }
+  ]
+}

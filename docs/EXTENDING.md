@@ -1,6 +1,6 @@
 # Extending ClayMind
 
-Each recipe below is kept true as the code changes. Recipes for AI providers, challenges and KG rules will be added in the phases that introduce them.
+Each recipe below is kept true as the code changes. Recipes for AI providers and challenges will be added in the phases that introduce them.
 
 ## New material (data only)
 Add one entry to `client/src/materials/materials.json`:
@@ -42,3 +42,17 @@ The matcher, baker and fracture pick it up automatically. Run `npx vite-node tes
 | Smoothing | `OneEuroFilter3` params in `xr-hands-provider.ts` |
 | Brush radii | each tool in `tools.ts` |
 | Usable table distance | `MAX_TABLE_DISTANCE` in `surface-system.ts` |
+
+## New knowledge (data only)
+Edit `client/src/kg/seed/knowledge.json`:
+- add a property, behaviour or feature to `properties` / `behaviors` / `features` (`key: label`)
+- add a belief to `edges`: `[from, relation, to, confidence, domain]`, e.g. `["prop:sticky", "causes", "beh:stays_put", 0.8, "adhesion"]`
+- `tagMap` turns template `tags` into Concept edges
+
+Material properties are generated from `materials.json` in `kg/seed.ts`. New seed knowledge reaches existing players only after "Reset brain", because their saved brain is kept.
+
+## New KG rule (data only)
+Add an object to `client/src/kg/rules/core.json` (or a new file listed in `kg/brain.ts`):
+`{ "id", "label", "if": [{ "s": "?x", "r": "<relation>", "o": "?y" }, …], "then": { "s", "r", "o" }, "factor": 0..1 }`.
+Variables start with `?`. Add a golden test in `tests/unit/kg.test.ts` that checks the reasoning path.
+See `docs/KG_SCHEMA.md` for relations.

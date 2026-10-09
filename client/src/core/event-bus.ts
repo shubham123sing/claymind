@@ -35,6 +35,12 @@ export type AppEvents = {
   };
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
+  /** The user changed a creation's material (a correction the brain learns from). */
+  'object:material-set': { creationId: string; materialId: string };
+  /** The user picked up / interacted with a creation. */
+  'object:focus': { creationId: string };
+  /** Show / hide the brain. */
+  'kg:toggle': Record<string, never>;
   'object:broke': { creationId: string; materialId: string; x: number; y: number; z: number };
   'hand:pinch-start': { hand: Handedness; x: number; y: number; z: number };
   'hand:pinch-end': { hand: Handedness; x: number; y: number; z: number };

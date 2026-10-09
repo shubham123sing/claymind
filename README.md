@@ -8,7 +8,7 @@ Hands-only mixed-reality sculpting for Meta Quest 3/3S (WebXR). Shape clay, brin
 3. Quest: same Wi-Fi, open `https://<your-pc-ip>:8081/` in Quest Browser, accept the certificate warning, then press **Enter XR**.
 4. Tests: `npm test` · types: `npm run typecheck` · SDF bench: `npx vite-node tests/bench/sdf-bench.ts`
 
-## Controls (Phases 1-2: sculpt, bring to life, play)
+## Controls (Phases 1-3: sculpt, bring to life, play, edit the brain)
 - **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Shape, Add, Carve, Smooth, Mirror, Undo, Redo, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** cycles the material of the last object you touched.
 - **Browser:** drag on the clay = pull (Shape) or use the selected tool · Shift+drag = poke · drag empty space = turn · 1-4 tools · M mirror · Ctrl+Z / Ctrl+Y · **Enter = bring to life** · drag an object to move it, **mouse wheel lifts it**, release to drop or throw · H debug HUD (`?debug`).
 
@@ -21,3 +21,11 @@ Hands-only mixed-reality sculpting for Meta Quest 3/3S (WebXR). Shape clay, brin
 - `client/`: IWSDK + Vite + TypeScript app (`src/core`, `src/platform`, `src/sculpt`, `src/spikes`, `src/devtools`)
 - `docs/`: KNOWN_LIMITS, PERF, IDEAS (more per phase)
 - `server/`, `assets/`: arrive in Phases 2 and 4
+
+## The brain (Phase 3)
+After **Bring to life**, the AI's reasoning graph appears above the table (toggle: **Brain** in the menu, or `G`). Each prediction comes from the graph:
+- **Cut a belief:** pinch (or mouse-drag) an edge's middle handle and pull it away.
+- **Add a belief:** pinch-drag (or mouse-drag) from one node onto another.
+- **Why?** Tap a prediction on the card; its reasoning path lights up step by step.
+- **Undo edit / Reset brain / Overview** are on the card. The card shows what each edit changed, e.g. "bounces 67% → 0%".
+- The brain is saved in the browser (IndexedDB) and survives reloads.

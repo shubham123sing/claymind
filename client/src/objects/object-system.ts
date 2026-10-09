@@ -228,6 +228,7 @@ export class ObjectSystem extends createSystem({}) {
     rec.entity.setValue(PhysicsBody, 'gravityFactor', 0);
     rec.entity.setValue(PhysObject, 'held', 1);
     this.focus = rec.creation ? rec : this.focus;
+    if (rec.creation) bus.emit('object:focus', { creationId: rec.creation.id });
   }
 
   private release(rec: Live): void {
@@ -376,6 +377,7 @@ export class ObjectSystem extends createSystem({}) {
     n.material.emissiveIntensity = 0.35; // small flash to show the change
     c.massKg = n.massKg;
     this.focus = n;
+    bus.emit('object:material-set', { creationId: c.id, materialId });
   }
 
   // ---------------- frame ----------------
@@ -389,7 +391,7 @@ export class ObjectSystem extends createSystem({}) {
       for (const side of ['left', 'right'] as const) {
         const h = input.hands[side];
         if (!h.tracked) continue;
-        if (h.pinchStarted && input.claims[side] !== 'menu') {
+        if (h.pinchStarted && !input.claims[side]) {
           const rec = this.nearest(h.pinchPoint);
           if (rec) {
             rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
