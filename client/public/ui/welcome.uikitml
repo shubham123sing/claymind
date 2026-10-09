@@ -57,23 +57,22 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="heading">Hello, Immersive Web!</div>
+    <div class="heading">ClayMind</div>
     <Divider></Divider>
     <div class="sub-heading">
-      Build interactive browser, mixed-reality, and virtual-reality experiences
-      with Immersive Web SDK.
+      Shape the clay with your hands. Pinch to pull, poke to dent, open palm to smooth. Turn your left palm up for tools.
     </div>
   </div>
   <Button id="xr-button" class="button">
     <ButtonIcon>
       <RectangleGoggles></RectangleGoggles>
     </ButtonIcon>
-    <ButtonLabel class="button-label">Enter XR</ButtonLabel>
+    <ButtonLabel class="button-label">Start in mixed reality</ButtonLabel>
   </Button>
   <Button id="exit-button" class="button" style="display: none">
     <ButtonIcon>
       <LogIn></LogIn>
     </ButtonIcon>
-    <ButtonLabel class="button-label">Exit to Browser</ButtonLabel>
+    <ButtonLabel class="button-label">Exit</ButtonLabel>
   </Button>
 </Panel>

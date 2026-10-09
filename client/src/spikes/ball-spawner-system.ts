@@ -11,7 +11,8 @@ import {
 import { bus } from '../core/event-bus.js';
 import { runCameraProbe } from './camera-probe.js';
 import { SpikeBody } from './spike-components.js';
-import { spike, TABLE } from './spike-state.js';
+import { surface } from '../platform/surface/surface-system.js';
+import { spike } from './spike-state.js';
 
 const MATERIALS = [
   { name: 'rubber', density: 1100, restitution: 0.8, friction: 0.9, color: 0xe2733b },
@@ -87,14 +88,14 @@ export class BallSpawnerSystem extends createSystem({}) {
   }
 
   private run(action: string): void {
-    const top = spike.tableTopY;
-    if (action === 'drop') this.spawn(TABLE.centerX + (Math.random() - 0.5) * 0.1, top + 0.4, TABLE.centerZ, 0.03);
+    const top = surface.topY;
+    if (action === 'drop') this.spawn(surface.centerX + (Math.random() - 0.5) * 0.1, top + 0.4, surface.centerZ, 0.03);
     else if (action === 'fast') {
       const v = FAST_SPEEDS[this.fastIdx++ % FAST_SPEEDS.length];
-      this.spawn(TABLE.centerX, top + 0.5, TABLE.centerZ, 0.02, v);
+      this.spawn(surface.centerX, top + 0.5, surface.centerZ, 0.02, v);
     } else if (action === 'ten') {
       for (let i = 0; i < 10; i++)
-        this.spawn(TABLE.centerX + (i % 5 - 2) * 0.07, top + 0.3 + Math.floor(i / 5) * 0.1, TABLE.centerZ, 0.025);
+        this.spawn(surface.centerX + (i % 5 - 2) * 0.07, top + 0.3 + Math.floor(i / 5) * 0.1, surface.centerZ, 0.025);
     } else if (action === 'clear') {
       for (const b of this.bodies) b.dispose({ disposeResources: false });
       this.bodies.length = 0;

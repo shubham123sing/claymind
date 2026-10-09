@@ -8,8 +8,12 @@ Hands-only mixed-reality sculpting for Meta Quest 3/3S (WebXR). Shape clay, brin
 3. Quest: same Wi-Fi, open `https://<your-pc-ip>:8081/` in Quest Browser, accept the certificate warning, then press **Enter XR**.
 4. Tests: `npm test` · types: `npm run typecheck` · SDF bench: `npx vite-node tests/bench/sdf-bench.ts`
 
+## Controls (Phase 1: sculpting)
+- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Shape, Add, Carve, Smooth, Mirror, Undo, Redo, New clay) and poke a button with your right index finger.
+- **Browser:** drag on the clay = pull (Shape) or use the selected tool · Shift+drag = poke · drag empty space = turn · 1-4 tools · M mirror · Ctrl+Z / Ctrl+Y · H debug HUD (`?debug`).
+
 ## Phase 0 spike pages
-- `/`: MR scene. Ball drop on the table (real plane on Quest, virtual elsewhere), pinch probe, impact/CCD probe, camera probe (`?camera=1`). Keys: B drop · F fast shot · N spawn 10 · R clear · C camera.
+- `/?spikes`: MR scene. Ball drop on the table (real plane on Quest, virtual elsewhere), pinch probe, impact/CCD probe, camera probe (`?camera=1`). Keys: B drop · F fast shot · N spawn 10 · R clear · C camera.
 - `/spikes/sdf.html`: SDF sculpt benchmark (`?res=64` for 64³).
 - `/spikes/hands.html`: MediaPipe webcam hand tracking.
 

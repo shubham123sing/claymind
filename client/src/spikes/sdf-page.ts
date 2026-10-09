@@ -55,7 +55,7 @@ function flush(): void {
   const id = nextId++;
   sent.set(id, performance.now());
   inFlight = true;
-  const msg: SculptRequest = { type: 'strokes', id, strokes: pending };
+  const msg: SculptRequest = { type: 'strokes', id, action: 1, strokes: pending };
   pending = [];
   worker.postMessage(msg);
 }
@@ -92,7 +92,7 @@ worker.onmessage = (e: MessageEvent<SculptResponse>) => {
 
 function init(): void {
   for (const k of Object.keys(stats) as (keyof typeof stats)[]) stats[k].length = 0;
-  const msg: SculptRequest = { type: 'init', res, size: SIZE, radius: 0.06 };
+  const msg: SculptRequest = { type: 'init', id: 0, res, size: SIZE, lump: { x: 0, y: 0, z: 0, r: 0.06 } };
   worker.postMessage(msg);
 }
 init();

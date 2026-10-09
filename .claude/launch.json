@@ -4,8 +4,20 @@
     {
       "name": "claymind-http",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd client && set IWSDK_HTTP=1&& npx vite --port 5190 --strictPort"],
+      "runtimeArgs": [
+        "/c",
+        "cd client && set IWSDK_HTTP=1&& npx vite --port 5190 --strictPort"
+      ],
       "port": 5190
+    },
+    {
+      "name": "claymind-preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd client && set IWSDK_HTTP=1&& npx vite preview --port 5191 --strictPort"
+      ],
+      "port": 5191
     }
   ]
 }

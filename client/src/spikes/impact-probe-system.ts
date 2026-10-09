@@ -8,7 +8,8 @@
 import { createSystem, PhysicsBody } from '@iwsdk/core';
 import { bus } from '../core/event-bus.js';
 import { SpikeBody } from './spike-components.js';
-import { spike, TABLE } from './spike-state.js';
+import { surface } from '../platform/surface/surface-system.js';
+import { spike } from './spike-state.js';
 
 /** Gravity alone changes v by ~0.14 m/s per 72 Hz step; stay well above it. */
 const DV_THRESHOLD = 0.6;
@@ -56,8 +57,8 @@ export class ImpactProbeSystem extends createSystem({
       // Tunnelling: a fast shot that ends up well below the table top within its footprint.
       if (e.getValue(SpikeBody, 'fastShot') === 1) {
         const o = e.object3D!;
-        const overTable = Math.abs(o.position.x - TABLE.centerX) < 0.3 && Math.abs(o.position.z - TABLE.centerZ) < 0.2;
-        if (overTable && o.position.y < spike.tableTopY - 0.15) {
+        const overTable = Math.abs(o.position.x - surface.centerX) < 0.3 && Math.abs(o.position.z - surface.centerZ) < 0.2;
+        if (overTable && o.position.y < surface.topY - 0.15) {
           e.setValue(SpikeBody, 'fastShot', 3);
           this.tunnels++;
         }

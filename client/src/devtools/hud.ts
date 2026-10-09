@@ -12,6 +12,8 @@ export class Hud {
   private texture: CanvasTexture;
   private lastDraw = 0;
   private dirty = true;
+  private panel: Mesh;
+  visible = true;
 
   constructor(world: World) {
     this.dom = document.createElement('div');
@@ -28,15 +30,21 @@ export class Hud {
     this.ctx = this.canvas.getContext('2d')!;
     this.texture = new CanvasTexture(this.canvas);
     this.texture.colorSpace = SRGBColorSpace;
-    const panel = new Mesh(
+    const panel = (this.panel = new Mesh(
       new PlaneGeometry(0.4, 0.25),
       new MeshBasicMaterial({ map: this.texture, transparent: true, depthWrite: false }),
-    );
+    ));
     // Left of the table, angled toward a seated user; within ~70 cm reach.
     panel.position.set(-0.5, 1.15, -0.65);
     panel.rotation.y = 0.5;
     panel.renderOrder = 10;
     world.createTransformEntity(panel);
+  }
+
+  setVisible(v: boolean): void {
+    this.visible = v;
+    this.dom.style.display = v ? 'block' : 'none';
+    this.panel.visible = v;
   }
 
   set(key: string, value: string): void {

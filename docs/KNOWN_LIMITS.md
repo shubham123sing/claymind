@@ -1,6 +1,6 @@
 # Known limits and spike results
 
-Last updated: 2026-10-09 (Phase 0). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
+Last updated: 2026-10-09 (Phase 1). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
 
 Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/emulator, needs a Quest number · **FALLBACK** = use the plan-B path.
 
@@ -37,6 +37,14 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - The IWSDK managed Chromium (`iwsdk dev up`) **cannot launch from the agent sandbox on this PC** (`spawn UNKNOWN`). You can run it yourself with `npm run dev`.
 - For agent checks, `IWSDK_HTTP=1` serves plain HTTP on localhost (port 5190, via `.claude/launch.json`). Use HTTPS (default) for the headset.
 - The browser pane only animates while it is visible (rAF stops when hidden).
+
+### Phase 1 findings
+- **Table choice:** the first table-height plane is not necessarily the right one. In IWER's living room it was a coffee table 2.3 m away. We now pick the table plane nearest the user and only accept it if its edge is within 0.5 m of the head (seated reach). Otherwise the virtual table stays.
+- **Camera prompt:** `features.camera` is now **off**, so players get no permission prompt; `?spikes` registers `CameraSystem` itself. The built-in browser still reports a camera request on the *dev* server (IWER runtime), but not on the production build.
+- **IWER scripting:** hands and head can be scripted by setting `IWER_DEVICE.controlMode = 'programmatic'`. In `manual` mode the DevUI overwrites poses every frame. This is how the XR hand path and the wrist menu were exercised without a headset.
+- **Mouse sculpting:** dragging aims at the surface *as it was when the press began* (snapshot raycast). Aiming at the live surface drilled holes (carve) or grew towers toward the camera (add).
+- **Resolution:** 48³ (5.3 mm voxels). Carved edges show slight scalloping at grazing angles. 64³ costs about the same per stroke on desktop (`?res=64`); pick the default once Quest numbers are in. The client lowers resolution automatically if worker p90 > 14 ms.
+- **Not yet verified on a real Quest:** hand tracking feel, 72 fps while sculpting, wrist-menu reachability, real-table placement.
 
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).

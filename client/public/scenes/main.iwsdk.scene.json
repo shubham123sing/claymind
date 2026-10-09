@@ -19,9 +19,9 @@
         "asset": "welcome-panel"
       },
       "transform": {
-        "position": [0.45, 1.2, -0.7],
-        "rotationDeg": [0, -30, 0],
-        "scale": 0.25
+        "position": [0.6, 1.25, -0.75],
+        "rotationDeg": [0, -40, 0],
+        "scale": 0.16
       },
       "components": {
         "RayInteractable": {},
