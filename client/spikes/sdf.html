@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClayMind spike: SDF sculpt</title>
+    <style>
+      body { margin: 0; background: #1d1f24; color: #e8e8ea; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+      #hud { position: fixed; top: 12px; left: 12px; background: rgba(0,0,0,.6); padding: 10px 12px; border-radius: 10px; white-space: pre; font-family: ui-monospace, monospace; font-size: 13px; }
+      #btns { position: fixed; bottom: 12px; left: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+      button { font: inherit; padding: 10px 14px; border-radius: 10px; border: 0; background: #e2733b; color: #fff; cursor: pointer; }
+      button.alt { background: #3a3f4a; }
+    </style>
+  </head>
+  <body>
+    <div id="hud">loading…</div>
+    <div id="btns">
+      <button id="bench">Run benchmark (400 strokes)</button>
+      <button class="alt" id="res48">48³</button>
+      <button class="alt" id="res64">64³</button>
+      <button class="alt" id="reset">Reset clay</button>
+    </div>
+    <script type="module" src="../src/spikes/sdf-page.ts"></script>
+  </body>
+</html>
