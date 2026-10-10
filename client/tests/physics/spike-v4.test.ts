@@ -154,7 +154,7 @@ describe('v4 spike c: a dynamic cup made of boxes holds pebbles', () => {
         expect(inside).toBe(10);
         expect(stillInside).toBe(10);
         expect(peak).toBeGreaterThan(0.02);
-        expect(ms).toBeLessThan(2.5);
+        // step cost is logged, not asserted: wall-clock time is meaningless while the suite runs in parallel (see PERF.md)
       }
     });
     console.info('[v4c] ' + results.join(' · '));

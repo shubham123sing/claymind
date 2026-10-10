@@ -12,6 +12,11 @@
  * sits in the object), so joined objects keep their pieces exactly in place.
  * Colour: vertex colours = the paint where painted, else the piece's chosen
  * colour, else its material's colour. Colour and paint never change physics.
+ * Room (plan v4, section 6): Pin makes an object a static body resting where it
+ * is (snapped onto the table / floor within 3 cm), Unpin (or grabbing it) makes
+ * it live again; far objects can be grabbed with a hand ray; the Play Kit
+ * spawns pebbles, dominoes and a glass target; creations are packed for the
+ * Library (serialize / restore).
  */
 import {
   Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
@@ -31,10 +36,16 @@ import { distanceToRect, nearestSurfacePoint, surface } from '../platform/surfac
 import type { BakedMesh, BakedObject, BakedPiece } from './bake.js';
 import type { PartCollider } from './collider.js';
 import { Creation, newCreationId, syncMainMaterial } from './creation.js';
+import { bakeFromSdf } from './bake.js';
+import type { SavedCreation } from '../storage/library.js';
+import { fromSurfaceFrame, LIBRARY_SCHEMA, toSurfaceFrame } from '../storage/library.js';
+import { renderThumbnail } from './thumbnail.js';
 import { PhysObject } from './object-components.js';
 import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
 
-type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'pointer' | 'free';
+type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free';
+/** creation = made by the player; shard = a breakage piece (fades); prop = a Play Kit item. */
+type Kind = 'creation' | 'shard' | 'prop';
 
 /** Where a piece sits in its object (piece-local -> object-local). */
 interface Frame {
@@ -68,6 +79,11 @@ interface LivePart extends PartSpec {
 }
 
 interface Live {
+  kind: Kind;
+  /** Static body resting where it was pinned. */
+  pinned: boolean;
+  /** 'ray' grab: distance along the hand ray. */
+  rayDist: number;
   entity: Entity;
   /** The physics body's object (carries the compound description; transforms the view). */
   mesh: Mesh;
@@ -167,6 +183,8 @@ export class ObjectSystem extends createSystem({}) {
       bus.on('physics:impact', (e) => this.onImpact(e)),
       bus.on('object:cycle-material', () => this.cycleMaterial()),
       bus.on('object:join', () => bus.emit('ui:toast', { text: this.join() })),
+      bus.on('object:pin', () => bus.emit('ui:toast', { text: this.togglePin() })),
+      bus.on('playkit:spawn', () => bus.emit('ui:toast', { text: this.spawnPlayKit() })),
       bus.on('object:separate', () => bus.emit('ui:toast', { text: this.separate() })),
       bus.on('creation:set-material', (e) => {
         const rec = this.byCreation(e.creationId);
@@ -233,6 +251,7 @@ export class ObjectSystem extends createSystem({}) {
     const rec = this.spawnBody(parts, position, quaternion, { creation, mode: 'materialize' });
     this.syncCreation(rec);
     this.focus = rec;
+    this.changed(rec);
     if (DEBUG) {
       const parts = rec.props.parts.map((pp, i) => `${rec.parts[i].mat.id} ${(pp.mass * 1000).toFixed(0)} g`).join(' + ');
       console.info(`[object] spawned ${creation.name}: ${parts} = ${(rec.massKg * 1000).toFixed(0)} g, COM ${rec.props.com.map((v) => (v * 100).toFixed(1)).join(', ')} cm, contact ${rec.parts[rec.contact].mat.id}`);
@@ -262,8 +281,10 @@ export class ObjectSystem extends createSystem({}) {
 
   private spawnBody(
     specs: PartSpec[], position: number[], quaternion: number[],
-    o: { creation?: Creation | null; mode: Mode; piece?: boolean; velocity?: [number, number, number] },
+    o: { creation?: Creation | null; mode: Mode; piece?: boolean; velocity?: [number, number, number]; pinned?: boolean; kind?: Kind },
   ): Live {
+    const kind: Kind = o.kind ?? (o.creation ? 'creation' : o.piece ? 'shard' : 'prop');
+    const pinned = !!o.pinned;
     // what is drawn: one mesh per piece, placed by its frame
     const view = new Group();
     const parts: LivePart[] = specs.map((sp) => {
@@ -293,14 +314,15 @@ export class ObjectSystem extends createSystem({}) {
     const entity = this.world.createTransformEntity(carrier);
     const held = o.mode !== 'free';
     const contact = contactPart(inputs, q);
+    // a pinned object is static: it rests where it was put
     entity.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, density: 1000, friction: parts[contact].mat.friction, restitution: parts[contact].mat.restitution });
     entity.addComponent(PhysicsBody, {
-      state: PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: props.com,
+      state: pinned ? PhysicsState.Static : PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: props.com,
     });
     entity.addComponent(PhysObject, {
       materialId: parts[contact].mat.id, massKg: props.mass, piece: o.piece ? 1 : 0, held: held ? 1 : 0, ignoreImpactsUntil: performance.now() + 250,
     });
-    if (o.velocity) entity.addComponent(PhysicsManipulation, { linearVelocity: o.velocity });
+    if (o.velocity && !pinned) entity.addComponent(PhysicsManipulation, { linearVelocity: o.velocity });
 
     view.updateMatrixWorld(true);
     const bb = new Box3().setFromObject(view);
@@ -316,8 +338,9 @@ export class ObjectSystem extends createSystem({}) {
       labelEntity = this.world.createTransformEntity(label.sprite);
     }
     const rec: Live = {
+      kind, pinned, rayDist: 0,
       entity, mesh: carrier, view, parts, props, contact, focusPart: 0, glow: 0, massKg: props.mass, creation: o.creation ?? null, mode: o.mode, side: null,
-      t0: performance.now(), expires: o.piece ? performance.now() + PIECE_LIFETIME : Infinity,
+      t0: performance.now(), expires: kind === 'shard' ? performance.now() + PIECE_LIFETIME : Infinity,
       anchor: new Vector3().fromArray(position), offset: new Vector3(), halfH, radius, shadow, label, labelEntity,
       lastInteract: performance.now(), hist: [], pending: new Map(), pendingAt: 0, pendingBy: 'user', pendingConfidence: 1, outOfReachSince: 0,
     };
@@ -353,13 +376,13 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   private enforceLimits(): void {
-    const creations = this.live.filter((r) => r.creation && !r.creation.id.includes('#exp'));
+    const creations = this.live.filter((r) => r.kind === 'creation' && !r.creation!.id.includes('#exp'));
     while (creations.length > MAX_CREATIONS) {
       const old = creations.find((r) => r.mode === 'free') ?? creations[0];
       creations.splice(creations.indexOf(old), 1);
       this.dispose(old);
     }
-    const pieces = this.live.filter((r) => !r.creation);
+    const pieces = this.live.filter((r) => r.kind === 'shard');
     while (pieces.length > MAX_PIECES) this.dispose(pieces.shift()!);
   }
 
@@ -437,8 +460,10 @@ export class ObjectSystem extends createSystem({}) {
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);
     const hits = this.ray.intersectObjects(this.live.map((r) => r.view), true);
     if (!hits.length) return;
-    const rec = this.live.find((r) => r.parts.some((lp) => lp.view === hits[0].object))!;
-    rec.focusPart = Math.max(0, rec.parts.findIndex((lp) => lp.view === hits[0].object));
+    let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hits[0].object))!;
+    const touched = Math.max(0, rec.parts.findIndex((lp) => lp.view === hits[0].object));
+    if (rec.pinned) rec = this.setPinned(rec, false);
+    rec.focusPart = touched;
     this.pointerDepth = hits[0].distance;
     this.pointerPlane.copy(hits[0].point);
     this.pointerLift = 0;
@@ -683,6 +708,7 @@ export class ObjectSystem extends createSystem({}) {
       }
     }
     const n = this.rebuild(rec, {});
+    this.changed(n);
     for (const [i, id] of changed) {
       bus.emit('object:material-set', { creationId: c.id, materialId: c.materialId, by: rec.pendingBy, confidence: rec.pendingConfidence, part: i, partMaterialId: id });
     }
@@ -690,12 +716,14 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   /** Rebuild a creation's body (new materials or parts), keeping how it is held. */
-  private rebuild(rec: Live, o: { parts?: PartSpec[]; flash?: number; free?: boolean; velocity?: [number, number, number] }): Live {
+  private rebuild(rec: Live, o: { parts?: PartSpec[]; flash?: number; free?: boolean; velocity?: [number, number, number]; pinned?: boolean; pose?: { p: number[]; q: number[] } }): Live {
     const c = rec.creation!;
     const specs = o.parts ?? rec.parts.map((x) => this.specOf(x));
+    const pinned = o.pinned ?? rec.pinned;
+    if (pinned) o.free = true; // a pinned object stays where it is
     const mode: Mode = o.free ? 'free' : rec.mode === 'free' || rec.mode === 'materialize' ? 'hover' : rec.mode;
     const side = o.free ? null : rec.side;
-    const pos = rec.mesh.position.toArray(), quat = rec.mesh.quaternion.toArray();
+    const pos = o.pose?.p ?? rec.mesh.position.toArray(), quat = o.pose?.q ?? rec.mesh.quaternion.toArray();
     const anchor = rec.mode === 'free' ? rec.mesh.position.clone() : rec.anchor.clone();
     const offset = rec.offset.clone();
     const wasPointer = !o.free && this.pointerHeld === rec;
@@ -704,7 +732,7 @@ export class ObjectSystem extends createSystem({}) {
     // entity index, the new entity reuses it in the same frame, and the physics
     // worker / impact tracking then confuse the two bodies (seen as a body that
     // sleeps mid-air, sinks through the table and reports no impacts).
-    const n = this.spawnBody(specs, pos, quat, { creation: c, mode, velocity: o.velocity });
+    const n = this.spawnBody(specs, pos, quat, { creation: c, mode, velocity: pinned ? undefined : o.velocity, pinned, kind: rec.kind });
     this.dispose(rec);
     n.anchor.copy(anchor);
     n.offset.copy(offset);
@@ -716,6 +744,149 @@ export class ObjectSystem extends createSystem({}) {
     this.syncCreation(n);
     if (this.focus === rec || !this.focus) this.focus = n;
     return n;
+  }
+
+  // ---------------- room: pin, library, play kit, distance grab ----------------
+
+  private changed(rec: Live): void {
+    if (rec.kind === 'creation' && rec.creation && !rec.creation.id.includes('#exp')) bus.emit('creation:changed', { creationId: rec.creation.id });
+  }
+
+  /** Pin / unpin the object the player last touched. */
+  togglePin(): string {
+    const rec = this.focus;
+    if (!rec?.creation || !this.live.includes(rec)) return 'Touch an object first';
+    const n = this.setPinned(rec, !rec.pinned);
+    return n.pinned ? 'Pinned: it stays here (grab it to unpin)' : 'Unpinned: it is live again';
+  }
+
+  /** Pinned = a static body resting where it is (snapped onto the table / floor within 3 cm). */
+  setPinned(rec: Live, pinned: boolean): Live {
+    if (rec.pinned === pinned) return rec;
+    const pose = { p: rec.mesh.position.toArray(), q: rec.mesh.quaternion.toArray() };
+    if (pinned) pose.p[1] += this.snapOffset(rec);
+    const n = this.rebuild(rec, { pinned, free: true, pose, velocity: pinned ? undefined : [0, -0.01, 0], flash: 0.3 });
+    this.changed(n);
+    return n;
+  }
+
+  /** How far to move an object down so it rests on the table / floor, if it is within 3 cm above (or 1 cm into) it. */
+  private snapOffset(rec: Live): number {
+    let bottom = Infinity;
+    const q = rec.mesh.quaternion;
+    for (const lp of rec.parts) {
+      const p = lp.bodyPositions;
+      for (let i = 0; i < p.length; i += 9) bottom = Math.min(bottom, this.v.set(p[i], p[i + 1], p[i + 2]).applyQuaternion(q).y);
+    }
+    bottom += rec.mesh.position.y;
+    const x = rec.mesh.position.x, z = rec.mesh.position.z;
+    const top = distanceToRect(surface, x, z) === 0 ? surface.topY : 0;
+    const gap = bottom - top;
+    return gap < 0.03 && gap > -0.01 ? -gap + 0.0005 : 0;
+  }
+
+  /** Everything the Library needs to bring this creation back (null if gone). */
+  serialize(id: string): SavedCreation | null {
+    const rec = this.byCreation(id);
+    if (!rec?.creation || rec.kind !== 'creation') return null;
+    const local = toSurfaceFrame(surface, rec.mesh.position.toArray() as [number, number, number], rec.mesh.quaternion.toArray() as [number, number, number, number]);
+    const { aiStatus: _drop, ...creation } = rec.creation;
+    void _drop;
+    return {
+      schemaVersion: LIBRARY_SCHEMA, id, savedAt: Date.now(), creation: structuredClone(creation), pinned: rec.pinned, pose: local,
+      thumb: renderThumbnail(this.world.renderer, rec.view),
+      parts: rec.parts.map((lp) => ({
+        label: lp.label, materialId: lp.mat.id, color: lp.color ?? null, mesh: lp.mesh, shards: lp.shards, collider: lp.collider, frame: lp.frame,
+      })),
+    };
+  }
+
+  /**
+   * Bring a saved creation into the room: pinned ones go back to their spot on
+   * the table ('saved'), or it materialises beside the clay ('present').
+   * If it is already in the room it is just highlighted.
+   */
+  restore(saved: SavedCreation, where: 'saved' | 'present', near?: number[]): string {
+    const here = this.byCreation(saved.id);
+    if (here) {
+      this.glow(here, 0.6);
+      this.focus = here;
+      return 'It is already here (glowing)';
+    }
+    const specs: PartSpec[] = saved.parts.map((sp) => ({
+      label: sp.label, mat: getMaterial(sp.materialId), mesh: sp.mesh, shards: sp.shards, collider: sp.collider, frame: sp.frame, color: sp.color,
+    }));
+    const creation: Creation = structuredClone(saved.creation);
+    if (where === 'saved') {
+      const w = fromSurfaceFrame(surface, saved.pose.p, saved.pose.q);
+      const rec = this.spawnBody(specs, w.p, w.q, { creation, mode: 'free', pinned: saved.pinned, velocity: [0, -0.01, 0] });
+      this.syncCreation(rec);
+      this.glow(rec, 0.4);
+      this.enforceLimits();
+      return saved.pinned ? 'Back where you pinned it' : 'Back on the table';
+    }
+    const at = near ?? rec0Anchor(this.world.camera.getWorldPosition(this.v));
+    const rec = this.spawnBody(specs, at, fromSurfaceFrame(surface, [0, 0, 0], saved.pose.q).q, { creation, mode: 'materialize' });
+    this.syncCreation(rec);
+    this.focus = rec;
+    this.enforceLimits();
+    return `${creation.name} is back`;
+  }
+
+  /** Ids of the creations in the room now. */
+  liveCreationIds(): string[] {
+    return this.live.filter((r) => r.kind === 'creation' && r.creation).map((r) => r.creation!.id);
+  }
+
+  /** The Play Kit: pebbles, a row of dominoes and a glass target plate on the table, left of the clay. */
+  spawnPlayKit(): string {
+    for (const r of [...this.live]) if (r.kind === 'prop') this.dispose(r);
+    const kit = playKitMeshes();
+    this.world.camera.getWorldPosition(this.v);
+    nearestSurfacePoint(this.v.x, this.v.z, 0.12, this.xz);
+    this.world.camera.getWorldDirection(this.v2);
+    const right = this.v3.set(-this.v2.z, 0, this.v2.x).normalize();
+    const fwd = new Vector3(this.v2.x, 0, this.v2.z).normalize();
+    const base = new Vector3(this.xz[0], surface.topY, this.xz[1]).addScaledVector(right, -0.22);
+    const yaw = Math.atan2(-fwd.x, -fwd.z);
+    const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw).toArray();
+    const spec = (mesh: BakedMesh, mat: string, shards: BakedPiece[] = [], color: string | null = null): PartSpec[] => [{ label: 0, mat: getMaterial(mat), mesh, shards, frame: IDENTITY, color }];
+    const at = (dx: number, dy: number, dz: number) => base.clone().addScaledVector(right, dx).addScaledVector(fwd, dz).setY(surface.topY + dy).toArray();
+    // dominoes: a row standing on the table, going away from the viewer
+    for (let i = 0; i < 7; i++) this.spawnBody(spec(kit.domino, 'wood', [], i % 2 ? '#e2733b' : '#f4f1ec'), at(0.02, 0.0226, -0.02 - i * 0.032), q, { mode: 'free', kind: 'prop', velocity: [0, -0.01, 0] });
+    // the glass target plate, lying flat further left
+    this.spawnBody(spec(kit.plate, 'glass', kit.plateShards), at(-0.1, 0.0035, -0.08), q, { mode: 'free', kind: 'prop', velocity: [0, -0.01, 0] });
+    // pebbles: a little heap in front
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      this.spawnBody(spec(kit.pebble, i % 3 ? 'stone' : 'rubber'), at(-0.08 + Math.cos(a) * 0.03, 0.012 + (i % 2) * 0.02, 0.06 + Math.sin(a) * 0.03), q, { mode: 'free', kind: 'prop', velocity: [0, -0.01, 0] });
+    }
+    return 'Play Kit: pebbles, dominoes and a glass plate';
+  }
+
+  /** XR: a ray from the shoulder through the pinch grabs a far object (it keeps its distance along the ray). */
+  private rayGrab(side: Handedness, h: typeof input.hands.left): void {
+    this.handRay(side, h);
+    const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
+    if (!hit || hit.distance > 3) return;
+    let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hit.object));
+    if (!rec) return;
+    if (rec.pinned) rec = this.setPinned(rec, false);
+    rec.focusPart = Math.max(0, rec.parts.findIndex((lp) => lp.view === hit.object));
+    rec.rayDist = hit.distance;
+    rec.offset.copy(rec.mesh.position).sub(hit.point);
+    this.hold(rec, 'ray', side);
+  }
+
+  /** Hand ray: from an estimated shoulder through the pinch point. */
+  private handRay(side: Handedness, h: typeof input.hands.left): void {
+    const head = this.world.camera.getWorldPosition(this.v3);
+    this.world.camera.getWorldDirection(this.v2);
+    const right = this.tmp.set(-this.v2.z, 0, this.v2.x).normalize();
+    const shoulder = head.addScaledVector(right, side === 'right' ? 0.18 : -0.18);
+    shoulder.y -= 0.25;
+    this.ray.ray.origin.copy(shoulder);
+    this.ray.ray.direction.set(h.pinchPoint[0] - shoulder.x, h.pinchPoint[1] - shoulder.y, h.pinchPoint[2] - shoulder.z).normalize();
   }
 
   // ---------------- join / separate ----------------
@@ -737,6 +908,7 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.creation?.parts[part]) rec.creation.parts[part].color = color;
     recolor(lp.view, lp.mesh, color ?? getMaterial(rec.pending.get(part) ?? lp.mat.id).visual.color);
     this.glow(rec, 0.25);
+    this.changed(rec);
     rec.lastInteract = performance.now();
     return true;
   }
@@ -785,6 +957,8 @@ export class ObjectSystem extends createSystem({}) {
     this.glow(s, 0.4);
     this.syncCreation(s);
     this.focus = s;
+    this.changed(n);
+    this.changed(s);
     this.enforceLimits();
     void n;
     return `Separated: ${part.mat.name} piece`;
@@ -815,9 +989,11 @@ export class ObjectSystem extends createSystem({}) {
     a.creation.parts.push(...b.creation!.parts.map((x) => ({ ...x })));
     const specs = [...a.parts.map((x) => this.specOf(x)), ...moved];
     const free = a.mode === 'free';
+    bus.emit('creation:removed', { creationId: b.creation!.id });
     this.dispose(b);
     const n = this.rebuild(a, { parts: specs, free, velocity: free ? [0, -0.01, 0] : undefined, flash: 0.5 });
     this.focus = n;
+    this.changed(n);
     return `Joined: ${n.parts.length} pieces, ${Math.round(n.massKg * 1000)} g`;
   }
 
@@ -833,12 +1009,13 @@ export class ObjectSystem extends createSystem({}) {
         const h = input.hands[side];
         if (!h.tracked) continue;
         if (h.pinchStarted && !input.claims[side]) {
-          const rec = this.nearest(h.pinchPoint);
+          let rec = this.nearest(h.pinchPoint);
           if (rec) {
+            if (rec.pinned) rec = this.setPinned(rec, false);
             rec.focusPart = this.nearestPart(rec, h.pinchPoint);
             rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
             this.hold(rec, 'pinch', side);
-          }
+          } else this.rayGrab(side, h);
         }
       }
     }
@@ -942,6 +1119,19 @@ export class ObjectSystem extends createSystem({}) {
         this.teleport(rec, this.v);
         break;
       }
+      case 'ray': {
+        const h = input.hands[rec.side!];
+        if (!h.tracked || h.pinchEnded || !h.pinching) {
+          this.release(rec);
+          break;
+        }
+        this.handRay(rec.side!, h);
+        this.v.copy(this.ray.ray.direction).multiplyScalar(rec.rayDist).add(this.ray.ray.origin).add(rec.offset);
+        const floor = distanceToRect(surface, this.v.x, this.v.z) === 0 ? surface.topY : 0;
+        this.v.y = Math.max(this.v.y, floor + rec.halfH + 0.005);
+        this.teleport(rec, this.v);
+        break;
+      }
       case 'pointer': {
         this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);
         // drag on an upright plane through the grab point, facing the viewer:
@@ -976,7 +1166,7 @@ export class ObjectSystem extends createSystem({}) {
           this.dispose(rec);
           return;
         }
-        if (rec.creation) this.recallIfOutOfReach(rec, now);
+        if (rec.creation && !rec.pinned) this.recallIfOutOfReach(rec, now);
         break;
     }
     if (rec.glow > 0 && rec.mode !== 'materialize') this.glow(rec, Math.max(0, rec.glow - dt * 1.2));
@@ -1067,6 +1257,29 @@ function mainColor(rec: Live): string {
     if (pp.mass > rec.props.parts[best].mass) best = i;
   });
   return rec.parts[best].mat.visual.color;
+}
+
+/** Where restored creations appear: on the table in front of the viewer (beside the clay). */
+function rec0Anchor(eye: Vector3): number[] {
+  const xz = [0, 0];
+  nearestSurfacePoint(eye.x, eye.z, 0.2, xz);
+  return [xz[0], surface.topY + 0.12, xz[1]];
+}
+
+let kitCache: { pebble: BakedMesh; domino: BakedMesh; plate: BakedMesh; plateShards: BakedPiece[] } | null = null;
+
+/** Play Kit shapes, baked once (object-local, centred). */
+function playKitMeshes() {
+  if (kitCache) return kitCache;
+  const box = (hx: number, hy: number, hz: number) => (x: number, y: number, z: number) => {
+    const qx = Math.abs(x) - hx, qy = Math.abs(y) - hy, qz = Math.abs(z) - hz;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0);
+  };
+  const pebble = bakeFromSdf((x, y, z) => Math.hypot(x, y, z) - 0.009, 0.018, { res: 20, pieces: 1 }).parts[0].mesh;
+  const domino = bakeFromSdf(box(0.011, 0.0225, 0.004), 0.045, { res: 28, pieces: 1 }).parts[0].mesh;
+  const plateBake = bakeFromSdf((x, y, z) => Math.max(Math.hypot(x, z) - 0.06, Math.abs(y) - 0.0035), 0.12, { res: 40, pieces: 6 });
+  kitCache = { pebble, domino, plate: plateBake.parts[0].mesh, plateShards: plateBake.parts[0].shards };
+  return kitCache;
 }
 
 const tmpCol = new Color();

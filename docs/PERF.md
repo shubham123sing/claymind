@@ -69,3 +69,12 @@ Notes:
 | Bake of a 2-piece sculpt | Desktop worker | not measured separately yet (per-part mesh + up to 6 shards per part at 24³; single-piece bakes unchanged) |
 | Extra per-frame cost | | none: parts are geometry groups of one mesh, one body per object |
 | Frame time on Quest | | not measured (no device run yet) |
+
+## Phase 8 (2026-10-10)
+
+| Measurement | Where | Result |
+|---|---|---|
+| Whole physics world with a 40-box cup + 10 pebbles | Desktop, headless, alone | 0.54 ms per 72 Hz step (12 ms when the whole test suite runs in parallel on the same machine: not asserted) |
+| Library thumbnail | Desktop | 128 px JPEG, ~3 KB, one offscreen render |
+| Play Kit | | 18 bodies (10 pebbles, 7 dominoes, 1 plate); meshes baked once |
+| Frame time on Quest | | not measured |

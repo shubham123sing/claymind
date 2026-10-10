@@ -146,6 +146,16 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 - **Not verified:** fingertip painting in XR, Quest frame time while painting (desktop worker ~0.6 ms per dab).
 - **Only the clay can be painted**; an object's pieces can be recoloured (Whole piece) but not painted after Bring to life.
 
+### Phase 8 (room placement)
+- **Acceptance in the browser:** a sculpted cup, painted with a yellow ring and a blue band, made stone, put near the table edge and pinned; after a reload it came back pinned at the same spot (surface frame x 0.3398 / y 0.0471 / z 0.101, identical), stone, all 7,772 painted vertices. Play Kit pebbles poured over it: 10/10 inside the pinned cup.
+- **Pin / Unpin** (menu, `P`): pinned = a static Havok body (the compound with its boxes, so pinned cups hold things), snapped down onto the table / floor when its lowest point is within 3 cm above (or 1 cm into) it. Grabbing a pinned object unpins it. Pinned objects are never recalled.
+- **Library** (menu, `L`): every creation is saved to IndexedDB automatically (0.8 s after it changes: bring to life, material, colour, pin, join, separate), with its baked pieces (meshes, paint, colliders, shards, frames), thumbnail (128 px JPEG, ~3 KB) and pose relative to the work surface. Pinned creations come back on load; others wait on the shelf; tap a thumbnail to bring one back (pinned: to its spot; else beside the clay), tap x twice to delete. A creation joined into another is removed from the Library. Breaking does not save, so the Library keeps the last whole version.
+- **Anchors not used:** pinned poses are stored relative to the work surface (spike 6a-d is still unverified on Quest). When a real table is found after loading, a toast points to Library -> "Re-place pinned". If the table is a different size, pinned things keep their offset from its centre.
+- **Size per saved creation:** the baked meshes and shards are stored as-is (a 2-piece object is roughly 1-3 MB). Not yet measured how many fit within Quest Browser's storage quota.
+- **Play Kit** (menu, `O`): 10 pebbles (stone and rubber), a row of 7 wooden dominoes, a glass plate that breaks; spawned on the table left of the clay; pressing it again resets the kit. Kit items are props: grabbable, never saved, not limited like shards.
+- **Distance grab (XR):** a pinch that is not near an object casts a ray from an estimated shoulder through the pinch; the object it hits (up to 3 m) follows the ray at its distance. **Not verified** (needs the headset / emulator hands); in the browser the mouse already grabs at any distance.
+- **Seen while testing:** the browser pane's mouse can be used by the person watching at the same time; strokes then appear on the clay (13 drag strokes in 3 s without any scripted input). Not a bug, noted so the spiky clay in screenshots is explained.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

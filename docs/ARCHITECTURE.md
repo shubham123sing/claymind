@@ -29,6 +29,9 @@ client/src
   objects/collider.ts         per-piece collider: hull, or <= 40 voxel boxes for hollow pieces
   ui/material-picker.ts       ring of 8 materials on the touched piece (poke / click)
   ui/color-picker.ts          hue ring, lightness, swatches, whole-piece colour, paint / eraser, brush size
+  ui/library.ts               auto-save to IndexedDB, restore pinned creations, the Library shelf panel
+  storage/library.ts          saved-creation format, table-relative poses
+  objects/thumbnail.ts        offscreen thumbnail of an object
   objects/csg.ts              SDF CSG language for templates
   objects/templates/*.json    template library (auto-loaded)
   objects/descriptor.ts       shape descriptor (aspect, elong, fill, profile, open top, holes)

@@ -54,6 +54,17 @@ export async function idbSet(store: StoreName, key: string, value: unknown): Pro
   });
 }
 
+/** Every value in a store. */
+export async function idbGetAll<T>(store: StoreName): Promise<T[]> {
+  const db = await open();
+  if (!db) return [...memory.entries()].filter(([k]) => k.startsWith(`${store}/`)).map(([, v]) => v as T);
+  return new Promise((resolve) => {
+    const req = db.transaction(store, 'readonly').objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result as T[]);
+    req.onerror = () => resolve([]);
+  });
+}
+
 export async function idbDelete(store: StoreName, key: string): Promise<void> {
   const db = await open();
   if (!db) {

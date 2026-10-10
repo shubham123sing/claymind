@@ -53,6 +53,14 @@ export type AppEvents = {
   /** Join the focused object with the one touching it / separate its focused piece. */
   'object:join': Record<string, never>;
   'object:separate': Record<string, never>;
+  /** A creation in the room changed (materials, colour, pieces, pinned): the Library saves it. */
+  'creation:changed': { creationId: string };
+  /** A creation stopped existing on its own (joined into another): the Library drops it. */
+  'creation:removed': { creationId: string };
+  /** Pin / unpin the touched object; spawn the Play Kit; open / close the Library. */
+  'object:pin': Record<string, never>;
+  'playkit:spawn': Record<string, never>;
+  'library:toggle': Record<string, never>;
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */

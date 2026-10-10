@@ -113,7 +113,7 @@ export class SculptSystem extends createSystem({}) {
     this.world.createTransformEntity(this.menu.root);
     this.toolbar = new Toolbar(
       items,
-      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · C: colour · 5 Paint / 6 Eraser, [ ] brush size · Enter: bring to life · click a piece, then Material (T) · J join / K separate · drag objects (wheel lifts) and release to drop',
+      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · C: colour · 5 Paint / 6 Eraser, [ ] brush size · Enter: bring to life · click a piece, then Material (T) · J join / K separate · P pin · O play kit · L library · drag objects (wheel lifts) and release to drop',
       () => this.audio.tickSound(),
     );
 
@@ -146,6 +146,9 @@ export class SculptSystem extends createSystem({}) {
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
       { id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) },
       { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
+      { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
+      { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:spawn', {}) },
+      { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
       ...(devKgView
         ? [
@@ -525,7 +528,9 @@ export class SculptSystem extends createSystem({}) {
     if (kb.getKeyDown('Enter')) void this.bringToLife();
     if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
     if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
-    if (devKgView && kb.getKeyDown('KeyP')) bus.emit('mastery:toggle', {});
+    if (kb.getKeyDown('KeyP')) bus.emit(devKgView ? 'mastery:toggle' : 'object:pin', {});
+    if (kb.getKeyDown('KeyO')) bus.emit('playkit:spawn', {});
+    if (kb.getKeyDown('KeyL')) bus.emit('library:toggle', {});
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);
