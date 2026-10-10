@@ -12,6 +12,7 @@ import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/cre
 import { getTemplate } from '../objects/templates.js';
 import type { HandState, Vec3 } from '../platform/input/hand-state.js';
 import { input } from '../platform/input/input-system.js';
+import { aiEnabled } from '../ai/ai-state.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
 import { MenuItem, WristMenu } from '../ui/wrist-menu.js';
@@ -128,6 +129,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
       { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
+      { id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) },
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
         selected: () => performance.now() - this.resetArmed < 2500,
@@ -327,7 +329,10 @@ export class SculptSystem extends createSystem({}) {
     const q = root.getWorldQuaternion(new Quaternion());
     const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name} ${Math.round(creation.materialConfidence * 100)}%`;
     this.showStatus(guess, 3500, mat.visual.color);
-    bus.emit('creation:baked', { creation, baked: b, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w] });
+    bus.emit('creation:baked', {
+      creation, baked: b, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w],
+      sculptGeometries: this.view.snapshot().map((m) => m.geometry), scale: root.scale.x, ranking: res.ranking,
+    });
     console.info(
       `[life] ${creation.name} (${creation.source}, match ${(creation.matchScore * 100).toFixed(0)}%) ${mat.id} ` +
         `${(creation.massKg * 1000).toFixed(0)} g, ${res.ms.toFixed(0)} ms bake`,

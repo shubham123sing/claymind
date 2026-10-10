@@ -1,6 +1,6 @@
 # Extending ClayMind
 
-Each recipe below is kept true as the code changes. Recipes for AI providers and challenges will be added in the phases that introduce them.
+Each recipe below is kept true as the code changes. The recipe for challenges will be added in the phase that introduces it.
 
 ## New material (data only)
 Add one entry to `client/src/materials/materials.json`:
@@ -56,3 +56,13 @@ Add an object to `client/src/kg/rules/core.json` (or a new file listed in `kg/br
 `{ "id", "label", "if": [{ "s": "?x", "r": "<relation>", "o": "?y" }, …], "then": { "s", "r", "o" }, "factor": 0..1 }`.
 Variables start with `?`. Add a golden test in `tests/unit/kg.test.ts` that checks the reasoning path.
 See `docs/KG_SCHEMA.md` for relations.
+
+## New AI provider
+**Server (real services):**
+1. Implement one of the protocols in `server/app/providers/base.py`: `VlmProvider.describe`, `ImageProvider.refine`, or `ModelProvider.submit/poll`. Each needs a `name` and a `version` (used in cache keys). Raise `ProviderError` on any failure.
+2. Register it in `server/app/providers/__init__.py` under a new env value (e.g. `MODEL_PROVIDER=sam3d`), and add its settings to `config.py` and `.env.example`.
+3. Validate its output into the schemas in `server/app/schemas.py`. Add a test with a stubbed client (see `tests/test_anthropic_vlm.py`).
+
+**Client (in-browser):** implement `AiProvider` (`client/src/ai/types.ts`) and select it in `AiSystem.chooseProvider`. `LocalMockProvider` is the reference implementation.
+
+Game logic never names a vendor or model: it only sees `AiProvider` results, which are validated (`validateDescribe`) and treated as suggestions.

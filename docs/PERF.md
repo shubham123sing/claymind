@@ -41,3 +41,13 @@ Notes:
 | Dynamic bodies | - | ≤ 4 creations + ≤ 24 pieces (pieces live 7 s) |
 | Draw calls per creation | - | 3 (mesh, shadow, label); shards: one instanced mesh for all |
 | Quest 3: bake time, physics with 4 objects + pieces | Quest 3 | _pending device run_ |
+
+## Phase 4 (2026-10-10)
+
+| Measurement | Where | Result |
+|---|---|---|
+| Describe (mock server, via HttpAiProvider) | Desktop, local server | 1.2 s first (mock latency), 21 ms cached |
+| Image-to-3D (mock server) | Desktop, local server | 6.2 s first, 0.01 s cached; progress 0→100 |
+| Full in-game AI pass, raw sculpt → clean model (in-browser mock) | Desktop browser | ~10 s, play not blocked |
+| Sample models | public/samples | 2.4k-21k triangles, 57-496 KB, 2.5 MB total |
+| Offscreen renders for the VLM | Desktop | 3 × 320 px PNG; render time not yet measured on Quest |

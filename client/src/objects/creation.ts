@@ -30,6 +30,8 @@ export interface Creation {
   /** Seconds from "Bring to life" to the object existing. */
   timeToObject: number;
   kgNodeIds: string[];
+  /** Transient (not persisted): one-line AI progress shown on the label. */
+  aiStatus?: string;
 }
 
 let counter = 0;

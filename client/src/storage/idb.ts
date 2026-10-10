@@ -4,8 +4,8 @@
  * tests), so the game never fails because storage failed.
  */
 const DB_NAME = 'claymind';
-const DB_VERSION = 1;
-export const STORES = ['kg', 'creations', 'settings'] as const;
+const DB_VERSION = 2;
+export const STORES = ['kg', 'creations', 'settings', 'ai'] as const;
 export type StoreName = (typeof STORES)[number];
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
@@ -21,6 +21,8 @@ function open(): Promise<IDBDatabase | null> {
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
+      // another tab still holds the old version open: play on with memory storage
+      req.onblocked = () => resolve(null);
     } catch {
       resolve(null);
     }

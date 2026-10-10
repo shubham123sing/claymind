@@ -4,6 +4,7 @@
  * user (predictions + reasoning paths) always come from the reasoner over the
  * graph, so editing the graph truly changes them.
  */
+import type { DescribeResult } from '../ai/types.js';
 import type { Creation } from '../objects/creation.js';
 import { KnowledgeGraph } from './graph.js';
 import { factId, reason, ReasoningResult, Rule } from './reasoner.js';
@@ -112,6 +113,44 @@ export class Brain {
     g.batch('user', () => {
       for (const e of g.outgoing(id)) if (e.relation === 'made_of' && e.to !== `mat:${materialId}`) g.setEdge(e.from, e.relation, e.to, { ...e, status: 'rejected', source: 'user' });
       g.setEdge(id, 'made_of', `mat:${materialId}`, { confidence: 1, source: 'user', evidence: ['user picked material'] });
+    });
+  }
+
+  /**
+   * The vision model's description becomes `vlm`-sourced beliefs: what it is
+   * (an existing concept, or a new one it named) and what it is probably made of.
+   * The estimate edges stay; user edges always outrank both (see setCreationMaterial).
+   */
+  addVlmFacts(creationId: string, r: DescribeResult): void {
+    const id = `cre:${creationId}`;
+    if (!this.graph.node(id)) return;
+    const g = this.graph;
+    g.batch('system', () => {
+      const node = g.node(id);
+      if (node && r.confidence >= 0.5) node.label = r.name;
+      const concept = `concept:${r.category.replace(/[^a-z0-9_-]/g, '_')}`;
+      g.ensureNode(concept, 'Concept', r.name, { from: 'vlm' });
+      g.setEdge(id, 'is_a', concept, { confidence: r.confidence, source: 'vlm', evidence: [`vision model: ${r.name}`] });
+      for (const m of r.material.slice(0, 2)) {
+        const mat = `mat:${m.name}`;
+        if (!g.node(mat)) continue;
+        const existing = g.edge(`${id}|made_of|${mat}`);
+        if (existing?.source === 'user') continue;
+        g.setEdge(id, 'made_of', mat, { confidence: m.prob, source: 'vlm', evidence: [`vision model ${(m.prob * 100).toFixed(0)}%`] });
+      }
+    });
+  }
+
+  /** The AI picked a material (combined estimate): weaker than a user choice, never rejects other options. */
+  setCreationMaterialByAi(creationId: string, materialId: string, confidence: number): void {
+    const id = `cre:${creationId}`;
+    if (!this.graph.node(id)) return;
+    const g = this.graph;
+    if (g.outgoing(id).some((e) => e.relation === 'made_of' && e.source === 'user' && e.status === 'active')) return;
+    g.batch('system', () => {
+      for (const e of g.outgoing(id))
+        if (e.relation === 'made_of' && e.to !== `mat:${materialId}` && e.status === 'active') g.setEdge(e.from, e.relation, e.to, { ...e, confidence: e.confidence * 0.5 });
+      g.setEdge(id, 'made_of', `mat:${materialId}`, { confidence, source: 'vlm', evidence: ['local estimate + vision model'] });
     });
   }
 

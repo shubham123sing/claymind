@@ -32,11 +32,26 @@ export type AppEvents = {
     /** World pose of the object's origin (bbox centre) and orientation. */
     position: [number, number, number];
     quaternion: [number, number, number, number];
+    /** The sculpt as it was (grid-local geometry, for AI renders) and its scale. */
+    sculptGeometries: import('three').BufferGeometry[];
+    scale: number;
+    /** Local template ranking (best first). */
+    ranking: { id: string; similarity: number }[];
   };
+  /** Toggle AI on / off. */
+  'ai:toggle': Record<string, never>;
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
-  /** The user changed a creation's material (a correction the brain learns from). */
-  'object:material-set': { creationId: string; materialId: string };
+  /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */
+  'object:material-set': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number };
+  /** Ask the object system to change a creation's material (e.g. after the AI looked at it). */
+  'creation:set-material': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number };
+  /** The vision model described a creation (validated suggestion). */
+  'creation:described': { creationId: string; result: import('../ai/types.js').DescribeResult };
+  /** A cleaner model arrived for a creation (object-local metres, centred). */
+  'creation:model': { creationId: string; mesh: import('../objects/bake.js').BakedMesh; source: 'ai' | 'cache' };
+  /** One-line AI status for a creation's label ('' clears it). */
+  'creation:ai-status': { creationId: string; text: string };
   /** The user picked up / interacted with a creation. */
   'object:focus': { creationId: string };
   /** Show / hide the brain. */

@@ -48,6 +48,8 @@ interface Live {
   /** Material chosen by the user but not yet applied to the physics body. */
   pendingMaterial: string | null;
   pendingAt: number;
+  pendingBy: 'user' | 'ai';
+  pendingConfidence: number;
   /** Since when the body has been resting out of reach (0 = not). */
   outOfReachSince: number;
 }
@@ -91,6 +93,22 @@ export class ObjectSystem extends createSystem({}) {
       bus.on('creation:baked', (e) => this.spawnCreation(e.creation, e.baked.mesh, e.baked.pieces, e.position, e.quaternion)),
       bus.on('physics:impact', (e) => this.onImpact(e)),
       bus.on('object:cycle-material', () => this.cycleMaterial()),
+      bus.on('creation:set-material', (e) => {
+        const rec = this.byCreation(e.creationId);
+        if (rec && (rec.pendingMaterial ?? rec.mat.id) !== e.materialId) this.requestMaterial(rec, e.materialId, e.by, e.confidence);
+        else if (rec?.creation) rec.creation.materialConfidence = e.confidence;
+      }),
+      bus.on('creation:ai-status', (e) => {
+        const rec = this.byCreation(e.creationId);
+        if (rec?.creation) {
+          rec.creation.aiStatus = e.text;
+          rec.lastInteract = performance.now();
+        }
+      }),
+      bus.on('creation:model', (e) => {
+        const rec = this.byCreation(e.creationId);
+        if (rec) this.rebuild(rec, rec.pendingMaterial ?? rec.mat.id, { geometry: geometryFrom(e.mesh), flash: 0.8 });
+      }),
     );
     const onDown = (e: PointerEvent) => this.onPointerDown(e);
     const onMove = (e: PointerEvent) => this.setNdc(e);
@@ -170,7 +188,7 @@ export class ObjectSystem extends createSystem({}) {
       entity, mesh, material, mat, massKg, creation: o.creation ?? null, pieces: o.pieces ?? [], mode: o.mode, side: null,
       t0: performance.now(), expires: o.piece ? performance.now() + PIECE_LIFETIME : Infinity,
       anchor: new Vector3().fromArray(position), offset: new Vector3(), halfH, radius, shadow, label, labelEntity,
-      lastInteract: performance.now(), hist: [], pendingMaterial: null, pendingAt: 0, outOfReachSince: 0,
+      lastInteract: performance.now(), hist: [], pendingMaterial: null, pendingAt: 0, pendingBy: 'user', pendingConfidence: 1, outOfReachSince: 0,
     };
     if (o.mode === 'materialize') {
       mesh.scale.setScalar(0.3);
@@ -324,6 +342,10 @@ export class ObjectSystem extends createSystem({}) {
     this.enforceLimits();
   }
 
+  private byCreation(id: string): Live | undefined {
+    return this.live.find((r) => r.creation?.id === id);
+  }
+
   private cycleMaterial(): void {
     const rec = this.focus;
     if (!rec || !rec.creation) return;
@@ -333,9 +355,11 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   /** Show the new material at once; rebuild the body after a short pause. */
-  requestMaterial(rec: Live, materialId: string): void {
+  requestMaterial(rec: Live, materialId: string, by: 'user' | 'ai' = 'user', confidence = 1): void {
     const m = getMaterial(materialId);
     rec.pendingMaterial = materialId;
+    rec.pendingBy = by;
+    rec.pendingConfidence = confidence;
     rec.pendingAt = performance.now() + MATERIAL_REBUILD_DELAY;
     rec.material.color.set(m.visual.color);
     rec.material.roughness = m.visual.roughness;
@@ -346,17 +370,24 @@ export class ObjectSystem extends createSystem({}) {
     rec.material.needsUpdate = true;
     rec.lastInteract = performance.now();
     if (rec.creation && rec.label) {
-      const preview = { ...rec.creation, materialId, materialConfidence: 1, massKg: m.density * Math.abs(meshVolume(rec.mesh.geometry.getAttribute('position').array as Float32Array)) };
+      const preview = { ...rec.creation, materialId, materialConfidence: confidence, massKg: m.density * Math.abs(meshVolume(rec.mesh.geometry.getAttribute('position').array as Float32Array)) };
       rec.label.set(...labelText(preview, m), m.visual.color);
     }
   }
 
   /** Swap material: rebuild the body (shape properties are not reactive in IWSDK). */
-  setMaterial(rec: Live, materialId: string): void {
+  setMaterial(rec: Live, materialId: string, by: 'user' | 'ai' = 'user', confidence = 1): void {
     const c = rec.creation!;
     c.materialId = materialId;
-    c.materialConfidence = 1; // chosen by the user
-    const geo = rec.mesh.geometry.clone();
+    c.materialConfidence = confidence;
+    this.rebuild(rec, materialId, {});
+    bus.emit('object:material-set', { creationId: c.id, materialId, by, confidence });
+  }
+
+  /** Rebuild a creation's body with a new material and/or geometry, keeping how it is held. */
+  private rebuild(rec: Live, materialId: string, o: { geometry?: BufferGeometry; flash?: number }): void {
+    const c = rec.creation!;
+    const geo = o.geometry ?? rec.mesh.geometry.clone();
     const mode = rec.mode === 'free' ? 'hover' : rec.mode === 'materialize' ? 'hover' : rec.mode;
     const side = rec.side;
     const pos = rec.mesh.position.toArray(), quat = rec.mesh.quaternion.toArray();
@@ -374,10 +405,9 @@ export class ObjectSystem extends createSystem({}) {
     n.offset.copy(offset);
     if (side) this.hold(n, mode, side);
     if (wasPointer) this.pointerHeld = n;
-    n.material.emissiveIntensity = 0.35; // small flash to show the change
+    n.material.emissiveIntensity = o.flash ?? 0.35; // small flash to show the change
     c.massKg = n.massKg;
-    this.focus = n;
-    bus.emit('object:material-set', { creationId: c.id, materialId });
+    if (this.focus === rec || !this.focus) this.focus = n;
   }
 
   // ---------------- frame ----------------
@@ -405,7 +435,7 @@ export class ObjectSystem extends createSystem({}) {
       const rec = this.live[i];
       if (!this.live.includes(rec)) continue;
       if (rec.pendingMaterial && now > rec.pendingAt) {
-        this.setMaterial(rec, rec.pendingMaterial);
+        this.setMaterial(rec, rec.pendingMaterial, rec.pendingBy, rec.pendingConfidence);
         continue;
       }
       this.step(rec, dt, now, xr);
@@ -594,7 +624,8 @@ function labelText(c: Creation, m: Material): [string, string] {
   const title = `${c.name} · ${m.name}${c.materialConfidence < 1 ? ` ${pct(c.materialConfidence)}` : ''}`;
   const size = c.sizeCm.map((v) => v.toFixed(0)).join('×');
   const grams = c.massKg >= 1 ? `${c.massKg.toFixed(2)} kg` : `${Math.round(c.massKg * 1000)} g`;
-  const how = c.source === 'template' ? `matched ${pct(c.matchScore)}` : c.bestGuess ? `a bit like a ${c.bestGuess.name.toLowerCase()}?` : 'your sculpt';
+  if (c.aiStatus) return [title, c.aiStatus];
+  const how = c.source === 'ai' ? 'AI model' : c.source === 'template' ? `matched ${pct(c.matchScore)}` : c.bestGuess ? `a bit like a ${c.bestGuess.name.toLowerCase()}?` : 'your sculpt';
   return [title, `${grams} · ${size} cm · ${how}`];
 }
 

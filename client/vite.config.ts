@@ -12,7 +12,13 @@ export default defineConfig({
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
   plugins: [iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
-  server: { host: '0.0.0.0', port: 8081, open: false },
+  server: {
+    host: '0.0.0.0',
+    port: 8081,
+    open: false,
+    // dev: /api -> the local AI server (server/, `uvicorn app.main:app --port 8787`)
+    proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') } },
+  },
   build: {
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',

@@ -70,7 +70,12 @@ export class KGSystem extends createSystem({}) {
     });
     this.cleanupFuncs.push(
       bus.on('creation:baked', (e) => (this.ready ? this.addCreation(e.creation) : this.pending.push(e.creation))),
-      bus.on('object:material-set', (e) => this.edit(() => this.brain.setCreationMaterial(e.creationId, e.materialId), `Material set to ${e.materialId}`)),
+      bus.on('object:material-set', (e) =>
+        e.by === 'user'
+          ? this.edit(() => this.brain.setCreationMaterial(e.creationId, e.materialId), `Material set to ${e.materialId}`)
+          : this.edit(() => this.brain.setCreationMaterialByAi(e.creationId, e.materialId, e.confidence), `AI thinks it is ${e.materialId}`),
+      ),
+      bus.on('creation:described', (e) => this.edit(() => this.brain.addVlmFacts(e.creationId, e.result), `AI looked: "${e.result.name}"`)),
       bus.on('object:focus', (e) => {
         const id = `cre:${e.creationId}`;
         if (this.brain.graph.node(id) && this.focus !== id) {
@@ -119,7 +124,9 @@ export class KGSystem extends createSystem({}) {
     const positions = layoutGraph(this.fg.nodes, this.fg.edges, { width: 0.56, height: Math.max(0.26, Math.min(0.42, tallest * 0.032)), bend: 0.06 });
     this.view.setGraph(this.fg, positions);
     const node = this.focus ? this.brain.graph.node(this.focus) : null;
-    const made = this.focus ? this.brain.graph.outgoing(this.focus).find((e) => e.relation === 'made_of' && e.status !== 'rejected') : null;
+    const made = this.focus
+      ? this.brain.graph.outgoing(this.focus).filter((e) => e.relation === 'made_of' && e.status !== 'rejected').sort((a, b) => b.confidence - a.confidence)[0]
+      : null;
     this.card.set({
       hasFocus: !!node,
       title: node ? `What I think about this ${node.label.toLowerCase()}` : 'The brain (overview)',

@@ -29,3 +29,10 @@ After **Bring to life**, the AI's reasoning graph appears above the table (toggl
 - **Why?** Tap a prediction on the card; its reasoning path lights up step by step.
 - **Undo edit / Reset brain / Overview** are on the card. The card shows what each edit changed, e.g. "bounces 67% → 0%".
 - The brain is saved in the browser (IndexedDB) and survives reloads.
+
+## AI layer (Phase 4, optional)
+The game works fully offline: Bring to life always creates the object locally first. On top of that, the AI layer looks at the sculpt, names it, refines the material guess (the brain gains AI beliefs), and for raw sculpts swaps in a clean generated model, with progress on the object's label.
+
+- **No server** (static build, judges): an in-browser mock with shipped sample models.
+- **Local server:** see `server/README.md` (mock providers by default; Claude vision and fal.ai image-to-3D when keys are set). In dev the game finds it at `/api` automatically.
+- URL options: `?ai=off|mock|server|auto`, `?aiUrl=https://…`. The **AI** button in the menu turns it on and off.

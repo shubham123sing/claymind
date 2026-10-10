@@ -1,6 +1,6 @@
 # Known limits and spike results
 
-Last updated: 2026-10-09 (Phase 3). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
+Last updated: 2026-10-10 (Phase 4). Stack: `@iwsdk/core` 1.0.1, super-three 0.181, `@mediapipe/tasks-vision` 1.1.0.
 
 Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/emulator, needs a Quest number · **FALLBACK** = use the plan-B path.
 
@@ -64,6 +64,20 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - **Browser camera:** while the brain is open in the browser, the camera eases back and up to frame the clay, graph and card; it returns when the brain closes. XR is unaffected.
 - **Storage:** IndexedDB, falling back to memory. A stuck database (e.g. a pending delete) times out after 1.5 s and the game starts from the seed brain.
 - **Not verified on Quest:** label readability at arm's length, reach to the graph (placed 36 cm above the table, 8 cm behind the clay), card poke comfort.
+
+### Phase 4 findings (AI layer)
+- **Mock-first:** no API keys are configured. The server runs `mock` providers by default; a static build with no server uses the in-browser `LocalMockProvider` with the shipped sample models (`public/samples`). The real adapters (Claude vision, fal.ai queue) are written and unit-tested with stubbed clients, but **have not been called against the live services**.
+- **Mock honesty:** the mock vision model cannot see images. It answers from the local shape hints (best template match, open top, holes), so mock answers mirror the local matcher. A sculpt with no template sample (e.g. a "spaceship") gets no generated model: the object stays the local one, as with a real provider failure.
+- **fal.ai model ids** (`FAL_3D_MODEL`, `FAL_IMAGE_MODEL`) and their output field names change over time; they are configuration and must be verified on fal.ai before enabling. The result parser accepts `model_mesh` / `model_glb` / `mesh` / `glb` URL fields.
+- **Generated meshes:** no decimation yet. Models above 80k triangles are refused and the local object is kept; samples are 2.4k-21k triangles. Real Trellis output may need its simplify option or a decimation pass (Phase 7).
+- **Model look:** the swapped-in model uses the game material (colour/roughness from `materials.json`), not the generated texture, so material edits, physics and the brain stay consistent. Textured AI models are a Phase 7 polish option.
+- **Size:** generated models are scaled so their bounding-box volume matches the sculpt's (keeps mass sensible), not their largest side.
+- **Which objects get a new model:** only objects that kept the raw sculpt or matched a template below 0.85. Clean template matches skip image-to-3D (no cost, already clean).
+- **Waiting is never blocking:** the local object exists immediately; AI progress shows on its label ("AI is looking…", "Making a clean model 40%"). Any failure shows "AI unavailable · kept the local result" for 4 s.
+- **Privacy:** only offscreen renders of the sculpt (3 PNGs, 320 px) are sent, never camera frames. The first real (non-mock) request shows "sculpt renders are sent to the AI service" once. The **AI** menu button turns AI off (`?ai=off` too).
+- **Caching (gets faster with use):** client IndexedDB `ai` store keyed by a quantised shape descriptor + size + provider; the server also caches by content hash. Measured with the mock server: describe 1.2 s first, 21 ms cached; model 6.2 s first, 0.01 s cached.
+- **Spend:** costs per call are estimates (`COST_*_USD`); the monthly cap (`SPEND_CAP_USD`, default $5) is enforced before any paid call.
+- **Not verified:** the in-game server path in the browser pane (the pane was hidden; covered instead by `tests/integration/server-roundtrip.ts` against the running server, plus the in-game mock path); anything on Quest.
 
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).

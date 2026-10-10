@@ -5,6 +5,7 @@ import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
 import { InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
+import { AiSystem } from './ai/ai-system.js';
 import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
@@ -34,5 +35,6 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
+    world.registerSystem(AiSystem); // optional upgrade layer: the game works without it
   }
 });

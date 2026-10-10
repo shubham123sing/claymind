@@ -1,4 +1,4 @@
-# Architecture (as built, Phase 3)
+# Architecture (as built, Phase 4)
 
 ```
 client/src
@@ -43,6 +43,19 @@ client/src
   kgview/brain-card.ts        predictions + "Why?" + Undo / Reset / Overview (poke or click)
   kgview/kg-system.ts         placement, hand & mouse gestures (cut, connect, select), edit diffs
   audio/ui-sounds.ts          tick / snip / chime
+  ai/types.ts                 AiProvider port, request/response types, validateDescribe
+  ai/http-provider.ts         server client: timeouts, retry/backoff, abort, job polling
+  ai/local-mock-provider.ts   in-browser mock (static/offline build) using shipped sample GLBs
+  ai/snapshot-renderer.ts     offscreen clay renders (3 angles) for the vision model
+  ai/model-normalize.ts       GLB scene -> one centred mesh, volume-matched to the sculpt
+  ai/ai-cache.ts              IndexedDB cache keyed by quantised shape (repeat shapes are instant)
+  ai/ai-system.ts             orchestration: cache -> describe -> material/KG -> refine -> generate -> swap
+  objects/glb.ts              minimal GLB writer (+ vertex welding) for samples / caching
+server/ (Python, FastAPI)
+  app/main.py                 routes: /health, /vlm/describe, /image/refine, /model/generate, /model/jobs, /model/files
+  app/providers/              mock, anthropic_vlm (Claude vision, strict JSON), fal (queue API)
+  app/cache.py, guards.py     content-hash cache; size limits, per-session quotas, global spend cap
+  app/jobs.py                 async image-to-3D jobs with progress
   ui/wrist-menu.ts            palm-up menu, poke-to-press (XR)
   ui/toolbar.ts               same menu items as HTML (browser)
   audio/sculpt-audio.ts       procedural squish + UI ticks (WebAudio, spatialised)
@@ -59,3 +72,5 @@ client/src
 **Physics loop:** held objects are teleported with gravity off; on release they get the hand's velocity. `ImpactSystem` turns velocity jumps into `physics:impact` events → impact sound; above the material's `breakSpeed` the object is swapped for its pre-baked pieces plus shards.
 
 **Brain loop:** `creation:baked` → `Brain.addCreation` (is_a concept by shape match, made_of material by estimate, features and heaviness by measurement) → reasoner → predictions + paths → `focusGraph` → `layoutGraph` → `KGView`. User edits (cut / connect / material change via `object:material-set`) go through `Brain` as user-sourced, undoable changes. The card shows the before → after effect on the predictions. Autosave writes the snapshot to IndexedDB.
+
+**AI loop (optional layer):** `creation:baked` (local object already exists) → `AiSystem`: cache hit → apply instantly; otherwise render the sculpt → `describe` → `creation:described` (KG gains `vlm` beliefs: is_a, made_of) + merged material estimate → `creation:set-material` (by `ai`) → for raw sculpts / weak matches: `refine` → `generate` with progress (`creation:ai-status`) → `creation:model` → `ObjectSystem` rebuilds the body with the new geometry. Provider: server if `/health` answers, else the in-browser mock (`?ai=` overrides). Failures keep the local result.
