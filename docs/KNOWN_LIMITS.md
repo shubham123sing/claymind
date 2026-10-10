@@ -113,6 +113,17 @@ Run headless on IWSDK 1.0.1's own `PhysicsRuntime` (the code inside the physics 
 - **Bug fixed from Phase 1: Carve.** The carve brush computed an intersection instead of a subtraction, so Carve and the finger poke only shaved a thin shell outside the brush. Now a true smooth subtraction (`tests/unit/carve.test.ts`).
 - **Materials 12 -> 8** (plan): steel, stone, wood, rubber, plastic, glass, foam, clay. Old ids map: ceramic -> glass, aluminium -> steel, cloth/paper -> foam (`normalizeMaterialId`). Mugs/bowls/plates/vases now lean glass or plastic. Saved brains may still hold nodes for removed materials until "Reset brain" (the brain view is hidden in plan v3).
 
+### Phase 6a spikes for plan v4 (2026-10-10)
+Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests/physics/spike-v4.test.ts`):
+- **(a) several materials on one body: GO (with the runtime extension).** A Havok container of a steel and a wood box gets mass 8.500 kg and COM -4.24 cm, exactly the density-weighted values; each child keeps its own friction (a sled with a rubber and a slick runner turns 75 deg while sliding, equal runners 0.1 deg). IWSDK's component cannot express this, so ClayMind swaps the worker-side runtime (see PLAN.md notes): verified in dev (worker imports `/src/physics/runtime/physics-runtime-ext.ts`), in the build (marker in `physics-worker-*.js`) and in the live page (worker log line).
+- **(b) contact impulse events: GO (runtime extension); CCD: no flag.** Havok reports the two bodies, the contact point and the impulse (0.919 N·s for a 294 g ball at 3.0 m/s; m·v = 0.881). Tunnelling numbers from the first 6a stand (spheres hold to 30 m/s; 5 mm plates tunnel from 12 m/s; throw cap 6 m/s).
+- **(c) dynamic cup of boxes holding ~10 pebbles: GO.** A 40-box cup (base + 39 wall boxes, 9 cm wide) holds 10/10 pebbles after the pour and keeps them when tossed 4 cm up; a 5-box cup leaks 1 through its corner gaps. 0.80 ms per 72 Hz step for the whole world on desktop (Quest estimate 3-4x: ~3 ms, in the physics worker).
+- **(d) anchor persistence in Quest Browser: NOT RUN (needs the headset).**
+- **(e) distance grab of a physics body: NOT RUN in XR.** The hold code already moves a body kinematically at any distance (mouse drags in the browser do exactly that); the XR ray part needs the emulator/headset.
+- **(f) painting cost: vertex colours chosen.** Desktop, res 48: one 1 cm paint dab (re-mesh the dirty chunks + colour their vertices) 0.63 ms; colouring the whole surface 0.71 ms; full re-mesh 5.0 ms (res 64: 1.24 / 0.79 / 14.9 ms). A 64^3 3D texture would cost ~0 ms to write but a 1 MB upload per dab. Quest not measured. Paint detail = grid spacing (~5 mm at 48^3).
+- **6b in the browser, re-checked:** a wood-head hammer dropped on a 139 g glass ball: felt 0.76 m/s, no break; stone head: felt 5.08 m/s, shattered. Fixed on the way: in object-object hits the hitting part is now the part nearest the other object (a flat-falling hammer was reported as hitting with its handle).
+- **No AI / no network** (plan v4): with default URLs the page makes no AI/server requests (checked: no `/api` or vendor requests; the AI system is not registered). New pieces start as clay; templates never replace the sculpt.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

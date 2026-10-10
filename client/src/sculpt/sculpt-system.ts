@@ -7,7 +7,7 @@
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
-import { devKgView } from '../core/flags.js';
+import { devAi, devKgView } from '../core/flags.js';
 import { Hud } from '../devtools/hud.js';
 import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
 import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
@@ -141,7 +141,7 @@ export class SculptSystem extends createSystem({}) {
             { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
           ]
         : []),
-      { id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) },
+      ...(devAi ? [{ id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) }] : []),
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
         selected: () => performance.now() - this.resetArmed < 2500,
@@ -299,11 +299,13 @@ export class SculptSystem extends createSystem({}) {
     if (this.baking) return;
     this.baking = true;
     const t0 = performance.now();
-    this.view.setStatus('Looking at your sculpt…');
+    this.view.setStatus(devAi ? 'Looking at your sculpt…' : 'Bringing it to life…');
     this.statusUntil = Infinity;
     this.audio.tickSound(1.2);
     const root = this.view.root;
-    const res = await this.client.bake({ scale: root.scale.x, threshold: TEMPLATE_THRESHOLD, pieces: 6, seed: Math.floor(Math.random() * 1e9) });
+    // plan v4: the player's own shape, never swapped for a template (threshold above any similarity)
+    const threshold = devAi ? TEMPLATE_THRESHOLD : Infinity;
+    const res = await this.client.bake({ scale: root.scale.x, threshold, pieces: 6, seed: Math.floor(Math.random() * 1e9) });
     if (!res.ok || !res.baked || !res.descriptor) {
       this.showStatus('Shape some clay first, then bring it to life', 3000, '#d9534f');
       this.baking = false;
@@ -316,7 +318,8 @@ export class SculptSystem extends createSystem({}) {
     const sources = tmpl
       ? [{ priors: tmpl.materialPriors, weight: 1 }, { priors: shapePriors(d), weight: 0.3 }]
       : [{ priors: shapePriors(d), weight: 1 }, ...(best && top.similarity > 0.3 ? [{ priors: best.materialPriors, weight: top.similarity }] : [])];
-    const guesses = estimateMaterial(sources);
+    // plan v4: every piece starts as clay; the player picks materials (no guessing)
+    const guesses = devAi ? estimateMaterial(sources) : [{ id: 'clay', prob: 1 }];
     const mat = getMaterial(guesses[0].id);
     const b = res.baked;
     const creation: Creation = {
@@ -324,12 +327,12 @@ export class SculptSystem extends createSystem({}) {
       id: newCreationId(),
       createdAt: Date.now(),
       descriptor: d,
-      name: tmpl ? tmpl.name : 'Sculpt',
+      name: tmpl ? tmpl.name : devAi ? 'Sculpt' : 'Creation',
       category: tmpl?.category ?? 'sculpt',
       source: tmpl ? 'template' : 'sculpt-only',
       templateId: tmpl?.id ?? null,
       matchScore: top?.similarity ?? 0,
-      bestGuess: best && top.similarity > 0.25 ? { id: best.id, name: best.name, similarity: top.similarity } : null,
+      bestGuess: devAi && best && top.similarity > 0.25 ? { id: best.id, name: best.name, similarity: top.similarity } : null,
       materialId: mat.id,
       materialConfidence: guesses[0].prob,
       materialGuesses: guesses.slice(0, 4),
@@ -348,7 +351,8 @@ export class SculptSystem extends createSystem({}) {
     const p = new Vector3(...d.center).applyMatrix4(root.matrixWorld);
     const q = root.getWorldQuaternion(new Quaternion());
     const pieces = b.parts.length > 1 ? ` · ${b.parts.length} pieces` : '';
-    const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name} ${Math.round(creation.materialConfidence * 100)}%${pieces}`;
+    const conf = creation.materialConfidence < 1 ? ` ${Math.round(creation.materialConfidence * 100)}%` : '';
+    const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name}${conf}${pieces}`;
     this.showStatus(guess, 3500, mat.visual.color);
     bus.emit('creation:baked', {
       creation, baked: b, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w],

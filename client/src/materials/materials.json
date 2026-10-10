@@ -58,7 +58,7 @@
       "tags": ["soft", "natural"]
     }
   ],
-  "aliases": { "ceramic": "glass", "aluminium": "steel", "cloth": "foam", "paper": "foam" },
+  "aliases": { "ceramic": "stone", "aluminium": "steel", "cloth": "foam", "paper": "foam" },
   "shapePriors": [
     { "when": { "openTop": [0.55, 1] }, "priors": { "glass": 0.4, "plastic": 0.35, "clay": 0.15, "stone": 0.1 } },
     { "when": { "aspect": [0, 0.25] }, "priors": { "wood": 0.4, "plastic": 0.25, "glass": 0.2, "clay": 0.15 } },

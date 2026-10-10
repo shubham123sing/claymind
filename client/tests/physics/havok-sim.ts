@@ -151,6 +151,12 @@ export class HavokSim {
     this.step(Math.round(s / this.dt), each);
   }
 
+  /** The Havok engine and world inside IWSDK's runtime (for spikes that need APIs IWSDK does not expose). */
+  raw(): { engine: unknown; world: unknown } {
+    const st = (this.rt as unknown as { state: { havok: unknown; havokWorld: unknown } }).state;
+    return { engine: st.havok, world: st.havokWorld };
+  }
+
   destroy(): void {
     this.rt.destroy();
   }

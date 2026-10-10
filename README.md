@@ -23,7 +23,7 @@ Hands-only mixed-reality sculpting for Meta Quest 3/3S (WebXR). Shape clay, brin
 - `docs/`: KNOWN_LIMITS, PERF, IDEAS (more per phase)
 - `server/`, `assets/`: arrive in Phases 2 and 4
 
-> **Plan v3 (`docs/PLAN.md`, from 2026-10-10):** the brain graph, Debug the Brain and Mastery below are hidden from players; open the game with `?devKgView` to see them. The brain still runs internally.
+> **Plan v4 (`docs/PLAN.md`, from 2026-10-10): no AI, fully offline.** The brain graph, Debug the Brain, Mastery and the AI layer described below are switched off for players (`?devKgView`, `?devAi` bring them back for development). Every piece starts as clay; the player picks materials.
 
 ## The brain (Phase 3)
 After **Bring to life**, the AI's reasoning graph appears above the table (toggle: **Brain** in the menu, or `G`). Each prediction comes from the graph:

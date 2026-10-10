@@ -381,9 +381,10 @@ export class ObjectSystem extends createSystem({}) {
   private onImpact(e: { entityIndex: number; materialId: string; piece: boolean; deltaV: number; dir?: [number, number, number]; x: number; y: number; z: number }): void {
     const rec = this.byEntity.get(e.entityIndex);
     if (!rec) return;
-    const hit = e.dir ? this.hitPart(rec, e.dir) : rec.contact;
-    const part = rec.parts[hit];
     const other = this.otherMaterial(rec, e.x, e.y, e.z);
+    // against another object: the part nearest to it; against a surface: the part reaching furthest down the hit
+    const hit = other.rec ? this.nearestPart(rec, other.rec.mesh.position.toArray()) : e.dir ? this.hitPart(rec, e.dir) : rec.contact;
+    const part = rec.parts[hit];
     const mu = matchup(part.mat.id, other.materialId);
     // what the part "feels": the speed change scaled by the material pair (glass on steel hurts more)
     const felt = feltSpeed(part.mat.id, other.materialId, e.deltaV);

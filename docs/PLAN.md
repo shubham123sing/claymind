@@ -1,71 +1,81 @@
-# ClayMind plan v3: Clay -> AI understands -> real physics -> you talk to the AI
+# CLAYMIND V4: sculpt + material + color + paint + real physics (NO AI)
 
-Adopted 2026-10-10 after Phase 5. Replaces the older add-on plans. The master prompt still holds the technical rules (IWSDK, Quest performance, hands-only, seated, offline fallback, code structure). If anything conflicts, this file wins.
+> This file REPLACES CLAYMIND_SIMPLE_V3.md and every older ClayMind plan. Keep MASTER_PROMPT_CLAYMIND.md only for the technical rules (IWSDK, Quest performance, hands-only, seated, code structure). If anything conflicts, THIS FILE WINS.
+> Working rules: ONE step at a time. After each step run it, test it, report in <= 10 lines (works / broken / frame time on Quest / what changed / next) and wait. Do NOT add features that are not in this file (put ideas in `IDEAS.md`). Keep the app runnable. Hands-only, seated, no camera shake. Phase 5 is done; continue from Phase 6a.
 
-Working rules: one step at a time; run it, test it, report in <= 10 lines (works / broken / frame time on Quest / changes from this plan and why / next), then wait. No features outside this file. Keep the app runnable. Hands-only, seated, no camera shake.
-
-## 1. The product
-1. Make things from clay with your hands. Pieces can be joined.
-2. The AI understands what was made: what it is, its parts, each part's probable material.
-3. A clean 3D object is made (offline: the sculpt or a template; online: AI image-to-3D polish).
-4. Real physics per part material (mass, friction, bounce, strength), on the real table.
-5. The player says how a thing should behave; the AI maps it to a fixed behavior list (section 5).
-6. The AI discusses what it made ("base steel, top wood, right?"); the player agrees or corrects.
-7. Internally a Physics Relations Graph (touches, supports, pushes) explains and predicts chains of contact.
-8. The graph is never drawn for the player: only words, labels and numbers.
+## 1. Product in 6 lines
+1. Sculpt clay with bare hands. Any shape. Take as many lumps ("pieces") as you like; each piece is its own clay.
+2. Every piece has its own **material** (steel, stone, wood, rubber, plastic, glass, foam, clay), picked by the player with one tap.
+3. Every piece has its own **color**, and the player can **draw/paint on its surface** with a brush (fingertip).
+4. Pieces can be **joined** (stick together) or **separated**.
+5. **Real physics** from material + shape: weight, center of mass, friction, bounce, tipping, breaking, sound. Color and paint are looks only.
+6. Place it in the room: grab, distance grab, put on table/floor/shelf, **pin** it, or **unpin** and play (throw, roll, stack, knock down). Save to a Library.
 
 ## 2. Scope
-IN, in order: hand sculpting (done), multi-piece objects with per-piece materials, correct per-piece physics numbers, Physics Relations Graph, AI understanding + dialogue, words -> behavior, Predict then Test, polish.
-OUT (ideas go to `IDEAS.md`): 3D graph visualization, Debug-the-Brain visuals, hinge/slide joints, challenges, mastery screen, training mini-game, Agent Exam, lobby/fight/multiplayer (Appendix A only if time remains), photo capture, SAM 3D, TRIBE v2, webcam/Android tiers, automatic splitting of one lump into pieces.
+**REMOVED (keep old code behind flags, do not delete code other modules use):** all AI (describe adapter, Function Packs, cloud calls, keys), Knowledge Graph and every graph view, Predict then Test, dialogue, challenges, mastery, fight/multiplayer, real-photo capture, SAM 3D, TRIBE v2.
+**KEPT:** sculpting, the 8 materials, `computePhysicalProperties`, matchups/breaking, offline-only (no network needed at all).
+**NEW:** per-piece material picker, per-piece color, surface painting, join/separate, room placement + pin + Library, Play Kit.
+No network = no keys, no cost, nothing to break for judges.
 
-## 3. AI
-- Closed multimodal models allowed for: looking at sculpt renders, naming, material per part, conversation, words -> behavior spec. One adapter: `describe`, `converse`, `parseBehavior`, optional `image2model`.
-- Keys only on the server; per-session limits and a global spend cap; only sculpt renders and the player's own text are sent.
-- The AI proposes, our code decides: strict JSON validated against schemas; physics numbers only from our tables and functions; the AI picks from our material table and behavior list.
-- Offline fallback (required): shape rules + the player's past corrections for materials, canned dialogue, keyword behavior parsing. Never dead-ends.
-- Judges: cached AI results for sample sculpts and a pre-filled player history.
+## 3. Pieces, materials, color
+- `Piece { id, sdf, materialId, color, paint }`. A creation = pieces + joints.
+- `materials.json`: steel, stone, wood, rubber, plastic, glass, foam, clay (ceramic = stone). Each has density, friction, restitution, hardness, fragility, sound set, PBR look (roughness/metalness).
+- **Material picker:** radial menu on a piece (look at it/touch it, palm-up hand opens it), big targets >= 3 cm, one tap. New pieces default to `clay`. Show a small chip: "Stone - heavy, fragile".
+- **Color picker:** a hue ring + lightness bar + 8 quick swatches, applies to the whole piece. Color multiplies the material's PBR look (steel stays shiny, rubber stays matte).
+- **Never** let color change physics.
 
-## 4. Materials and physics
-- `materials.json` with 8 player-facing materials: steel, stone, wood, rubber, plastic, glass, foam, clay. Each: density, friction, restitution, hardness, fragility, sound, look.
-- A creation = pieces joined when touching; each piece has `materialId` + `confidence`.
-- One pure function `computePhysicalProperties(assembly)`: per piece and total volume, mass, center of mass, inertia, support area. Physics setup and all player-facing text use it. Unit tests: two equal cubes steel vs wood (COM shifts to steel), an L shape, a pyramid.
-- Havok via IWSDK; damage/breaking via `matchups.json` (material pair -> damage/friction multipliers, sounds).
-- Real room: rests on table/floor, tips when COM leaves the support area, breaks above material limits (pre-made chunks + particles + sound).
+## 4. Painting (draw on the clay)
+- Store color **in the sculpt data**: an RGB value per voxel/SDF cell (or per vertex of the extracted mesh) so paint follows the shape when the player sculpts more.
+- Brush: fingertip touching the surface paints; size by a thumb-index pinch slider (min 3 mm, max 3 cm); colors from the picker; **Eraser** mode restores the piece color. Stroke throttled to the frame budget; update only dirty chunks of the mesh.
+- Undo/redo for sculpt AND paint (last 20 strokes).
+- If vertex color on the extracted mesh is too slow on Quest, fall back to a per-piece low-res 3D color texture (e.g. 64^3) and sample it in the shader. Record the result in `docs/KNOWN_LIMITS.md`.
 
-## 5. Words -> behavior
-Fixed list: `roll`, `slide`, `bounce`, `spin`, `wobble`, `stay-heavy-low`, `light-and-floaty`, `fragile`, `tough`. Each maps to concrete parameter changes within material limits. Outside the list: "I can't do that yet, closest option: ...". The AI says what it changed; every change can be undone.
+## 5. Physics (the real point)
+- ONE pure function `computePhysicalProperties(assembly)`: per piece and total: volume, mass (volume x density), center of mass, inertia, support area on the table. Physics setup, the info chip and tipping all use this output. Unit-test it (two equal cubes steel vs wood shift COM toward steel; an L shape; a pyramid).
+- Havok (IWSDK): one body per assembly, one convex shape per piece with its own density/friction/restitution. Pieces touching beyond a threshold are joined with fixed joints (compound body); a **Separate** button breaks the joint.
+- **Concave pieces (cups, bowls):** pinned/static = TriMesh collider (static only in Havok); dynamic = **compound of boxes built from the voxel grid** (greedy merge, cap about 40 boxes) or convex parts. Switch on pin/unpin.
+- `matchups.json` (material pair -> damage/friction multipliers, sound). Breaking: when the impulse exceeds the limit, the piece chips into pre-made chunks + particles + sound by material.
+- Real room: rests on the real table/floor (planes or mesh as static colliders), tips when COM leaves the support area. Budget: about 10 dynamic bodies plus pebbles, sleeping on.
+- **Play Kit** (procedural): about 10 pebble balls, a small domino tower, a target plate, spawned from the wrist menu, so every creation has something to interact with.
 
-## 6. Physics Relations Graph (internal)
-Nodes: pieces/assemblies, real surfaces, props. Edges: `touches`, `supports`, `joined_to`, `pushes` (time, magnitude), `will_tip`. Uses: explain a chain after an event, predict before a test, pick the question most likely to be wrong. Predict then Test: Predict (drop/push/tilt) -> AI states prediction -> physics runs -> compare; if wrong, say why and offer a fix; corrections stored as examples.
+## 6. Room placement (hands-only, seated)
+- One-hand grab (kinematic while held, velocity transferred on release); **distance grab** with a ray for far spots.
+- **Pin/Unpin** (wrist menu or a ring on the object): pinned = static; unpinned = live physics. Surfaces from plane/mesh detection; soft snap within about 3 cm; contact shadow always.
+- **Persistence:** save each creation (sculpt + materials + colors + paint + pose) in IndexedDB. Pinned objects use an anchor if the spike says anchors persist; otherwise save the pose relative to the table plane and show a "Re-place" button. Library shelf with thumbnails; pinch-drag brings one back.
+- Comfort: never move or shake the player's view.
 
-## 7. Conversation
-Small spatial panel by the object, large text, big buttons. Short messages; one question if any confidence < 0.6; quick replies "Yes", "Change material", "Why?", "Make it ...", "Predict"; "Why?" = 1-2 sentences; max 2 questions per creation; never blocks play. Learning: corrections saved as (shape features -> material) examples; nearest examples first, then rules, then the model. One honest line like "Learned: long thin pieces are usually steel for you."
+## 7. UI
+- **Wrist menu (palm up):** New piece, Material, Color, Paint/Eraser, Join/Separate, Pin/Unpin, Play Kit, Library, Undo/Redo, Settings.
+- One accent colour, one font (SDF text, >= 2.5 cm tall at 1 m), targets >= 3 cm, hover glow + tick, press click, sound for every action, no flat grey materials in the final build.
+- **First five minutes (no text wall):** pinch Start -> a clay lump appears on the real table -> sculpt -> tap Material and Color -> paint a pattern -> drop it / pin it on a shelf. Target: a finished, painted, placed object in 2 minutes.
+- Accessibility: high contrast, left/right swap, one-handed option, reduced motion, no flashing above 3 Hz.
 
-## 8. Phases (deadline 18 Nov 2026 12:00 PST; feature freeze 13 Nov)
-- 6a (~2 days, likely 1): spikes (section 4) + hide KG UI (`devKgView=false`).
-- 6b (~4 days): multi-piece multi-material objects, `computePhysicalProperties`, matchups, breaking. Accept: stone-head/wood-handle hammer tips and hits differently from an all-wood hammer; tipping matches the computed COM.
-- 7 (~5 days): Physics Relations Graph + Predict then Test. Accept: a three-body chain reaction explained correctly in words.
-- 8 (~6 days): AI understanding + dialogue + words -> behavior, adapter, schemas, offline fallback, cached samples, local learning. Accept: sculpt, AI names it and assigns materials, player corrects one, says "make it bounce", result changes, also offline.
-- 9 (~8 days): polish, onboarding (first five minutes), accessibility, 72 fps, judge profile + Reset.
-- 10 (~7 days): submission (deploy, video < 3 min, README, Devpost, final Quest run).
-- Never cut: per-piece materials with correct physics, AI dialogue with corrections, Predict then Test with chain explanation, offline fallback, onboarding, 72 fps.
+## 8. Phases (today 10 Oct 2026; deadline 18 Nov 2026 12:00 PST; freeze 13 Nov)
+- **6a (11-12 Oct): spikes**, record in `docs/KNOWN_LIMITS.md`: (a) several shapes with different material parameters on one body (child entities / Havok API / separate bodies + fixed constraints as fallbacks); (b) contact impulse events + CCD; (c) compound-of-boxes cup holding about 10 pebbles at 72 fps; (d) anchor persistence in Quest Browser; (e) distance grab of a physics body; (f) vertex-color vs 3D-texture painting cost on Quest. Hide all graph/AI UI; confirm Phase 5 still passes.
+- **6b (13-16 Oct): multi-piece, multi-material** with `computePhysicalProperties`, joints, matchups, breaking, material picker. *Accept:* a hammer with a stone head and a wooden handle hits and tips differently from an all-wood one.
+- **7 (17-22 Oct): color + painting.** Color picker, brush, eraser, paint stored in sculpt data, undo/redo. *Accept:* paint a pattern on a piece, keep sculpting it, paint stays on the surface; 72 fps.
+- **8 (23-28 Oct): room placement.** Grab, distance grab, pin/unpin, surfaces, Library, persistence, Play Kit. *Accept:* make a cup, paint it, pin it on a real table edge, reload, find it again (or one-tap Re-place); pebbles pour into it.
+- **9 (29 Oct-5 Nov): polish.** PBR looks, contact shadows, FX and sound by material, UI, onboarding, accessibility, 72 fps pass, pre-made sample creations + Reset button.
+- **Buffer 6-9 Nov:** bug fixing, more Play Kit pieces. Nothing new after 9 Nov.
+- **10-13 Nov:** bug fixing, public HTTPS deploy, test on a real Quest, freeze 13 Nov.
+- **14-18 Nov:** demo video (< 3 min, best moment first), README (setup < 10 steps), Devpost text, final run.
+- Cut order if late: more Play Kit pieces -> paint eraser/size slider -> pinned-pose persistence (keep Library). **Never cut:** per-piece materials with correct physics, color, painting, placing/pinning, onboarding, 72 fps.
 
-## 9. Submission framing
-"Sculpt with your hands; an AI understands your creation, applies the right material physics, explains chains of cause and effect, and learns from your corrections." No mind-reading or "trains a neural network" claims. Awards: Best Agentic Interaction, Boldest Original Concept, Best First Five Minutes.
+## 9. Honest limits (write in `docs/KNOWN_LIMITS.md`)
+Concave dynamic colliders are approximations; Havok TriMesh is static only; anchor persistence in Quest Browser is unverified; painting resolution is limited by the Quest budget; a single lump is one piece (no automatic splitting); real objects do not move when hit; iOS Safari has no WebXR.
 
-## Appendix A (optional): Clay Fight vs Bot
-Only after 6-9 pass. Bot lobby, 45-60 s build, ~50 cm arena plate, pinch-drag push / pull-back dash, damage from physics + matchups, "Check my agent" link. No multiplayer.
+## 10. Submission framing
+Track: Productivity (creative tool) or Gaming (sandbox). Aim at Boldest Original Concept, Best First Five Minutes, Best Reason to Come Back (your library of creations lives in your room). Pitch: "Sculpt, paint and build with real materials in your own room. What you make is heavy, bouncy, fragile or slippery for real." No AI claims.
 
 ---
 
-## Engineering amendments (Claude, 2026-10-10)
-These do not add features; they decide how the plan is built with what exists.
+## Engineering notes (Claude, 2026-10-10, after the v4 Phase 6a spikes)
+How v4 is built with what IWSDK 1.0.1 offers. No features added.
 
-1. **Multi-piece physics = one body.** IWSDK 1.0.1 allows one `PhysicsShape` per entity, has no constraints/joints, and exposes `PhysicsBody.centerOfMass` (Havok mass properties). So an assembly is one dynamic body: one convex hull of all pieces, total mass and center of mass from `computePhysicalProperties` (the hull's own mass/COM are overridden). Tipping then follows our computed COM exactly. Friction/restitution are per body: use the material of the piece touching the surface (re-chosen when the object rests in a new pose), behaviors adjust from there. Limit: a convex hull fills concave gaps (an L shape slides as its hull). Confirmed by the 6a spike before 6b relies on it.
-2. **Contact events do not exist in IWSDK 1.0.1** (no collision callbacks in the worker protocol). Impacts are already inferred from velocity changes (`ImpactSystem`); `pushes` edges are inferred the same way plus proximity (A slowed while B, within contact distance, sped up in the same step). Support/touch edges come from geometry (bounding boxes + table height).
-3. **No CCD flag is exposed.** Mitigation: throw speed cap (exists, 6 m/s), minimum piece thickness, and the 72 Hz step. Spike measures the tunnelling speed for thin pieces.
-4. **Reuse, not rewrite.** The Phase 3-5 brain (graph + reasoner + seed knowledge) stays as the internal static knowledge and corrections store, hidden behind `devKgView`. The Phase 5 experiment runner becomes Predict then Test. The Phase 4 AI adapter gains `converse` and `parseBehavior`. `CanvasPanel` becomes the dialogue panel. Agent/Mastery panels are hidden, not deleted.
-5. **Materials 12 -> 8 player-facing.** Today: ceramic, glass, steel, aluminium, wood, plastic, rubber, stone, clay, foam, cloth, paper. Removed from play in 6b: ceramic -> glass (mug/vase priors), aluminium -> steel, cloth -> foam, paper -> foam; saved creations are migrated with that map.
-6. **Pieces UX.** "New piece" starts another lump next to the current one; touching pieces join. Up to 4 pieces, each a smaller SDF grid (32^3) so meshing cost stays near today's single 48^3 grid.
-7. **Text input in VR is hard** (no keyboard inside an immersive session on Quest Browser). Quick-reply buttons are the main path; free text works in the browser; voice (Web Speech API) is checked on Quest in Phase 8 and is optional.
-8. **Frame time on Quest** can only be reported when the owner runs a Quest build; until then each report says "not measured on device".
+1. **Compound bodies and collision events need a small IWSDK extension.** IWSDK's physics component allows one shape per body, no joints and no contact events, but the Havok engine it ships has all three (container shapes with per-child material, constraints, collision events with impulse). ClayMind swaps IWSDK's worker-side runtime for an extended one (`src/physics/runtime/physics-runtime-ext.ts`) through a tiny Vite plugin (`vite.config.ts`); IWSDK's main-thread PhysicsSystem is untouched. Proven in dev, in the production build and in the live page (6a). Phase 6b-v4 adds to it: compound shapes (one child per piece, own density/friction/restitution; concave pieces as up to ~40 boxes) and collision events (with impulse) posted back to the main thread.
+2. **Join / Separate = one compound body vs separate bodies.** A joined creation is one body whose children are its pieces (no joint solver needed for "stick together"); Separate rebuilds the piece as its own body. Havok fixed constraints stay available if a hinge-like case appears later.
+3. **Until 6b-v4 lands** the game keeps the 6b one-hull body with our centre of mass (accepted hammer test).
+4. **Painting = colour per sculpt-grid sample**, copied to vertex colours at re-mesh (the same path as the piece labels): ~0.6 ms per dab on desktop (worker). Paint detail is limited by the grid (~5 mm at 48^3), so the 3 mm minimum brush is effectively ~5 mm.
+5. **No AI, no network:** the AI system, template replacement and material guessing are off (`?devAi` restores them for development). Every piece starts as clay. The brain/agent/mastery views stay off (`?devKgView`).
+6. **Frame time on Quest** is reported as "not measured" until the owner runs a Quest build.
+

@@ -5,13 +5,32 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { fileURLToPath } from 'node:url';
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
+
+/**
+ * IWSDK's physics worker imports its Havok runtime as `./physics-runtime.js`.
+ * Point that one import at ClayMind's extended runtime (compound shapes,
+ * collision events: see src/physics/runtime). Nothing else in IWSDK changes.
+ */
+function claymindPhysicsRuntime(): Plugin {
+  const ext = fileURLToPath(new URL('./src/physics/runtime/physics-runtime-ext.ts', import.meta.url));
+  const worker = /[\\/]@iwsdk[\\/]core[\\/]dist[\\/]physics[\\/]physics-worker\.js/;
+  return {
+    name: 'claymind-physics-runtime',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === './physics-runtime.js' && importer && worker.test(importer.split('?')[0])) return ext;
+      return null;
+    },
+  };
+}
 
 export default defineConfig({
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
-  plugins: [iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
+  plugins: [claymindPhysicsRuntime(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
   server: {
     host: '0.0.0.0',
     port: 8081,
@@ -31,7 +50,8 @@ export default defineConfig({
       },
     },
   },
-  worker: { format: 'es' },
+  // workers are bundled separately: they need the runtime swap too
+  worker: { format: 'es', plugins: () => [claymindPhysicsRuntime()] },
   esbuild: { target: 'esnext' },
   // @drawcall/uikitml otherwise pulls a second three/@pmndrs/uikit graph
   // (three@0.185 vs app super-three@0.181). Duplicate Component classes break

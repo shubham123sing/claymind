@@ -27,7 +27,7 @@ describe('material table', () => {
   });
 
   it('removed materials map onto their replacements; unknown ids fall back to clay', () => {
-    expect(normalizeMaterialId('ceramic')).toBe('glass');
+    expect(normalizeMaterialId('ceramic')).toBe('stone');
     expect(normalizeMaterialId('aluminium')).toBe('steel');
     expect(getMaterial('paper').id).toBe('foam');
     expect(getMaterial('unobtainium').id).toBe('clay');
@@ -46,7 +46,7 @@ describe('material estimator', () => {
       { priors: { plastic: 1 }, weight: 1 },
     ]);
     expect(g[0].id).toBe('plastic');
-    expect(g[1].id).toBe('glass');
+    expect(g[1].id).toBe('stone');
     expect(g.reduce((a, x) => a + x.prob, 0)).toBeCloseTo(1, 6);
   });
 });

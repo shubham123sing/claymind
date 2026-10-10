@@ -82,6 +82,6 @@ describe('matchups', () => {
     expect(matchup('rubber', 'wood').friction).toBeGreaterThan(1);
     expect(matchup('wood', 'rubber').friction).toBe(matchup('rubber', 'wood').friction);
     expect(matchup('plastic', 'wood')).toEqual({ damage: 1, friction: 1, otherSound: 0.4 });
-    expect(matchup('ceramic', 'steel').damage).toBe(matchup('glass', 'steel').damage); // old id
+    expect(matchup('ceramic', 'steel').damage).toBe(matchup('stone', 'steel').damage); // old id
   });
 });

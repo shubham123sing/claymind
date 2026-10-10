@@ -7,7 +7,7 @@ import { InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
 import { AgentSystem } from './agent/agent-system.js';
 import { ExperimentSystem } from './agent/experiment-system.js';
-import { devKgView } from './core/flags.js';
+import { devAi, devKgView } from './core/flags.js';
 import { AiSystem } from './ai/ai-system.js';
 import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
@@ -38,7 +38,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
-    world.registerSystem(AiSystem); // optional upgrade layer: the game works without it
+    if (devAi) world.registerSystem(AiSystem); // plan v4: no AI and no network unless ?devAi
     world.registerSystem(ExperimentSystem);
     // Debug-the-Brain agent + Mastery: development only in plan v3 (experiments stay, for Predict then Test)
     if (devKgView) world.registerSystem(AgentSystem);
