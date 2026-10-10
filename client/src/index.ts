@@ -13,6 +13,7 @@ import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
+import { ColorPickerSystem } from './ui/color-picker.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 import { BallSpawnerSystem } from './spikes/ball-spawner-system.js';
 import { ImpactProbeSystem } from './spikes/impact-probe-system.js';
@@ -36,6 +37,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
     world.registerSystem(MaterialPickerSystem); // before objects: a click on the picker never grabs what is behind it
+    world.registerSystem(ColorPickerSystem);
     world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);

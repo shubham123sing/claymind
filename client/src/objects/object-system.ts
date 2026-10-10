@@ -10,9 +10,11 @@
  * events (impulse + the other body); a hard hit breaks the piece that took it.
  * Rendering: each piece is its own mesh under the body (its frame = where it
  * sits in the object), so joined objects keep their pieces exactly in place.
+ * Colour: vertex colours = the paint where painted, else the piece's chosen
+ * colour, else its material's colour. Colour and paint never change physics.
  */
 import {
-  Box3, BufferAttribute, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PerspectiveCamera, PhysicsBody, PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion,
   Raycaster, Sphere, Vector2, Vector3,
 } from '@iwsdk/core';
@@ -53,6 +55,8 @@ interface PartSpec {
   /** Physics shape from the bake (hull or boxes); missing = hull of the mesh. */
   collider?: PartCollider;
   frame: Frame;
+  /** Colour the player chose for the whole piece (sRGB hex); null/undefined = the material's own. */
+  color?: string | null;
 }
 
 interface LivePart extends PartSpec {
@@ -224,7 +228,7 @@ export class ObjectSystem extends createSystem({}) {
   private spawnCreation(creation: Creation, baked: BakedObject, position: number[], quaternion: number[]): void {
     const parts: PartSpec[] = baked.parts.map((p, i) => ({
       label: p.label, mat: getMaterial(creation.parts[i]?.materialId ?? creation.materialId), mesh: p.mesh, shards: p.shards,
-      collider: p.collider, frame: IDENTITY,
+      collider: p.collider, frame: IDENTITY, color: creation.parts[i]?.color ?? null,
     }));
     const rec = this.spawnBody(parts, position, quaternion, { creation, mode: 'materialize' });
     this.syncCreation(rec);
@@ -253,7 +257,7 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   private specOf(p: PartSpec): PartSpec {
-    return { label: p.label, mat: p.mat, mesh: p.mesh, shards: p.shards, collider: p.collider, frame: p.frame };
+    return { label: p.label, mat: p.mat, mesh: p.mesh, shards: p.shards, collider: p.collider, frame: p.frame, color: p.color };
   }
 
   private spawnBody(
@@ -264,7 +268,12 @@ export class ObjectSystem extends createSystem({}) {
     const view = new Group();
     const parts: LivePart[] = specs.map((sp) => {
       const material = pbrMaterial(sp.mat).clone();
-      const m = new Mesh(geometryFrom(sp.mesh), material);
+      // the colour lives in the vertices (paint + piece colour); the material keeps the PBR look
+      material.vertexColors = true;
+      material.color.set(0xffffff);
+      const geo = geometryFrom(sp.mesh);
+      geo.setAttribute('color', new BufferAttribute(meshColors(sp.mesh, sp.color ?? sp.mat.visual.color), 3));
+      const m = new Mesh(geo, material);
       m.position.fromArray(sp.frame.p);
       m.quaternion.fromArray(sp.frame.q);
       view.add(m);
@@ -567,7 +576,7 @@ export class ObjectSystem extends createSystem({}) {
       const local = this.v.fromArray(piece.center).applyQuaternion(fq).add(this.tmp.fromArray(part.frame.p));
       const out = local.clone().sub(comLocal).applyQuaternion(q).normalize();
       const world = local.applyQuaternion(q).add(p);
-      this.spawnBody([{ label: part.label, mat: part.mat, mesh: piece, shards: [], frame: IDENTITY }], [world.x, world.y, world.z], shardQ, {
+      this.spawnBody([{ label: part.label, mat: part.mat, mesh: piece, shards: [], frame: IDENTITY, color: part.color }], [world.x, world.y, world.z], shardQ, {
         mode: 'free',
         piece: true,
         velocity: [v[0] * 0.3 + out.x * 0.7, Math.abs(v[1]) * 0.25 + 0.6 + out.y * 0.3, v[2] * 0.3 + out.z * 0.7],
@@ -643,7 +652,7 @@ export class ObjectSystem extends createSystem({}) {
     rec.pendingConfidence = confidence;
     rec.pendingAt = performance.now() + MATERIAL_REBUILD_DELAY;
     const mat = lp.material;
-    mat.color.set(m.visual.color);
+    if (!lp.color) recolor(lp.view, lp.mesh, m.visual.color);
     mat.roughness = m.visual.roughness;
     mat.metalness = m.visual.metalness;
     mat.transparent = m.visual.opacity < 1;
@@ -717,6 +726,24 @@ export class ObjectSystem extends createSystem({}) {
     if (!rec?.creation || !this.live.includes(rec)) return null;
     const i = Math.min(rec.focusPart, rec.parts.length - 1);
     return { creationId: rec.creation.id, part: i, materialId: rec.pending.get(i) ?? rec.parts[i].mat.id, position: rec.mesh.position.clone(), radius: rec.radius };
+  }
+
+  /** Colour a whole piece (sRGB hex), or null for its material's own colour. Looks only. */
+  setPieceColor(creationId: string, part: number, color: string | null): boolean {
+    const rec = this.byCreation(creationId);
+    const lp = rec?.parts[part];
+    if (!rec || !lp) return false;
+    lp.color = color;
+    if (rec.creation?.parts[part]) rec.creation.parts[part].color = color;
+    recolor(lp.view, lp.mesh, color ?? getMaterial(rec.pending.get(part) ?? lp.mat.id).visual.color);
+    this.glow(rec, 0.25);
+    rec.lastInteract = performance.now();
+    return true;
+  }
+
+  /** When the player last touched an object (to decide where Color applies). */
+  get lastObjectTouch(): number {
+    return this.focus && this.live.includes(this.focus) ? this.focus.lastInteract : 0;
   }
 
   /** Where a live creation is now (null if gone): for UI that follows it. */
@@ -1040,6 +1067,24 @@ function mainColor(rec: Live): string {
     if (pp.mass > rec.props.parts[best].mass) best = i;
   });
   return rec.parts[best].mat.visual.color;
+}
+
+const tmpCol = new Color();
+
+/** Vertex colours: the paint where painted, else `base` (sRGB hex). Linear floats for three.js. */
+function meshColors(mesh: BakedMesh, base: string): Float32Array {
+  const n = mesh.positions.length / 3, out = new Float32Array(n * 3), b = tmpCol.set(base).clone(), p = mesh.paint;
+  for (let v = 0; v < n; v++) {
+    const c = p && p[v * 4 + 3] > 0 ? tmpCol.setRGB(p[v * 4] / 255, p[v * 4 + 1] / 255, p[v * 4 + 2] / 255, 'srgb') : b;
+    out[v * 3] = c.r; out[v * 3 + 1] = c.g; out[v * 3 + 2] = c.b;
+  }
+  return out;
+}
+
+function recolor(view: Mesh, mesh: BakedMesh, base: string): void {
+  const attr = view.geometry.getAttribute('color') as BufferAttribute;
+  attr.array.set(meshColors(mesh, base));
+  attr.needsUpdate = true;
 }
 
 /** A piece's mesh in object-local coordinates. */

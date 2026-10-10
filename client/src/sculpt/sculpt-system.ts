@@ -21,7 +21,7 @@ import { MenuItem, WristMenu } from '../ui/wrist-menu.js';
 import { ClayView, PIECE_COLORS } from './clay-view.js';
 import { SculptClient } from './sculpt-client.js';
 import { BrushOp, MAX_PIECES } from './sdf-grid.js';
-import { createHandToolState, HandToolState, SculptTool, ToolContext, TOOLS } from './tools.js';
+import { brush, createHandToolState, HandToolState, SculptTool, ToolContext, TOOLS } from './tools.js';
 
 const GRID_SIZE = 0.25;
 /**
@@ -65,6 +65,15 @@ export class SculptSystem extends createSystem({}) {
   private placeTmp = [0, 0];
   private lastToolbarRefresh = 0;
   private frameMs = 16;
+  /** Piece colours the player chose (sRGB hex, by piece label); null = the default tint. */
+  private chosen: (string | null)[] = PIECE_COLORS.map(() => null);
+  /** Paint brush colour (0xRRGGBB). */
+  paintColor = 0xd9534f;
+  /** The clay piece the player last touched (Color applies to it). */
+  private activePiece = 0;
+  /** When the clay was last touched (vs objects: decides where Color applies). */
+  lastClayTouch = 0;
+  private actionTouched = false;
   /** "New piece" pressed: the next Add stroke lays down this piece (null = none). */
   private armedPiece: number | null = null;
   private armedUsed = false;
@@ -104,7 +113,7 @@ export class SculptSystem extends createSystem({}) {
     this.world.createTransformEntity(this.menu.root);
     this.toolbar = new Toolbar(
       items,
-      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · Enter: bring to life · click a piece, then Material (T) · J: join touching objects · K: separate a piece · drag objects (wheel lifts) and release to drop',
+      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · C: colour · 5 Paint / 6 Eraser, [ ] brush size · Enter: bring to life · click a piece, then Material (T) · J join / K separate · drag objects (wheel lifts) and release to drop',
       () => this.audio.tickSound(),
     );
 
@@ -135,6 +144,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
+      { id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) },
       { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
       ...(devKgView
@@ -195,6 +205,7 @@ export class SculptSystem extends createSystem({}) {
     beginAction: () => {
       // the stroke that laid down a new piece is finished: back to extending pieces
       if (this.armedUsed) this.armedPiece = null;
+      this.actionTouched = false;
       this.client.beginAction();
     },
     nearClay: (p, margin) => {
@@ -214,8 +225,16 @@ export class SculptSystem extends createSystem({}) {
       const r = radius / s;
       const piece = op === 'add' && this.armedPiece !== null ? this.armedPiece : undefined;
       if (piece !== undefined) this.armedUsed = true;
-      this.client.push({ op, x: this.v.x, y: this.v.y, z: this.v.z, r, dx, dy, dz, piece });
-      if (this.mirror) this.client.push({ op, x: -this.v.x, y: this.v.y, z: this.v.z, r, dx: -dx, dy, dz, piece });
+      // the first touch of a gesture says which piece the player is working on
+      if (!this.actionTouched) {
+        this.actionTouched = true;
+        this.lastClayTouch = performance.now();
+        const label = piece ?? this.view.pieceAt(this.v);
+        if (label >= 0) this.activePiece = label;
+      }
+      const rgb = op === 'paint' ? this.paintColor : undefined;
+      this.client.push({ op, x: this.v.x, y: this.v.y, z: this.v.z, r, dx, dy, dz, piece, rgb });
+      if (this.mirror) this.client.push({ op, x: -this.v.x, y: this.v.y, z: this.v.z, r, dx: -dx, dy, dz, piece, rgb });
       this.strokesThisFrame++;
     },
   };
@@ -340,7 +359,7 @@ export class SculptSystem extends createSystem({}) {
       materialConfidence: guesses[0].prob,
       materialGuesses: guesses.slice(0, 4),
       parts: b.parts.map((part) => ({
-        label: part.label, materialId: mat.id, materialConfidence: guesses[0].prob, by: 'guess' as const,
+        label: part.label, materialId: mat.id, materialConfidence: guesses[0].prob, by: 'guess' as const, color: this.chosen[part.label] ?? null,
         massKg: mat.density * part.volume, volumeCm3: part.volume * 1e6,
       })),
       massKg: mat.density * b.volume,
@@ -371,9 +390,38 @@ export class SculptSystem extends createSystem({}) {
     setTimeout(() => {
       this.client.beginAction();
       this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
+      this.chosen = PIECE_COLORS.map(() => null);
+      this.activePiece = 0;
+      this.view.setPieceColors(PIECE_COLORS);
       this.fade = { from: 0, to: 1, t0: performance.now(), ms: 600 };
       this.baking = false;
     }, 1400);
+  }
+
+  /** The clay piece Color applies to, and its current colour. */
+  clayTarget(): { piece: number; color: string; chosen: boolean } {
+    const i = this.activePiece;
+    return { piece: i, color: this.chosen[i] ?? PIECE_COLORS[i], chosen: this.chosen[i] !== null };
+  }
+
+  /** Colour a whole clay piece (null = its default tint). Looks only. */
+  setPieceColor(piece: number, color: string | null): void {
+    this.chosen[piece] = color;
+    this.view.setPieceColors(this.chosen.map((c, i) => c ?? PIECE_COLORS[i]));
+  }
+
+  get toolId(): string {
+    return this.tool.id;
+  }
+
+  /** World-space centre of the clay. */
+  clayCenterWorld(): Vector3 {
+    return new Vector3(this.clayCenter[0], this.clayCenter[1], this.clayCenter[2]);
+  }
+
+  /** Pick a sculpt tool by id ('paint', 'erase', ...). */
+  selectTool(id: string): void {
+    this.tool = TOOLS.find((t) => t.id === id) ?? this.tool;
   }
 
   /** Lowest piece label not in use, or null when all MAX_PIECES exist. */
@@ -399,6 +447,12 @@ export class SculptSystem extends createSystem({}) {
     this.tool = TOOLS.find((t) => t.id === 'add') ?? this.tool;
     this.audio.tickSound(1.4);
     this.showStatus(`Piece ${piece + 1}: add clay where it goes`, 4000, PIECE_COLORS[piece]);
+  }
+
+  /** Brush size one step up / down (3 mm - 3 cm). */
+  brushSize(dir: number): void {
+    brush.size = Math.max(brush.min, Math.min(brush.max, brush.size * (dir > 0 ? 1.35 : 1 / 1.35)));
+    this.showStatus(`Brush ${Math.round(brush.size * 2000)} mm`, 1200);
   }
 
   private showStatus(text: string, ms: number, accent?: string): void {
@@ -462,6 +516,9 @@ export class SculptSystem extends createSystem({}) {
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
     if (kb.getKeyDown('KeyN')) this.newPiece();
+    if (kb.getKeyDown('BracketLeft')) this.brushSize(-1);
+    if (kb.getKeyDown('BracketRight')) this.brushSize(1);
+    if (kb.getKeyDown('KeyC')) bus.emit('color:toggle', {});
     if (kb.getKeyDown('KeyJ')) bus.emit('object:join', {});
     if (kb.getKeyDown('KeyK')) bus.emit('object:separate', {});
     if (kb.getKeyDown('KeyT')) bus.emit('material:toggle', {});

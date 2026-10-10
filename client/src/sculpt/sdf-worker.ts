@@ -5,7 +5,7 @@
  * Also "bakes" the sculpt into an object: describe -> match templates -> fit
  * template or keep the sculpt -> mesh + fracture pieces. All local, no network.
  */
-import { BakedObject, bakeFromSdf, describeTemplate, fitTemplate, sculptLabel, sculptSdf } from '../objects/bake.js';
+import { BakedObject, bakeFromSdf, describeTemplate, fitTemplate, sculptLabel, sculptPaint, sculptSdf } from '../objects/bake.js';
 import { describe, ShapeDescriptor } from '../objects/descriptor.js';
 import { MatchResult, rank } from '../objects/matcher.js';
 import { TEMPLATES } from '../objects/templates.js';
@@ -54,7 +54,7 @@ function send(id: number, brushMs: number, full = false): void {
   const update = full ? engine!.remeshAll() : engine!.update();
   const meshMs = performance.now() - t0;
   const transfer: ArrayBuffer[] = [];
-  for (const c of update.chunks) transfer.push(c.positions.buffer as ArrayBuffer, c.normals.buffer as ArrayBuffer, c.labels.buffer as ArrayBuffer);
+  for (const c of update.chunks) transfer.push(c.positions.buffer as ArrayBuffer, c.normals.buffer as ArrayBuffer, c.labels.buffer as ArrayBuffer, c.paint.buffer as ArrayBuffer);
   post({ type: 'mesh', id, brushMs, meshMs, ...update }, transfer);
 }
 
@@ -84,12 +84,17 @@ function bake(m: Extract<SculptRequest, { type: 'bake' }>): void {
   const baked = bakeFromSdf(sdf, extent, {
     res: tmpl ? 56 : 48, pieces: m.pieces, seed: m.seed,
     label: tmpl ? undefined : sculptLabel(grid, d.center, m.scale),
+    paint: tmpl ? undefined : sculptPaint(grid, d.center, m.scale),
   });
   // transfer each buffer once (a single part shares the whole mesh's buffers)
   const transfer = new Set<ArrayBuffer>([baked.mesh.positions.buffer as ArrayBuffer, baked.mesh.normals.buffer as ArrayBuffer]);
   for (const part of baked.parts) {
     transfer.add(part.mesh.positions.buffer as ArrayBuffer).add(part.mesh.normals.buffer as ArrayBuffer);
-    for (const p of part.shards) transfer.add(p.positions.buffer as ArrayBuffer).add(p.normals.buffer as ArrayBuffer);
+    if (part.mesh.paint) transfer.add(part.mesh.paint.buffer as ArrayBuffer);
+    for (const p of part.shards) {
+      transfer.add(p.positions.buffer as ArrayBuffer).add(p.normals.buffer as ArrayBuffer);
+      if (p.paint) transfer.add(p.paint.buffer as ArrayBuffer);
+    }
     transfer.add((part.collider.kind === 'hull' ? part.collider.points : part.collider.boxes).buffer as ArrayBuffer);
   }
   post(

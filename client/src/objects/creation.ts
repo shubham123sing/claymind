@@ -15,6 +15,8 @@ export interface CreationPart {
   materialConfidence: number;
   /** Who chose the material: the local guess, the AI, or the player. */
   by: 'guess' | 'ai' | 'user';
+  /** Colour the player chose for the whole piece (sRGB hex), or null = the material's own colour. Looks only. */
+  color?: string | null;
   massKg: number;
   volumeCm3: number;
 }

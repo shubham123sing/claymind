@@ -16,7 +16,12 @@ import type { TemplateDef } from './templates.js';
 export interface BakedMesh {
   positions: Float32Array;
   normals: Float32Array;
+  /** Paint per vertex, RGBA (alpha 0 = unpainted: the piece colour shows). */
+  paint?: Uint8Array;
 }
+
+/** Paint of the sculpt at an object-local point, written as RGBA into `out` at `o`. */
+export type PaintFn = (x: number, y: number, z: number, out: Uint8Array, o: number) => void;
 
 export interface BakedPiece extends BakedMesh {
   /** Piece centre in object-local metres; piece vertices are relative to it. */
@@ -79,7 +84,7 @@ function mulberry(seed: number): () => number {
  */
 export function bakeFromSdf(
   sdf: Sdf, extent: number,
-  opts: { res?: number; pieces?: number; pieceRes?: number; seed?: number; label?: (x: number, y: number, z: number) => number } = {},
+  opts: { res?: number; pieces?: number; pieceRes?: number; seed?: number; label?: (x: number, y: number, z: number) => number; paint?: PaintFn } = {},
 ): BakedObject {
   const res = opts.res ?? 56;
   const edge = extent * 1.25 + 0.01;
@@ -96,8 +101,10 @@ export function bakeFromSdf(
   const shards = opts.pieces ?? 6, pieceRes = opts.pieceRes ?? 32, seed = opts.seed ?? 1;
   const labels = opts.label ? labelGrid(g, opts.label) : null;
   const present = labels ? presentLabels(g, labels) : [0];
+  const painted = (m: BakedMesh, at: [number, number, number] = [0, 0, 0]): BakedMesh => (opts.paint ? { ...m, paint: paintOf(m.positions, opts.paint, at) } : m);
   if (present.length <= 1) {
-    return { mesh, volume, size, parts: [{ label: present[0] ?? 0, mesh, volume, shards: fracture(g, shards, pieceRes, seed), collider: partCollider(g, mesh.positions, volume) }] };
+    const sh = fracture(g, shards, pieceRes, seed).map((p) => ({ ...p, ...painted(p, p.center) }));
+    return { mesh, volume, size, parts: [{ label: present[0] ?? 0, mesh: painted(mesh), volume, shards: sh, collider: partCollider(g, mesh.positions, volume) }] };
   }
   const parts: BakedPart[] = [];
   for (const label of present) {
@@ -109,9 +116,17 @@ export function bakeFromSdf(
     if (m.positions.length < 9 * 4) continue;
     const v = Math.abs(meshVolume(m.positions));
     const n = Math.max(2, Math.min(6, Math.round((shards * v) / volume) + 1));
-    parts.push({ label, mesh: m, volume: v, shards: fracture(pg, n, pieceRes - 8, seed + label), collider: partCollider(pg, m.positions, v) });
+    const sh = fracture(pg, n, pieceRes - 8, seed + label).map((p) => ({ ...p, ...painted(p, p.center) }));
+    parts.push({ label, mesh: painted(m), volume: v, shards: sh, collider: partCollider(pg, m.positions, v) });
   }
   return { mesh, volume, size, parts };
+}
+
+/** Paint per vertex (positions relative to `at`). */
+function paintOf(positions: Float32Array, fn: PaintFn, at: [number, number, number]): Uint8Array {
+  const out = new Uint8Array((positions.length / 3) * 4);
+  for (let v = 0; v < positions.length / 3; v++) fn(positions[v * 3] + at[0], positions[v * 3 + 1] + at[1], positions[v * 3 + 2] + at[2], out, v * 4);
+  return out;
 }
 
 /** Piece label per sample (inside samples only; outside keep 0). */
@@ -198,6 +213,11 @@ export function fracture(g: SdfGrid, count: number, res: number, seed: number): 
 /** SDF of the sculpt itself in object-local metres (world scale), centred at `center` (grid-local). */
 export function sculptSdf(grid: SdfGrid, center: [number, number, number], scale: number): Sdf {
   return (x, y, z) => grid.sample(center[0] + x / scale, center[1] + y / scale, center[2] + z / scale) * scale;
+}
+
+/** Paint of the sculpt at an object-local point (nearest inside sample). */
+export function sculptPaint(grid: SdfGrid, center: [number, number, number], scale: number): PaintFn {
+  return (x, y, z, out, o) => grid.nearestInsidePaint(center[0] + x / scale, center[1] + y / scale, center[2] + z / scale, grid.voxel * 2, out, o);
 }
 
 /** Piece label of the sculpt at an object-local point (nearest inside sample). */

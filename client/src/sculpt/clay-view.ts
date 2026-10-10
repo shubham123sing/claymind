@@ -1,7 +1,8 @@
 /**
  * Visuals for the live sculpt: chunk meshes under a transform group, a soft
  * contact shadow, a size readout (label + ring on the surface) and brush cursors.
- * Each piece of clay has its own tint so the player can see the pieces.
+ * Each piece of clay has its own colour (a tint until the player picks one);
+ * paint on the surface shows over it.
  */
 import {
   BufferAttribute, BufferGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicMaterial,
@@ -99,7 +100,9 @@ export class ClayView {
       const geo = new BufferGeometry();
       geo.setAttribute('position', new BufferAttribute(c.positions, 3));
       geo.setAttribute('normal', new BufferAttribute(c.normals, 3));
-      geo.setAttribute('color', new BufferAttribute(pieceColors(c.labels), 3));
+      geo.setAttribute('color', new BufferAttribute(vertexColors(c.labels, c.paint, this.pieceLinear), 3));
+      geo.userData.labels = c.labels;
+      geo.userData.paint = c.paint;
       geo.computeBoundingSphere();
       if (mesh) {
         mesh.geometry.dispose();
@@ -207,16 +210,43 @@ export class ClayView {
   setClayColor(hex: number): void {
     this.material.color = new Color(hex);
   }
+
+  /** Piece colours (sRGB hex strings, index = piece label); recolours the clay. */
+  setPieceColors(colors: string[]): void {
+    this.pieceLinear = colors.map((h) => new Color(h));
+    for (const mesh of this.chunks.values()) {
+      const g = mesh.geometry, attr = g.getAttribute('color') as BufferAttribute;
+      attr.array.set(vertexColors(g.userData.labels, g.userData.paint, this.pieceLinear));
+      attr.needsUpdate = true;
+    }
+  }
+  private pieceLinear = PIECE_COLORS.map((h) => new Color(h));
+
+  /** Piece label of the clay surface nearest to a point in the clay's local space (-1 if no clay). */
+  pieceAt(local: { x: number; y: number; z: number }): number {
+    let best = Infinity, label = -1;
+    for (const mesh of this.chunks.values()) {
+      const pos = mesh.geometry.getAttribute('position').array as Float32Array, labels = mesh.geometry.userData.labels as Uint8Array;
+      for (let v = 0; v < labels.length; v++) {
+        const d = (pos[v * 3] - local.x) ** 2 + (pos[v * 3 + 1] - local.y) ** 2 + (pos[v * 3 + 2] - local.z) ** 2;
+        if (d < best) (best = d), (label = labels[v]);
+      }
+    }
+    return label;
+  }
 }
 
 /** Clay tints per piece (sRGB): terracotta, slate blue, olive, plum. */
 export const PIECE_COLORS = ['#c98a5e', '#7f9cc0', '#a3b067', '#b07aa6'];
-const PIECE_LINEAR = PIECE_COLORS.map((h) => new Color(h)); // Color() converts sRGB hex to linear
+const tmpColor = new Color();
 
-function pieceColors(labels: Uint8Array): Float32Array {
+/** Paint where painted, else the piece colour (linear, for the vertex colour attribute). */
+export function vertexColors(labels: Uint8Array, paint: Uint8Array, pieces: Color[]): Float32Array {
   const out = new Float32Array(labels.length * 3);
   for (let v = 0; v < labels.length; v++) {
-    const c = PIECE_LINEAR[labels[v] % PIECE_LINEAR.length];
+    let c: Color;
+    if (paint[v * 4 + 3] > 0) c = tmpColor.setRGB(paint[v * 4] / 255, paint[v * 4 + 1] / 255, paint[v * 4 + 2] / 255, 'srgb');
+    else c = pieces[labels[v] % pieces.length];
     out[v * 3] = c.r; out[v * 3 + 1] = c.g; out[v * 3 + 2] = c.b;
   }
   return out;

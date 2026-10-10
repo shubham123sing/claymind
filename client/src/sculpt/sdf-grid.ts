@@ -3,15 +3,16 @@
  * Values are clamped to a narrow band so brushes stay local and cheap.
  * Boundary samples are always "outside" so the surface is always closed.
  * Coordinates are grid-local metres; the grid cube is centred on the origin.
- * Each sample also carries a piece label (plan v3: an object is made of pieces,
- * each with its own material). A label is meaningful where the sample is inside.
+ * Each sample also carries a piece label (an object is made of pieces, each
+ * with its own material) and paint (RGBA; alpha 0 = unpainted, the piece colour
+ * shows). Both are meaningful where the sample is inside, and move with the clay.
  * Pure data + math: runs in a Web Worker and in unit tests.
  */
 export const CHUNK_CELLS = 8;
 /** Pieces per creation (labels 0..MAX_PIECES-1). */
 export const MAX_PIECES = 4;
 
-export type BrushOp = 'add' | 'carve' | 'smooth' | 'drag';
+export type BrushOp = 'add' | 'carve' | 'smooth' | 'drag' | 'paint' | 'erase';
 
 export class SdfGrid {
   /** Samples per axis. Cells per axis = res - 1. */
@@ -23,12 +24,15 @@ export class SdfGrid {
   readonly data: Float32Array;
   /** Piece label per sample (see MAX_PIECES). */
   readonly labels: Uint8Array;
+  /** Paint per sample, RGBA (alpha 0 = unpainted). */
+  readonly paint: Uint8Array;
   readonly chunksPerAxis: number;
   readonly dirty: Uint8Array;
   /** Grid-local min corner (metres). */
   readonly origin: [number, number, number];
   private scratch: Float32Array | null = null;
   private labelScratch: Uint8Array | null = null;
+  private paintScratch: Uint8Array | null = null;
 
   constructor(res = 48, size = 0.25) {
     this.res = res;
@@ -38,6 +42,7 @@ export class SdfGrid {
     this.origin = [-size / 2, -size / 2, -size / 2];
     this.data = new Float32Array(res * res * res).fill(this.band);
     this.labels = new Uint8Array(res * res * res);
+    this.paint = new Uint8Array(res * res * res * 4);
     this.chunksPerAxis = Math.ceil((res - 1) / CHUNK_CELLS);
     this.dirty = new Uint8Array(this.chunksPerAxis ** 3);
   }
@@ -73,14 +78,16 @@ export class SdfGrid {
   }
 
   /** Mark chunks wherever `data` or labels differ from the previous state (used after undo/redo rebuilds). */
-  markChangedSince(previous: Float32Array, previousLabels?: Uint8Array): number {
+  markChangedSince(previous: Float32Array, previousLabels?: Uint8Array, previousPaint?: Uint8Array): number {
     const r = this.res;
     let changed = 0;
     for (let k = 0; k < r; k++)
       for (let j = 0; j < r; j++) {
         const row = r * (j + r * k);
         for (let i = 0; i < r; i++) {
-          if (this.data[row + i] !== previous[row + i] || (previousLabels && this.labels[row + i] !== previousLabels[row + i])) {
+          const s = row + i;
+          if (this.data[s] !== previous[s] || (previousLabels && this.labels[s] !== previousLabels[s]) ||
+            (previousPaint && (this.paint[s * 4 + 3] !== previousPaint[s * 4 + 3] || this.paint[s * 4] !== previousPaint[s * 4] || this.paint[s * 4 + 1] !== previousPaint[s * 4 + 1] || this.paint[s * 4 + 2] !== previousPaint[s * 4 + 2]))) {
             changed++;
             this.markDirtyRange(i, j, k, i, j, k);
           }
@@ -107,7 +114,17 @@ export class SdfGrid {
           this.data[this.index(i, j, k)] = Math.max(-band, Math.min(band, d));
         }
     this.labels.fill(0);
+    this.paint.fill(0);
     this.markAllDirty();
+  }
+
+  /** Index of the sample nearest to (x, y, z) (grid-local metres). */
+  nearestIndex(x: number, y: number, z: number): number {
+    const { res, voxel, origin } = this;
+    const i = Math.max(0, Math.min(res - 1, Math.round((x - origin[0]) / voxel)));
+    const j = Math.max(0, Math.min(res - 1, Math.round((y - origin[1]) / voxel)));
+    const k = Math.max(0, Math.min(res - 1, Math.round((z - origin[2]) / voxel)));
+    return this.index(i, j, k);
   }
 
   /** Label of the sample nearest to (x, y, z) in `src` labels (grid-local metres). */
@@ -135,6 +152,61 @@ export class SdfGrid {
           if (d < best) (best = d), (label = labels[idx]);
         }
     return label;
+  }
+
+  /** Paint (RGBA) of the inside sample closest to (x, y, z) within `reach` m; alpha 0 if none. */
+  nearestInsidePaint(x: number, y: number, z: number, reach: number, out: Uint8Array | number[], o = 0): void {
+    const { res, voxel, origin, data, paint } = this;
+    const i0 = Math.max(0, Math.floor((x - reach - origin[0]) / voxel)), i1 = Math.min(res - 1, Math.ceil((x + reach - origin[0]) / voxel));
+    const j0 = Math.max(0, Math.floor((y - reach - origin[1]) / voxel)), j1 = Math.min(res - 1, Math.ceil((y + reach - origin[1]) / voxel));
+    const k0 = Math.max(0, Math.floor((z - reach - origin[2]) / voxel)), k1 = Math.min(res - 1, Math.ceil((z + reach - origin[2]) / voxel));
+    let best = Infinity, at = -1;
+    for (let k = k0; k <= k1; k++)
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) {
+          const idx = this.index(i, j, k);
+          if (data[idx] >= 0) continue;
+          const d = (origin[0] + i * voxel - x) ** 2 + (origin[1] + j * voxel - y) ** 2 + (origin[2] + k * voxel - z) ** 2;
+          if (d < best) (best = d), (at = idx);
+        }
+    for (let c = 0; c < 4; c++) out[o + c] = at < 0 ? 0 : paint[at * 4 + c];
+  }
+
+  /**
+   * Paint (or erase) the clay surface inside a sphere / capsule: samples just
+   * inside the surface take the colour. Shape is untouched. Returns samples changed.
+   */
+  paintBrush(cx: number, cy: number, cz: number, radius: number, rgb: number | null, dx = 0, dy = 0, dz = 0): number {
+    const { res, voxel, origin, data, paint } = this;
+    const r8 = rgb === null ? 0 : (rgb >> 16) & 255, g8 = rgb === null ? 0 : (rgb >> 8) & 255, b8 = rgb === null ? 0 : rgb & 255, a8 = rgb === null ? 0 : 255;
+    const seg2 = dx * dx + dy * dy + dz * dz;
+    const i0 = Math.max(1, Math.floor((Math.min(cx, cx + dx) - radius - origin[0]) / voxel)), i1 = Math.min(res - 2, Math.ceil((Math.max(cx, cx + dx) + radius - origin[0]) / voxel));
+    const j0 = Math.max(1, Math.floor((Math.min(cy, cy + dy) - radius - origin[1]) / voxel)), j1 = Math.min(res - 2, Math.ceil((Math.max(cy, cy + dy) + radius - origin[1]) / voxel));
+    const k0 = Math.max(1, Math.floor((Math.min(cz, cz + dz) - radius - origin[2]) / voxel)), k1 = Math.min(res - 2, Math.ceil((Math.max(cz, cz + dz) + radius - origin[2]) / voxel));
+    let touched = 0;
+    let mi0 = res, mj0 = res, mk0 = res, mi1 = -1, mj1 = -1, mk1 = -1;
+    for (let k = k0; k <= k1; k++)
+      for (let j = j0; j <= j1; j++)
+        for (let i = i0; i <= i1; i++) {
+          let x = origin[0] + i * voxel - cx, y = origin[1] + j * voxel - cy, z = origin[2] + k * voxel - cz;
+          if (seg2 > 0) {
+            const t = Math.max(0, Math.min(1, (x * dx + y * dy + z * dz) / seg2));
+            x -= dx * t; y -= dy * t; z -= dz * t;
+          }
+          if (x * x + y * y + z * z > radius * radius) continue;
+          const idx = this.index(i, j, k);
+          // only the skin matters: vertex colours come from the inside sample of each surface edge
+          if (data[idx] >= 0 || data[idx] < -2 * voxel) continue;
+          const p = idx * 4;
+          if (paint[p] === r8 && paint[p + 1] === g8 && paint[p + 2] === b8 && paint[p + 3] === a8) continue;
+          paint[p] = r8; paint[p + 1] = g8; paint[p + 2] = b8; paint[p + 3] = a8;
+          touched++;
+          if (i < mi0) mi0 = i; if (i > mi1) mi1 = i;
+          if (j < mj0) mj0 = j; if (j > mj1) mj1 = j;
+          if (k < mk0) mk0 = k; if (k > mk1) mk1 = k;
+        }
+    if (touched > 0) this.markDirtyRange(mi0, mj0, mk0, mi1, mj1, mk1);
+    return touched;
   }
 
   /** Which piece labels have clay (bit i set = piece i exists). */
@@ -231,6 +303,11 @@ export class SdfGrid {
           } else if (op === 'smooth' && nv < 0 && v >= 0) {
             labels[idx] = this.insideNeighbourLabel(idx);
           }
+          // new clay comes unpainted; clay smoothed into place takes its neighbour's paint
+          if (nv < 0 && v >= 0) {
+            if (op === 'smooth') this.copyNeighbourPaint(idx);
+            else this.paint[idx * 4 + 3] = 0;
+          }
           if (nv !== v || relabelled) {
             data[idx] = nv;
             touched++;
@@ -243,6 +320,16 @@ export class SdfGrid {
     return touched;
   }
 
+  private copyNeighbourPaint(idx: number): void {
+    const { data, paint, res } = this;
+    for (const o of [1, -1, res, -res, res * res, -res * res]) {
+      if (data[idx + o] < 0) {
+        paint.copyWithin(idx * 4, (idx + o) * 4, (idx + o) * 4 + 4);
+        return;
+      }
+    }
+  }
+
   private insideNeighbourLabel(idx: number): number {
     const { data, labels, res } = this;
     for (const o of [1, -1, res, -res, res * res, -res * res]) if (data[idx + o] < 0) return labels[idx + o];
@@ -253,7 +340,8 @@ export class SdfGrid {
     const { res, voxel, band, origin, data, labels } = this;
     if (!this.scratch || this.scratch.length !== data.length) this.scratch = new Float32Array(data.length);
     if (!this.labelScratch || this.labelScratch.length !== data.length) this.labelScratch = new Uint8Array(data.length);
-    const src = this.scratch, srcLabels = this.labelScratch;
+    if (!this.paintScratch || this.paintScratch.length !== data.length * 4) this.paintScratch = new Uint8Array(data.length * 4);
+    const src = this.scratch, srcLabels = this.labelScratch, srcPaint = this.paintScratch;
     const tx = cx + dx, ty = cy + dy, tz = cz + dz;
     // copy only the z-slab the samples can read from (contiguous memory)
     const reachK = (radius + Math.hypot(dx, dy, dz)) / voxel + 2;
@@ -261,6 +349,7 @@ export class SdfGrid {
     const sk1 = Math.min(res - 1, Math.ceil((tz - origin[2]) / voxel + reachK));
     src.set(data.subarray(sk0 * res * res, (sk1 + 1) * res * res), sk0 * res * res);
     srcLabels.set(labels.subarray(sk0 * res * res, (sk1 + 1) * res * res), sk0 * res * res);
+    srcPaint.set(this.paint.subarray(sk0 * res * res * 4, (sk1 + 1) * res * res * 4), sk0 * res * res * 4);
     const i0 = Math.max(1, Math.floor((tx - radius - origin[0]) / voxel));
     const j0 = Math.max(1, Math.floor((ty - radius - origin[1]) / voxel));
     const k0 = Math.max(1, Math.floor((tz - radius - origin[2]) / voxel));
@@ -281,7 +370,16 @@ export class SdfGrid {
           const sx = x - dx * w, sy = y - dy * w, sz = z - dz * w;
           const nv = Math.max(-band, Math.min(band, this.sample(sx, sy, sz, src)));
           const nl = nv < 0 ? this.labelAt(sx, sy, sz, srcLabels) : labels[idx];
-          if (nv !== data[idx] || nl !== labels[idx]) {
+          // paint moves with the clay it is on
+          let repainted = false;
+          if (nv < 0) {
+            const from = this.nearestIndex(sx, sy, sz) * 4, to = idx * 4, pt = this.paint;
+            if (pt[to] !== srcPaint[from] || pt[to + 1] !== srcPaint[from + 1] || pt[to + 2] !== srcPaint[from + 2] || pt[to + 3] !== srcPaint[from + 3]) {
+              pt[to] = srcPaint[from]; pt[to + 1] = srcPaint[from + 1]; pt[to + 2] = srcPaint[from + 2]; pt[to + 3] = srcPaint[from + 3];
+              repainted = true;
+            }
+          }
+          if (nv !== data[idx] || nl !== labels[idx] || repainted) {
             labels[idx] = nl;
             data[idx] = nv;
             touched++;
@@ -304,7 +402,9 @@ export class SdfGrid {
             ? band
             : other.sample(origin[0] + i * voxel, origin[1] + j * voxel, origin[2] + k * voxel);
           this.data[this.index(i, j, k)] = Math.max(-band, Math.min(band, v));
-          this.labels[this.index(i, j, k)] = other.labelAt(origin[0] + i * voxel, origin[1] + j * voxel, origin[2] + k * voxel);
+          const x = origin[0] + i * voxel, y = origin[1] + j * voxel, z = origin[2] + k * voxel, idx = this.index(i, j, k);
+          this.labels[idx] = other.labelAt(x, y, z);
+          this.paint.set(other.paint.subarray(other.nearestIndex(x, y, z) * 4, other.nearestIndex(x, y, z) * 4 + 4), idx * 4);
         }
     this.markAllDirty();
   }

@@ -162,4 +162,29 @@ export const SmoothTool: SculptTool = {
   },
 };
 
-export const TOOLS: SculptTool[] = [ShapeTool, AddTool, CarveTool, SmoothTool];
+/** Paint brush: the colour comes from the colour picker; size 3 mm - 3 cm (radius). */
+export const brush = { size: 0.008, min: 0.003, max: 0.03 };
+
+/** Paint: touch the clay with a fingertip (or pinch) and draw on it. The shape never changes. */
+export const PaintTool: SculptTool = {
+  id: 'paint', label: 'Paint', icon: '✎', color: 0xb07aa6, cursorRadius: brush.size,
+  update(h, ctx, s) {
+    this.cursorRadius = brush.size;
+    endIfReleased(h, s);
+    if (h.pinching && (s.mode === 'pinch' || ctx.nearClay(h.aimPoint, 0.01))) stamp(ctx, s, 'pinch', 'paint', h.aimPoint, brush.size);
+    else if (h.pointing && ctx.nearClay(h.indexTip, 0.006)) stamp(ctx, s, 'poke', 'paint', h.indexTip, brush.size);
+  },
+};
+
+/** Eraser: like Paint, but brings back the piece colour. */
+export const EraserTool: SculptTool = {
+  id: 'erase', label: 'Eraser', icon: '⌫', color: 0x8fa3b8, cursorRadius: brush.size,
+  update(h, ctx, s) {
+    this.cursorRadius = brush.size;
+    endIfReleased(h, s);
+    if (h.pinching && (s.mode === 'pinch' || ctx.nearClay(h.aimPoint, 0.01))) stamp(ctx, s, 'pinch', 'erase', h.aimPoint, brush.size);
+    else if (h.pointing && ctx.nearClay(h.indexTip, 0.006)) stamp(ctx, s, 'poke', 'erase', h.indexTip, brush.size);
+  },
+};
+
+export const TOOLS: SculptTool[] = [ShapeTool, AddTool, CarveTool, SmoothTool, PaintTool, EraserTool];

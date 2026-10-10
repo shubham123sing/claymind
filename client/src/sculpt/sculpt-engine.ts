@@ -19,6 +19,8 @@ export interface Stroke {
   dz?: number;
   /** add only: lay down clay of this piece (a new piece's first lump). */
   piece?: number;
+  /** paint only: colour 0xRRGGBB. */
+  rgb?: number;
 }
 
 export interface LumpSpec {
@@ -44,6 +46,7 @@ export interface MeshUpdate {
 interface Snapshot {
   data: Float32Array;
   labels: Uint8Array;
+  paint: Uint8Array;
 }
 
 const CHECKPOINT_EVERY = 8;
@@ -61,6 +64,7 @@ export class SculptEngine {
   private chunkBounds: Float32Array;
   private prevScratch: Float32Array;
   private prevLabels: Uint8Array;
+  private prevPaint: Uint8Array;
 
   constructor(res: number, private size: number, private lump: LumpSpec) {
     this.grid = new SdfGrid(res, size);
@@ -69,12 +73,13 @@ export class SculptEngine {
     this.chunkBounds = new Float32Array(this.grid.chunksPerAxis ** 3 * 6).fill(Infinity);
     this.prevScratch = new Float32Array(this.grid.data.length);
     this.prevLabels = new Uint8Array(this.grid.data.length);
+    this.prevPaint = new Uint8Array(this.grid.data.length * 4);
     this.fillInitial(this.grid);
     this.checkpoints.set(0, this.snapshot());
   }
 
   private snapshot(): Snapshot {
-    return { data: this.grid.data.slice(), labels: this.grid.labels.slice() };
+    return { data: this.grid.data.slice(), labels: this.grid.labels.slice(), paint: this.grid.paint.slice() };
   }
 
   get res(): number {
@@ -90,7 +95,8 @@ export class SculptEngine {
       this.fillInitial(this.grid);
       return;
     }
-    this.grid.brush(s.op, s.x, s.y, s.z, s.r, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0, s.piece);
+    if (s.op === 'paint' || s.op === 'erase') this.grid.paintBrush(s.x, s.y, s.z, s.r, s.op === 'erase' ? null : s.rgb ?? 0xffffff, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0);
+    else this.grid.brush(s.op, s.x, s.y, s.z, s.r, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0, s.piece);
   }
 
   /** Apply strokes belonging to `actionId`. A new id starts a new undoable action. */
@@ -140,14 +146,16 @@ export class SculptEngine {
   private rebuild(): void {
     this.prevScratch.set(this.grid.data);
     this.prevLabels.set(this.grid.labels);
+    this.prevPaint.set(this.grid.paint);
     let best = 0;
     for (const key of this.checkpoints.keys()) if (key <= this.actions.length && key > best) best = key;
     const cp = this.checkpoints.get(best)!;
     this.grid.data.set(cp.data);
     this.grid.labels.set(cp.labels);
+    this.grid.paint.set(cp.paint);
     for (let a = best; a < this.actions.length; a++) for (const s of this.actions[a]) this.applyStroke(s);
     this.grid.dirty.fill(0);
-    this.grid.markChangedSince(this.prevScratch, this.prevLabels);
+    this.grid.markChangedSince(this.prevScratch, this.prevLabels, this.prevPaint);
   }
 
   /** Change grid resolution, keeping the current shape and the full history. */
@@ -160,10 +168,11 @@ export class SculptEngine {
     this.chunkBounds = new Float32Array(this.grid.chunksPerAxis ** 3 * 6).fill(Infinity);
     this.prevScratch = new Float32Array(this.grid.data.length);
     this.prevLabels = new Uint8Array(this.grid.data.length);
+    this.prevPaint = new Uint8Array(this.grid.data.length * 4);
     const base = new SdfGrid(res, this.size);
     this.fillInitial(base);
     this.checkpoints.clear();
-    this.checkpoints.set(0, { data: base.data, labels: base.labels });
+    this.checkpoints.set(0, { data: base.data, labels: base.labels, paint: base.paint });
     this.checkpoints.set(this.actions.length, this.snapshot());
     this.currentAction = -1;
   }

@@ -134,6 +134,18 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 - **Material picker (menu `Material`, `T`):** a ring of the 8 materials on the touched piece; the centre and the toast say what it means ("Stone · heavy, fragile", "Rubber · medium weight, bouncy, grippy"; from the numbers in materials.json). Real mouse click verified. Fixed while testing: it opened out of view above tall objects, and a glide animation made it slip away from the click at low frame rates (it now snaps to its spot every frame). In the headset it is 20 cm across in front of the object (3.5 cm buttons); on the desktop half size.
 - **Not verified:** poking the picker with a fingertip in XR; frame time on Quest.
 
+### Phase 7 (colour and painting)
+- **Paint lives in the sculpt grid** (RGBA per sample, alpha 0 = unpainted) and goes through the same stroke history as sculpting, so Undo / Redo cover it. Pulled clay carries its paint, new clay comes unpainted, carving reveals unpainted clay, smoothing borrows a neighbour's paint. Bring to life samples it onto each piece mesh and its breakage shards. Tests: `tests/unit/paint.test.ts`.
+- **Browser check:** painted a blue wavy stripe and three yellow dots, then pulled the clay out through the stripe and added clay beside it: the stripe stays on the pulled surface, the new clay is unpainted. After Bring to life the object kept all 1,705 painted vertices; "Whole piece" made it green with the paint on top; mass unchanged (1,241 g); switching to steel kept colour and paint (5,412 g).
+- **Resolution:** paint follows the grid (~5 mm at 48^3), so edges are blocky and a dot is never smaller than ~5 mm (the plan's 3 mm minimum brush paints ~5 mm).
+- **Colour = looks only:** the piece colour and paint are vertex colours; the material keeps its PBR look (steel stays metallic, rubber matte). Physics never reads colour.
+- **Colour picker** (menu `Color`, `C`): hue ring, lightness bar, 8 swatches, Whole piece, Material colour, Paint / Eraser, brush - / + (also `[` `]`). It applies to the object if one was touched after the clay, else to the clay piece last touched. Desktop: beside the clay on the right; headset: on the left, 27 cm wide.
+- **Brush size** is set with - / + (and `[` `]`), not the thumb-index pinch slider of the plan (a slider needs XR testing first).
+- **Painting with the mouse at very low frame rates** (the browser pane ran at ~2 fps at times) samples a fast drag only once or twice; strokes are then gaps. Normal frame rates are fine.
+- **Desktop toolbar moved** to a two-column panel on the left; it had grown to 17 buttons and covered the clay.
+- **Not verified:** fingertip painting in XR, Quest frame time while painting (desktop worker ~0.6 ms per dab).
+- **Only the clay can be painted**; an object's pieces can be recoloured (Whole piece) but not painted after Bring to life.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

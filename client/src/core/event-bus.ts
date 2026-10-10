@@ -48,6 +48,8 @@ export type AppEvents = {
   'object:cycle-material': Record<string, never>;
   /** Open / close the material picker for the piece last touched. */
   'material:toggle': Record<string, never>;
+  /** Open / close the colour picker (clay piece or the touched object piece). */
+  'color:toggle': Record<string, never>;
   /** Join the focused object with the one touching it / separate its focused piece. */
   'object:join': Record<string, never>;
   'object:separate': Record<string, never>;

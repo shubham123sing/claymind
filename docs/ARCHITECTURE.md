@@ -28,6 +28,7 @@ client/src
   physics/runtime/compound-format.ts      compound description packed in a hull vertex buffer; contact message type
   objects/collider.ts         per-piece collider: hull, or <= 40 voxel boxes for hollow pieces
   ui/material-picker.ts       ring of 8 materials on the touched piece (poke / click)
+  ui/color-picker.ts          hue ring, lightness, swatches, whole-piece colour, paint / eraser, brush size
   objects/csg.ts              SDF CSG language for templates
   objects/templates/*.json    template library (auto-loaded)
   objects/descriptor.ts       shape descriptor (aspect, elong, fill, profile, open top, holes)
