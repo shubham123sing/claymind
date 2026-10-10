@@ -6,6 +6,7 @@
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
+import { devKgView } from '../core/flags.js';
 import { Hud } from '../devtools/hud.js';
 import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
 import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
@@ -128,9 +129,13 @@ export class SculptSystem extends createSystem({}) {
       { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
-      { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
-      { id: 'check', label: 'Check beliefs', icon: '⚗', color: 0xf0a040, onPress: () => bus.emit('agent:check', {}) },
-      { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
+      ...(devKgView
+        ? [
+            { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
+            { id: 'check', label: 'Check beliefs', icon: '⚗', color: 0xf0a040, onPress: () => bus.emit('agent:check', {}) },
+            { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
+          ]
+        : []),
       { id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) },
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
@@ -411,9 +416,9 @@ export class SculptSystem extends createSystem({}) {
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
     if (kb.getKeyDown('Enter')) void this.bringToLife();
-    if (kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
-    if (kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
-    if (kb.getKeyDown('KeyP')) bus.emit('mastery:toggle', {});
+    if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
+    if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
+    if (devKgView && kb.getKeyDown('KeyP')) bus.emit('mastery:toggle', {});
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);

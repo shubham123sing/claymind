@@ -10,6 +10,7 @@
 import { createSystem, Group, Matrix4, Mesh, PerspectiveCamera, Quaternion, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
 import { bus, Handedness } from '../core/event-bus.js';
+import { devKgView } from '../core/flags.js';
 import { Brain, Prediction } from '../kg/brain.js';
 import type { Creation } from '../objects/creation.js';
 import { input } from '../platform/input/input-system.js';
@@ -129,6 +130,7 @@ export class KGSystem extends createSystem({}) {
   }
 
   private setVisible(v: boolean): void {
+    v &&= devKgView; // plan v3: the graph is internal unless ?devKgView
     this.visible = v;
     this.view.root.visible = v;
     if (!v) this.cancelDrag();

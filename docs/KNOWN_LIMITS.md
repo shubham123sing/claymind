@@ -11,7 +11,8 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 | IWSDK MR scaffold (AR, hands, grabbing, physics, planes, meshes, hit-test, camera) | **GO** | `create-iwsdk --target ar`, typecheck clean, scene renders, Havok runs |
 | Ball falls on table, bounces | **GO** (browser) / pending Quest (real table) | Virtual table: ball falls, bounces, 2 impacts detected (Δv 1.82 m/s, J 0.226 N·s). Real-plane collider code is in `table-system.ts`; untested on device |
 | 1 Hand pinch + jitter | **GO (pending device)** | Detector + 1€ filter unit-tested; probe reads raw WebXR joints. Needs a Quest jitter number |
-| 2 Contact events / CCD | **FALLBACK (decided)** | IWSDK exposes neither (see below). Velocity-delta impact detection works. Tunnelling test is built but not yet run (see "Open") |
+| 2 Contact events / CCD | **FALLBACK (decided, 6a measured)** | IWSDK exposes neither. Velocity-delta impacts and chain-of-contact inference work; spheres hold to 30 m/s, 5 mm plates tunnel at >= 12 m/s (cap 6 m/s) |
+| 6a Multi-material object | **GO (one body + COM override)** | No compound shapes/joints; `centerOfMass` override makes tipping follow our computed COM (headless Havok test) |
 | 3 Camera frames in Quest Browser | **UNKNOWN, needs device** | Probe built (`C` key / `?camera=1`). Core loop does not depend on it |
 | 4 SDF sculpt 48³ | **GO**, 64³ is possible | Desktop worker: 3.7 ms p95 per stroke (48³), 4.5 ms (64³), off the main thread. Quest is roughly 3-4× slower, so expect about 11-15 ms in the worker: OK as async, but tighten dirty-chunk marking in Phase 1 |
 | 5 MediaPipe webcam hands | **GO (pending your webcam)** | Page built and typechecked; needs a human with a camera |
@@ -89,6 +90,16 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - **Material question:** 7 s after Bring to life, if material confidence is below 50% and the user has not corrected it, the agent asks with the top guesses as buttons. Logic is unit-tested; in the browser the default sculpt matches confidently, so the question was not triggered in the click test.
 - **Mastery screen:** honest mechanisms only: time to object (first vs now), AI answer time, material guesses kept, beliefs taught or fixed, experiments run / saved, brain size, AI cache hits. Saved in IndexedDB. Not "the AI learned you".
 - **Not verified:** poke interaction with the agent and Mastery panels on Quest (code path shared with the brain card); drop-break and bounce only via unit tests and the JS console, not a full click run.
+
+### Phase 6a spike (plan v3: multi-material physics)
+Run headless on IWSDK 1.0.1's own `PhysicsRuntime` (the code inside the physics worker) with Havok at 72 Hz: `tests/physics/spike-6a.test.ts`, harness `tests/physics/havok-sim.ts` (no browser needed; part of `npm test`).
+- **One shape per body, no joints/constraints** in IWSDK's ECS physics. Compound shapes with per-shape materials are not possible without bypassing IWSDK. **Chosen path:** one body per assembly = one convex hull of all pieces + our own mass (density) and **`PhysicsBody.centerOfMass` override** (local space; default `Infinity` = Havok computes it). The value is passed through `physics-system.js` -> worker -> `HP_Body_SetMassProperties`.
+- **COM override works:** a 4x16x4 cm box with the auto COM stays upright (0.3 deg); with COM +3 cm / -3 cm in x (outside its 2 cm half-width) it tips to +x / -x (90 deg); the same with a convex hull. With COM 6 cm low, a spin kick that topples the centred box leaves it at 0.4 deg. So tipping follows the centre of mass we compute.
+- **Per-piece friction/restitution** cannot differ inside one body: one value per body (plan: the piece touching the surface). A convex hull fills concave gaps (an L shape collides as its hull).
+- **Chain of contact without contact events works:** ball (1.4 m/s) -> block A -> block B was inferred exactly from per-step velocity changes plus proximity (a body that speeds up while a neighbour within 1.5 cm slows down was pushed by it): events at 83 ms (ball -> A) and 97 ms (A -> B).
+- **Tunnelling (no CCD flag):** 2 cm spheres never passed a 1 cm wall or the 3 cm table up to 30 m/s (Havok speculative contacts). A 5 mm thin plate passed a 1 cm wall at >= 12 m/s, held at <= 8 m/s. Throw cap stays 6 m/s; minimum piece thickness 8 mm in 6b.
+- **Not checked yet:** thin dynamic piece vs dynamic piece at speed; the same numbers on Quest (same wasm, so physics results should match; only timing differs).
+- **Brain UI hidden:** `devKgView` flag (`?devKgView` to show). Players see no graph, no agent panel, no Mastery; Brain / Check beliefs / Mastery leave the menu and the G/B/P keys. The brain still records creations, materials and corrections internally (verified in the browser: 50 nodes, view hidden).
 
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
