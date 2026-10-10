@@ -51,3 +51,12 @@ Notes:
 | Full in-game AI pass, raw sculpt → clean model (in-browser mock) | Desktop browser | ~10 s, play not blocked |
 | Sample models | public/samples | 2.4k-21k triangles, 57-496 KB, 2.5 MB total |
 | Offscreen renders for the VLM | Desktop | 3 × 320 px PNG; render time not yet measured on Quest |
+
+## Phase 5 (2026-10-10)
+
+| Measurement | Where | Result |
+|---|---|---|
+| Signature demo, Bring to life -> belief fixed (real clicks) | Desktop browser | ~16 s (target < 90 s); agent step pacing 750 ms |
+| Drop-compare experiment | Desktop browser | ~1.5 s; both balls in sync every frame, measured gap 0 ms |
+| Extra physics bodies during an experiment | | 1-2 spheres or one creation copy, removed 2.5 s after the result |
+| Agent / Mastery panels | | canvas textures, redrawn only when changed |

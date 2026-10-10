@@ -79,6 +79,17 @@ Legend: **GO** = proven here · **GO (pending device)** = code works on desktop/
 - **Spend:** costs per call are estimates (`COST_*_USD`); the monthly cap (`SPEND_CAP_USD`, default $5) is enforced before any paid call.
 - **Not verified:** the in-game server path in the browser pane (the pane was hidden; covered instead by `tests/integration/server-roundtrip.ts` against the running server, plus the in-game mock path); anything on Quest.
 
+### Phase 5 findings (agent, Debug the Brain, Mastery)
+- **The agent is code, not an LLM.** It plans tests from the brain (`planTests`), runs real physics experiments, and decides from measurements with fixed thresholds. Every step is shown (observe / plan / act / result / update / ask / report), at most 8 per run. It never changes a belief without asking; every change can be undone from the brain card.
+- **Signature demo verified in the browser with real clicks:** Bring to life -> Check beliefs -> a 722 g steel ball and a 6 g foam ball dropped from 40 cm "landed together (within 1 ms)" -> "heavy causes falls faster" pulses red (disputed) -> "Remove it" -> "Updated: falls faster 65% -> 0%". About 16 s from Bring to life to the report.
+- **Fall-time measurement:** frame timestamps are too coarse (a 72 Hz frame is 14 ms), so the gap is measured in space: when the first ball touches down, the other ball's height is converted to time at the impact speed. Only "heavy first by more than 20 ms" counts as support; a light ball landing first never does.
+- **Fixed during verification:** (1) bodies created on different frames gave the first experiment a ~40 ms head start: balls are now created with gravity off and released in the same frame once both exist in the engine. (2) a ball bounced off the user's creation and faked a 74 ms result: the experiment spot now avoids objects on the table (tries right, further right, then left), and a touchdown only counts near the table top.
+- **Experiments:** drop-compare, drop-break (a copy of the creation from 50 cm; the copy is removed after 12 s and does not count toward the 4-object limit), bounce (30 cm). Results the brain did not predict (e.g. plastic breaking) are proposed as new beliefs with source `experiment`.
+- **Memory:** experiments are remembered per belief version (IndexedDB `settings/agent-memory`); an unchanged belief is not re-tested ("already tested"), counted on Mastery as experiments saved.
+- **Material question:** 7 s after Bring to life, if material confidence is below 50% and the user has not corrected it, the agent asks with the top guesses as buttons. Logic is unit-tested; in the browser the default sculpt matches confidently, so the question was not triggered in the click test.
+- **Mastery screen:** honest mechanisms only: time to object (first vs now), AI answer time, material guesses kept, beliefs taught or fixed, experiments run / saved, brain size, AI cache hits. Saved in IndexedDB. Not "the AI learned you".
+- **Not verified:** poke interaction with the agent and Mastery panels on Quest (code path shared with the brain card); drop-break and bounce only via unit tests and the JS console, not a full click run.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

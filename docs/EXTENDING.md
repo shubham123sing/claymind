@@ -66,3 +66,10 @@ See `docs/KG_SCHEMA.md` for relations.
 **Client (in-browser):** implement `AiProvider` (`client/src/ai/types.ts`) and select it in `AiSystem.chooseProvider`. `LocalMockProvider` is the reference implementation.
 
 Game logic never names a vendor or model: it only sees `AiProvider` results, which are validated (`validateDescribe`) and treated as suggestions.
+
+## New agent experiment
+1. Measure it in `client/src/agent/experiment-system.ts`: add a kind to `ExperimentKind` and a result type, set up bodies in `run()` (use `zone()` for a clear spot; create bodies with gravity off and let the armed release start them), and fill the result in `finish()`. Report measurements, not conclusions.
+2. Teach the agent when to use it in `client/src/agent/agent.ts`: add a case to `planTests` (which prediction or belief it tests) and a `test<Kind>` method that compares the result with the prediction and calls `brain.disputeEdge` / `resolveDispute` / `confirmEdges` / `addLearnedEdge`. Always ask before changing a belief.
+3. Add it to the `AgentLab` interface and wire it in `agent-system.ts`. Add a unit test with a stubbed lab in `tests/unit/agent.test.ts`.
+
+Thresholds: `HEAVY_FIRST_MS` (agent.ts), `DROP_HEIGHT` / `BREAK_HEIGHT` / `BOUNCE_HEIGHT` / `ZONE_OFFSETS` (experiment-system.ts), `STEP_MS` / `ASK_MATERIAL_BELOW` (agent-system.ts).

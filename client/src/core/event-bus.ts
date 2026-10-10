@@ -40,6 +40,10 @@ export type AppEvents = {
   };
   /** Toggle AI on / off. */
   'ai:toggle': Record<string, never>;
+  /** Ask the agent to test its beliefs (Debug the Brain). */
+  'agent:check': Record<string, never>;
+  /** Show / hide the Mastery screen. */
+  'mastery:toggle': Record<string, never>;
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */

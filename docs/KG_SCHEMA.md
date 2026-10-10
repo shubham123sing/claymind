@@ -31,7 +31,7 @@ Source of truth: `client/src/kg/schema.ts` (`KG_SCHEMA_VERSION = 1`). Saved snap
 | has_behavior | **derived only** (reasoner output) | Creation → Behavior |
 
 - `source`: `prior` (seed / estimator), `measurement` (shape descriptor, mass), `vlm` (Phase 4), `user` (edits, weighted highest), `experiment` (Phase 5).
-- `status`: `active`, `disputed` (counts at half confidence; pulses red), `rejected` (cut by the user: ignored by the reasoner, shown faded so it can be undone).
+- `status`: `active`, `disputed` (counts at half confidence; pulses red), `rejected` (cut by the user, or removed by the agent after the user approved: ignored by the reasoner, shown faded so it can be undone).
 
 ## Rules (`client/src/kg/rules/core.json`)
 Generic patterns only; the domain knowledge is in editable edges.

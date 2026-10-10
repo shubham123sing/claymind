@@ -7,7 +7,7 @@
  *   tap a prediction on the card              -> "Why?" (reasoning path lights up)
  * Every edit shows what it changed ("Mug · breaks when dropped 50% -> 13%").
  */
-import { createSystem, Matrix4, Mesh, PerspectiveCamera, Quaternion, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
+import { createSystem, Group, Matrix4, Mesh, PerspectiveCamera, Quaternion, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
 import { bus, Handedness } from '../core/event-bus.js';
 import { Brain, Prediction } from '../kg/brain.js';
@@ -38,6 +38,7 @@ export class KGSystem extends createSystem({}) {
   private visible = false;
   private ready = false;
   private pending: Creation[] = [];
+  private graphDirty = false;
   private drag: Drag | null = null;
   private statusUntil = 0;
   private resetArmedAt = -Infinity;
@@ -63,7 +64,7 @@ export class KGSystem extends createSystem({}) {
 
     void loadBrain(this.brain).then((how) => {
       this.ready = true;
-      this.cleanupFuncs.push(autoSave(this.brain));
+      this.cleanupFuncs.push(autoSave(this.brain), this.brain.graph.onChange(() => (this.graphDirty = true)));
       for (const c of this.pending.splice(0)) this.addCreation(c);
       console.info(`[brain] ${how}: ${this.brain.graph.nodes.size} nodes, ${this.brain.graph.edges.size} edges`);
       this.refresh();
@@ -101,6 +102,25 @@ export class KGSystem extends createSystem({}) {
   private addCreation(c: Creation): void {
     this.focus = this.brain.addCreation(c);
     this.setVisible(true);
+    this.refresh();
+  }
+
+  /** The brain's placed group (agent / mastery panels attach beside the graph). */
+  get anchor(): Group {
+    return this.view.root;
+  }
+
+  /** The id of the focused node (a creation) or null. */
+  get focusId(): string | null {
+    return this.focus;
+  }
+
+  show(): void {
+    if (!this.visible) this.setVisible(true);
+  }
+
+  /** Re-read the graph (after edits made by other systems, e.g. the agent). */
+  refreshView(): void {
     this.refresh();
   }
 
@@ -247,9 +267,9 @@ export class KGSystem extends createSystem({}) {
     if (!this.camHome) {
       this.camHome = { p: cam.position.clone(), q: cam.quaternion.clone() };
       // frame the clay (below) and the graph (above it): back 0.32 m, up 0.2 m, aim between them
-      this.camBrain.p.copy(this.camHome.p).add(new Vector3(0.1, 0.2, 0.46));
+      this.camBrain.p.copy(this.camHome.p).add(new Vector3(0, 0.22, 0.72));
       nearestSurfacePoint(this.camHome.p.x, this.camHome.p.z, 0.2, this.xz);
-      const aim = new Vector3(this.xz[0] + 0.1, surface.topY + 0.2, this.xz[1] - 0.1);
+      const aim = new Vector3(this.xz[0], surface.topY + 0.22, this.xz[1] - 0.1);
       // camera looks down -Z: Matrix4.lookAt(eye, target, up) gives that orientation
       this.camBrain.q.setFromRotationMatrix(new Matrix4().lookAt(this.camBrain.p, aim, new Vector3(0, 1, 0)));
     }
@@ -411,6 +431,10 @@ export class KGSystem extends createSystem({}) {
     if (!this.visible) return;
     const now = performance.now();
     this.place();
+    if (this.graphDirty) {
+      this.graphDirty = false;
+      this.refresh();
+    }
     if (input.xr) this.updateHands(now);
     if (now > this.statusUntil) this.card.set({ status: '' });
     this.card.set({ resetArmed: now - this.resetArmedAt < 3000, canUndo: this.brain.canUndo() });

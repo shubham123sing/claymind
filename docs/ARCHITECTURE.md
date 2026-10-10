@@ -1,4 +1,4 @@
-# Architecture (as built, Phase 4)
+# Architecture (as built, Phase 5)
 
 ```
 client/src
@@ -50,6 +50,13 @@ client/src
   ai/model-normalize.ts       GLB scene -> one centred mesh, volume-matched to the sculpt
   ai/ai-cache.ts              IndexedDB cache keyed by quantised shape (repeat shapes are instant)
   ai/ai-system.ts             orchestration: cache -> describe -> material/KG -> refine -> generate -> swap
+  agent/agent.ts              Debug the Brain: planTests (from predictions + paths), Agent.checkBeliefs / askMaterial, memory; pure, unit-tested
+  agent/experiment-system.ts  visible physics experiments on a clear table spot (drop-compare, drop-break, bounce) -> measurements
+  agent/agent-system.ts       wires agent + panels to the brain anchor, poke/mouse answers, metrics hooks
+  agent/agent-panel.ts        step log + answer buttons (+ aria-live DOM mirror)
+  game/metrics.ts             Mastery metrics (IndexedDB), score
+  game/mastery-panel.ts       Mastery screen
+  ui/canvas-panel.ts          shared canvas-texture panel: regions, hover, poke
   objects/glb.ts              minimal GLB writer (+ vertex welding) for samples / caching
 server/ (Python, FastAPI)
   app/main.py                 routes: /health, /vlm/describe, /image/refine, /model/generate, /model/jobs, /model/files

@@ -185,6 +185,49 @@ export class Brain {
     return out;
   }
 
+  // ------------- agent / experiments -------------
+
+  /** An experiment contradicted this belief: mark it disputed (counts at half confidence, pulses red). */
+  disputeEdge(edgeId: string, evidence: string): void {
+    const e = this.graph.edge(edgeId);
+    if (!e || e.status === 'rejected') return;
+    this.graph.batch('system', () => this.graph.setEdge(e.from, e.relation, e.to, { ...e, status: 'disputed', evidence: [...e.evidence, evidence] }));
+  }
+
+  /**
+   * The user decided about a disputed belief. wrong = true: reject it (undoable,
+   * source becomes `experiment`); false: keep it, a little less sure.
+   */
+  resolveDispute(edgeId: string, wrong: boolean): void {
+    const e = this.graph.edge(edgeId);
+    if (!e) return;
+    this.graph.batch('user', () => {
+      if (wrong) this.graph.setEdge(e.from, e.relation, e.to, { ...e, status: 'rejected', source: 'experiment', evidence: [...e.evidence, 'removed after an experiment (approved by user)'] });
+      else this.graph.setEdge(e.from, e.relation, e.to, { ...e, status: 'active', confidence: e.confidence * 0.7, evidence: [...e.evidence, 'kept by user despite an experiment'] });
+    });
+  }
+
+  /** An experiment agreed with these beliefs: a little more confident. */
+  confirmEdges(edgeIds: string[], evidence: string): void {
+    this.graph.batch('system', () => {
+      for (const id of edgeIds) {
+        const e = this.graph.edge(id);
+        if (!e || e.status === 'rejected' || e.from.startsWith('cre:')) continue;
+        this.graph.setEdge(e.from, e.relation, e.to, { ...e, status: 'active', confidence: Math.min(1, e.confidence + 0.1), evidence: [...e.evidence, evidence] });
+      }
+    });
+  }
+
+  /** Add (or restore) a belief an experiment supports, after user approval. */
+  addLearnedEdge(from: string, relation: Relation, to: string, evidence: string): KGEdge | null {
+    if (!this.graph.node(from) || !this.graph.node(to)) return null;
+    let out: KGEdge | null = null;
+    this.graph.batch('user', () => {
+      out = this.graph.setEdge(from, relation, to, { confidence: 0.9, source: 'experiment', status: 'active', evidence: [evidence] });
+    });
+    return out;
+  }
+
   undo(): boolean {
     return this.graph.undo('user');
   }

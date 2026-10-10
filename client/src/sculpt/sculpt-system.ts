@@ -129,6 +129,8 @@ export class SculptSystem extends createSystem({}) {
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
       { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
+      { id: 'check', label: 'Check beliefs', icon: '⚗', color: 0xf0a040, onPress: () => bus.emit('agent:check', {}) },
+      { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
       { id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) },
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
@@ -410,6 +412,8 @@ export class SculptSystem extends createSystem({}) {
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
     if (kb.getKeyDown('Enter')) void this.bringToLife();
     if (kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
+    if (kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
+    if (kb.getKeyDown('KeyP')) bus.emit('mastery:toggle', {});
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);

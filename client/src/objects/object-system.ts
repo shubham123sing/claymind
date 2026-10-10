@@ -214,7 +214,7 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   private enforceLimits(): void {
-    const creations = this.live.filter((r) => r.creation);
+    const creations = this.live.filter((r) => r.creation && !r.creation.id.includes('#exp'));
     while (creations.length > MAX_CREATIONS) {
       const old = creations.find((r) => r.mode === 'free') ?? creations[0];
       creations.splice(creations.indexOf(old), 1);
@@ -340,6 +340,36 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.creation) bus.emit('object:broke', { creationId: rec.creation.id, materialId: rec.mat.id, x: p.x, y: p.y, z: p.z });
     this.dispose(rec);
     this.enforceLimits();
+  }
+
+  /**
+   * Experiments: drop a copy of a creation (same mesh, material, fracture pieces)
+   * from a world position. Returns the clone's creation id, or null.
+   * The clone never enters the brain or the metrics.
+   */
+  spawnExperimentClone(creationId: string, position: [number, number, number], note: string): string | null {
+    const src = this.byCreation(creationId);
+    if (!src?.creation) return null;
+    const c = { ...src.creation, id: `${creationId}#exp${Date.now().toString(36)}`, aiStatus: note };
+    const rec = this.spawnBody(src.mesh.geometry.clone(), src.mat, position, src.mesh.quaternion.toArray(), { creation: c, pieces: src.pieces, mode: 'free' });
+    rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 150);
+    rec.expires = performance.now() + 12000; // never left lying around
+    return c.id;
+  }
+
+  removeCreation(id: string): void {
+    const rec = this.byCreation(id);
+    if (rec) this.dispose(rec);
+  }
+
+  /** Live creation snapshot for the agent (null if gone). */
+  creationById(id: string): Creation | null {
+    return this.byCreation(id)?.creation ?? null;
+  }
+
+  /** Is anything (object or piece) within `clear` m of (x, z) on the table plane? */
+  occupied(x: number, z: number, clear: number, except?: string): boolean {
+    return this.live.some((l) => l.creation?.id !== except && Math.hypot(l.mesh.position.x - x, l.mesh.position.z - z) < l.radius + clear);
   }
 
   private byCreation(id: string): Live | undefined {
