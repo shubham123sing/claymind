@@ -104,7 +104,7 @@ export class SculptSystem extends createSystem({}) {
     this.world.createTransformEntity(this.menu.root);
     this.toolbar = new Toolbar(
       items,
-      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · Enter: bring to life · click a part of an object, then Material · drag objects (wheel lifts) and release to drop',
+      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · Enter: bring to life · click a piece, then Material (T) · J: join touching objects · K: separate a piece · drag objects (wheel lifts) and release to drop',
       () => this.audio.tickSound(),
     );
 
@@ -115,6 +115,7 @@ export class SculptSystem extends createSystem({}) {
         if (s !== 'non-immersive') this.audio.ensure();
         this.surfaceVersion = -1; // re-place clay relative to the new head pose
       }),
+      bus.on('ui:toast', (e) => this.showStatus(e.text, 2600, e.color)),
     );
   }
 
@@ -133,7 +134,9 @@ export class SculptSystem extends createSystem({}) {
       { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
-      { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
+      { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
+      { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
+      { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
       ...(devKgView
         ? [
             { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
@@ -459,6 +462,9 @@ export class SculptSystem extends createSystem({}) {
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
     if (kb.getKeyDown('KeyN')) this.newPiece();
+    if (kb.getKeyDown('KeyJ')) bus.emit('object:join', {});
+    if (kb.getKeyDown('KeyK')) bus.emit('object:separate', {});
+    if (kb.getKeyDown('KeyT')) bus.emit('material:toggle', {});
     if (kb.getKeyDown('Enter')) void this.bringToLife();
     if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
     if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});

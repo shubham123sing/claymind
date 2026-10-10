@@ -6,6 +6,7 @@
  * the object SDF for the two sources: the sculpt itself, or a template fitted
  * to the sculpt's footprint, size and orientation. Pure (worker + tests).
  */
+import { PartCollider, partCollider } from './collider.js';
 import { compile, Sdf } from './csg.js';
 import { describe, rasterize, sdfBounds, ShapeDescriptor } from './descriptor.js';
 import { ChunkMesher, meshVolume } from '../sculpt/marching-cubes.js';
@@ -30,6 +31,8 @@ export interface BakedPart {
   /** m^3 */
   volume: number;
   shards: BakedPiece[];
+  /** Physics shape: a hull, or boxes for hollow pieces (cups) so things fit inside. */
+  collider: PartCollider;
 }
 
 export interface BakedObject {
@@ -94,7 +97,7 @@ export function bakeFromSdf(
   const labels = opts.label ? labelGrid(g, opts.label) : null;
   const present = labels ? presentLabels(g, labels) : [0];
   if (present.length <= 1) {
-    return { mesh, volume, size, parts: [{ label: present[0] ?? 0, mesh, volume, shards: fracture(g, shards, pieceRes, seed) }] };
+    return { mesh, volume, size, parts: [{ label: present[0] ?? 0, mesh, volume, shards: fracture(g, shards, pieceRes, seed), collider: partCollider(g, mesh.positions, volume) }] };
   }
   const parts: BakedPart[] = [];
   for (const label of present) {
@@ -106,7 +109,7 @@ export function bakeFromSdf(
     if (m.positions.length < 9 * 4) continue;
     const v = Math.abs(meshVolume(m.positions));
     const n = Math.max(2, Math.min(6, Math.round((shards * v) / volume) + 1));
-    parts.push({ label, mesh: m, volume: v, shards: fracture(pg, n, pieceRes - 8, seed + label) });
+    parts.push({ label, mesh: m, volume: v, shards: fracture(pg, n, pieceRes - 8, seed + label), collider: partCollider(pg, m.positions, v) });
   }
   return { mesh, volume, size, parts };
 }

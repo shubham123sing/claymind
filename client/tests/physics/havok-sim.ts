@@ -1,6 +1,8 @@
 /**
  * Headless physics for tests: IWSDK 1.0.1's own PhysicsRuntime (the code that
  * runs inside the game's physics worker) driven directly, at 72 Hz.
+ * `HavokSim.create({ ext: true })` uses ClayMind's extended runtime instead
+ * (compound colliders, collision events), exactly as the game's worker does.
  * Lets physics behaviour be unit-tested without a browser.
  */
 // not in the package exports: import the file the worker uses
@@ -8,11 +10,15 @@ import { PhysicsRuntime } from '../../node_modules/@iwsdk/core/dist/physics/phys
 import {
   PHYSICS_HEADER_WORDS, PHYSICS_INPUT_RECORD_FLOATS, PHYSICS_OUTPUT_RECORD_FLOATS, PHYSICS_PROTOCOL_VERSION, physicsExchangeByteLength,
 } from '../../node_modules/@iwsdk/core/dist/physics/physics-worker-protocol.js';
+import { PhysicsRuntime as ExtRuntime } from '../../src/physics/runtime/physics-runtime-ext';
+import { CompoundChild, ContactMessage, encodeCompound } from '../../src/physics/runtime/compound-format';
 
 export type Shape =
   | { type: 'Box'; size: [number, number, number] }
   | { type: 'Sphere'; r: number }
-  | { type: 'ConvexHull'; vertices: Float32Array };
+  | { type: 'ConvexHull'; vertices: Float32Array }
+  /** ext runtime only: one child per piece, each with its own material */
+  | { type: 'Compound'; children: CompoundChild[] };
 
 export interface BodySpec {
   shape: Shape;
@@ -42,14 +48,23 @@ const FLAG_GRAVITY = 128;
 
 export class HavokSim {
   readonly dt = 1 / 72;
-  private rt = new PhysicsRuntime();
+  private rt: PhysicsRuntime;
+  /** ext runtime: contacts of the last step */
+  contacts: ContactMessage[] = [];
+
+  private constructor(ext: boolean) {
+    this.rt = ext ? new ExtRuntime() : new PhysicsRuntime();
+    if (ext) (this.rt as ExtRuntime).onContacts = (c) => this.contacts.push(...c);
+  }
   private next = 1;
   private dynamic = new Set<number>();
   private states = new Map<number, BodyState>();
   private commands: { handle: number; flags: number; v?: number[]; w?: number[]; g?: number }[] = [];
   time = 0;
+  /** centre of mass the runtime used for the last added body */
+  lastCom: [number, number, number] = [0, 0, 0];
 
-  static async create(): Promise<HavokSim> {
+  static async create(o: { ext?: boolean } = {}): Promise<HavokSim> {
     // Havok fetches its .wasm next to the module; Node's fetch has no file: support
     const realFetch = globalThis.fetch;
     if (!(realFetch as { havokPatched?: boolean }).havokPatched) {
@@ -63,7 +78,7 @@ export class HavokSim {
       patched.havokPatched = true;
       globalThis.fetch = patched;
     }
-    const s = new HavokSim();
+    const s = new HavokSim(!!o.ext);
     await s.rt.initialize([0, -9.81, 0]);
     return s;
   }
@@ -72,16 +87,16 @@ export class HavokSim {
     const handle = this.next++;
     const sh = b.shape;
     const state = b.state ?? 'DYNAMIC';
-    const com = this.rt.addBody({
+    this.lastCom = this.rt.addBody({
       type: 'add-body',
       handle,
       shape: {
-        type: sh.type,
+        type: sh.type === 'Compound' ? 'ConvexHull' : sh.type,
         dimensions: sh.type === 'Box' ? sh.size : sh.type === 'Sphere' ? [sh.r, 0, 0] : [0, 0, 0],
         density: b.density ?? 1000,
         friction: b.friction ?? 0.5,
         restitution: b.restitution ?? 0.1,
-        vertices: sh.type === 'ConvexHull' ? sh.vertices.slice().buffer : undefined,
+        vertices: sh.type === 'ConvexHull' ? sh.vertices.slice().buffer : sh.type === 'Compound' ? encodeCompound(sh.children).buffer : undefined,
       },
       state,
       position: b.position,
@@ -91,7 +106,6 @@ export class HavokSim {
       gravityFactor: b.gravityFactor ?? 1,
       centerOfMass: b.centerOfMass ?? [Infinity, Infinity, Infinity],
     });
-    void com;
     if (state !== 'STATIC') this.dynamic.add(handle);
     this.states.set(handle, { p: [...b.position], q: b.quaternion ?? [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0] });
     return handle;
@@ -113,15 +127,25 @@ export class HavokSim {
     return this.states.get(handle)!;
   }
 
+  removeBody(handle: number): void {
+    this.rt.removeBody(handle);
+    this.dynamic.delete(handle);
+  }
+
+  /** Advance `n` 72 Hz steps in ONE runtime call (as IWSDK does after a slow frame). */
+  stepMany(n: number): void {
+    this.step(1, undefined, n);
+  }
+
   /** Advance one 72 Hz step; `each` runs after every step. */
-  step(n = 1, each?: () => void): void {
+  step(n = 1, each?: () => void, subSteps = 1): void {
     for (let k = 0; k < n; k++) {
       const cmds = this.commands.splice(0);
       const buf = new ArrayBuffer(physicsExchangeByteLength(cmds.length, this.dynamic.size));
       const ints = new Int32Array(buf), f = new Float32Array(buf);
       ints[0] = PHYSICS_PROTOCOL_VERSION;
       ints[2] = cmds.length;
-      ints[5] = 1;
+      ints[5] = subSteps;
       f[8] = this.dt;
       cmds.forEach((c, i) => {
         const base = PHYSICS_HEADER_WORDS + i * PHYSICS_INPUT_RECORD_FLOATS;
@@ -142,7 +166,7 @@ export class HavokSim {
         s.v = [out[base + 8], out[base + 9], out[base + 10]];
         s.w = [out[base + 11], out[base + 12], out[base + 13]];
       }
-      this.time += this.dt;
+      this.time += this.dt * subSteps;
       each?.();
     }
   }

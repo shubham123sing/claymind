@@ -56,6 +56,17 @@ export function getMaterial(id: string): Material {
   return byId.get(normalizeMaterialId(id))!;
 }
 
+/** Two or three plain words for the material chip ("heavy, fragile"). From the numbers, never invented. */
+export function materialTraits(m: Material): string[] {
+  const out = [m.density < 300 ? 'very light' : m.density < 1000 ? 'light' : m.density < 2000 ? 'medium weight' : m.density < 5000 ? 'heavy' : 'very heavy'];
+  if (m.fragility) out.push('fragile');
+  else if (m.hardness >= 0.9) out.push('tough');
+  if (m.restitution >= 0.6) out.push('bouncy');
+  if (m.friction >= 0.85) out.push('grippy');
+  else if (m.friction <= 0.42) out.push('slippery');
+  return out.slice(0, 3);
+}
+
 /** Priors from the first shape rule whose feature ranges all match. */
 export function shapePriors(d: ShapeDescriptor): Priors {
   for (const rule of SHAPE_PRIORS) {

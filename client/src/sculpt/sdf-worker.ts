@@ -90,6 +90,7 @@ function bake(m: Extract<SculptRequest, { type: 'bake' }>): void {
   for (const part of baked.parts) {
     transfer.add(part.mesh.positions.buffer as ArrayBuffer).add(part.mesh.normals.buffer as ArrayBuffer);
     for (const p of part.shards) transfer.add(p.positions.buffer as ArrayBuffer).add(p.normals.buffer as ArrayBuffer);
+    transfer.add((part.collider.kind === 'hull' ? part.collider.points : part.collider.boxes).buffer as ArrayBuffer);
   }
   post(
     { type: 'baked', id: m.id, ok: true, ms: performance.now() - t0, descriptor: d, ranking, source: tmpl ? 'template' : 'sculpt', templateId: tmpl?.id ?? null, baked },

@@ -70,6 +70,9 @@ Game logic never names a vendor or model: it only sees `AiProvider` results, whi
 ## Material pair rules (data only)
 Add `{ "a", "b", "damageToA", "damageToB", "friction", "otherSound" }` to `client/src/materials/matchups.json`. Damage scales the speed a part feels when it hits (or is hit by) the other material, before comparing with its `fragility.breakSpeed`. Built-in surfaces are listed under `surfaces` (table, floor).
 
+## Physics features IWSDK does not expose
+Add them in `client/src/physics/runtime/physics-runtime-ext.ts` (runs in IWSDK's physics worker; the Vite plugin in `vite.config.ts` swaps it in). Pass extra data from the main thread inside the compound description (`compound-format.ts`, bump `VERSION`) and send results back on the BroadcastChannel. Test it headless with `HavokSim.create({ ext: true })` (`tests/physics/runtime-ext.test.ts`).
+
 ## Physical numbers
 Never compute mass or balance elsewhere: call `computePhysicalProperties` (`client/src/physics/physical-properties.ts`) and use its output for both the physics body (`bodyParameters`) and anything shown to the player. Unit tests: `tests/unit/physical-properties.test.ts`; physics behaviour on IWSDK's Havok runtime: `tests/physics/` (harness `havok-sim.ts`, no browser).
 

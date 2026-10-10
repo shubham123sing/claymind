@@ -1,15 +1,20 @@
 /**
  * Creations in the world: spawn (materialize -> fly to hand / hover), hold
  * (palm carry, pinch, mouse), throw, impact sounds, breaking into pre-baked
- * fracture shards, info labels and blob shadows.
- * Plan v3: a creation is made of parts (clay pieces), each with its own
- * material. One physics body per object: a convex hull carrying the mass and
- * centre of mass from computePhysicalProperties; friction / bounce come from
- * the part touching the surface. A hard hit breaks the part that took it.
+ * fracture shards, Join / Separate, info labels and blob shadows.
+ * Plan v4: a creation is made of pieces, each with its own material. One
+ * physics body per object, a Havok compound with one child per piece (its own
+ * density, friction, bounce; a hull, or boxes for hollow pieces like cups),
+ * built by ClayMind's runtime extension (src/physics/runtime). Mass and centre
+ * of mass come from computePhysicalProperties. Hits come from Havok collision
+ * events (impulse + the other body); a hard hit breaks the piece that took it.
+ * Rendering: each piece is its own mesh under the body (its frame = where it
+ * sits in the object), so joined objects keep their pieces exactly in place.
  */
 import {
-  BufferAttribute, BufferGeometry, createSystem, Entity, Mesh, MeshStandardMaterial, PerspectiveCamera, PhysicsBody,
-  PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion, Raycaster, Vector2, Vector3,
+  Box3, BufferAttribute, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  PerspectiveCamera, PhysicsBody, PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion,
+  Raycaster, Sphere, Vector2, Vector3,
 } from '@iwsdk/core';
 import { ImpactAudio } from '../audio/impact-audio.js';
 import { audioContext } from '../audio/audio-context.js';
@@ -17,41 +22,59 @@ import { bus, Handedness } from '../core/event-bus.js';
 import { Shards } from '../fx/shards.js';
 import { feltSpeed, matchup, SURFACE_MATERIAL } from '../materials/matchups.js';
 import { getMaterial, Material, MATERIALS } from '../materials/materials.js';
-import { bodyParameters, computePhysicalProperties, PartInput, PhysicalProperties } from '../physics/physical-properties.js';
+import { computePhysicalProperties, contactPart, PartInput, PhysicalProperties } from '../physics/physical-properties.js';
+import { CompoundChild, CONTACT_CHANNEL, ContactMessage, encodeCompound } from '../physics/runtime/compound-format.js';
 import { input } from '../platform/input/input-system.js';
 import { distanceToRect, nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import type { BakedMesh, BakedObject, BakedPiece } from './bake.js';
-import { Creation, syncMainMaterial } from './creation.js';
+import type { PartCollider } from './collider.js';
+import { Creation, newCreationId, syncMainMaterial } from './creation.js';
 import { PhysObject } from './object-components.js';
-import { blobTexture, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
+import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
 
 type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'pointer' | 'free';
 
-/** What a body is built from: one entry per part. */
+/** Where a piece sits in its object (piece-local -> object-local). */
+interface Frame {
+  p: [number, number, number];
+  q: [number, number, number, number];
+}
+const IDENTITY: Frame = { p: [0, 0, 0], q: [0, 0, 0, 1] };
+
+/** What a body is built from: one entry per piece. */
 interface PartSpec {
   /** Piece label from the sculpt. */
   label: number;
   mat: Material;
-  /** Closed mesh in object-local metres. */
+  /** Closed mesh in piece-local metres. */
   mesh: BakedMesh;
-  /** Pre-fractured shards of this part (object-local centres). */
+  /** Pre-fractured shards of this piece (piece-local centres). */
   shards: BakedPiece[];
+  /** Physics shape from the bake (hull or boxes); missing = hull of the mesh. */
+  collider?: PartCollider;
+  frame: Frame;
 }
 
 interface LivePart extends PartSpec {
-  /** Render material of this part (geometry group i). */
   material: MeshStandardMaterial;
+  /** This piece's mesh (a child of the object's view group). */
+  view: Mesh;
+  /** The mesh in object-local coordinates (for physics numbers and hit tests). */
+  bodyPositions: Float32Array;
 }
 
 interface Live {
   entity: Entity;
+  /** The physics body's object (carries the compound description; transforms the view). */
   mesh: Mesh;
+  /** What is drawn: one mesh per piece. */
+  view: Group;
   parts: LivePart[];
   /** Mass, centre of mass, support: the numbers used for the body and the label. */
   props: PhysicalProperties;
-  /** Part that touches the surface (sets friction / bounce). */
+  /** Part that touches the surface. */
   contact: number;
-  /** Part the player last touched (target of Material). */
+  /** Part the player last touched (target of Material / Separate). */
   focusPart: number;
   glow: number;
   massKg: number;
@@ -79,10 +102,17 @@ interface Live {
   outOfReachSince: number;
 }
 
+/** The physics carrier is never drawn (its "geometry" is the compound description). */
+const HIDDEN = new MeshBasicMaterial({ visible: false });
+/** Join: pieces of two objects must be at most this far apart (m). */
+const JOIN_GAP = 0.012;
+/** Below this speed change a contact makes no sound (m/s). */
+const SOUND_DV = 0.15;
+
 /** Rebuilding bodies in quick succession confuses the physics worker (entity indices get reused). */
 const MATERIAL_REBUILD_DELAY = 400;
 
-const MAX_CREATIONS = 4;
+const MAX_CREATIONS = 8;
 const MAX_PIECES = 24;
 const MAX_THROW = 6;
 const PIECE_LIFETIME = 7000;
@@ -110,14 +140,30 @@ export class ObjectSystem extends createSystem({}) {
   private v2 = new Vector3();
   private v3 = new Vector3();
   private lostSince: Record<Handedness, number> = { left: 0, right: 0 };
+  /** Collision events from the physics worker, handled in update(). */
+  private contacts: ContactMessage[] = [];
+  /** Once Havok events arrive, the velocity-change impact path stays quiet. */
+  private contactsSeen = false;
+  private byHandle = new Map<number, Live>();
 
   init(): void {
     this.physics = this.world.getSystem(PhysicsSystem);
     this.world.createTransformEntity(this.shards.mesh);
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel(CONTACT_CHANNEL);
+      channel.onmessage = (e: MessageEvent<ContactMessage[]>) => {
+        if (!Array.isArray(e.data)) return; // debug pings / pongs share the channel
+        this.contactsSeen = true;
+        if (this.contacts.length < 256) this.contacts.push(...e.data);
+      };
+      this.cleanupFuncs.push(() => channel.close());
+    }
     this.cleanupFuncs.push(
       bus.on('creation:baked', (e) => this.spawnCreation(e.creation, e.baked, e.position, e.quaternion)),
       bus.on('physics:impact', (e) => this.onImpact(e)),
       bus.on('object:cycle-material', () => this.cycleMaterial()),
+      bus.on('object:join', () => bus.emit('ui:toast', { text: this.join() })),
+      bus.on('object:separate', () => bus.emit('ui:toast', { text: this.separate() })),
       bus.on('creation:set-material', (e) => {
         const rec = this.byCreation(e.creationId);
         const c = rec?.creation;
@@ -144,7 +190,7 @@ export class ObjectSystem extends createSystem({}) {
       bus.on('creation:model', (e) => {
         // a generated model has no pieces: only single-part objects take it
         const rec = this.byCreation(e.creationId);
-        if (rec && rec.parts.length === 1) this.rebuild(rec, { parts: [{ ...this.specOf(rec.parts[0]), mesh: e.mesh }], flash: 0.8 });
+        if (rec && rec.parts.length === 1) this.rebuild(rec, { parts: [{ ...this.specOf(rec.parts[0]), mesh: e.mesh, collider: undefined }], flash: 0.8 });
       }),
     );
     const onDown = (e: PointerEvent) => this.onPointerDown(e);
@@ -178,6 +224,7 @@ export class ObjectSystem extends createSystem({}) {
   private spawnCreation(creation: Creation, baked: BakedObject, position: number[], quaternion: number[]): void {
     const parts: PartSpec[] = baked.parts.map((p, i) => ({
       label: p.label, mat: getMaterial(creation.parts[i]?.materialId ?? creation.materialId), mesh: p.mesh, shards: p.shards,
+      collider: p.collider, frame: IDENTITY,
     }));
     const rec = this.spawnBody(parts, position, quaternion, { creation, mode: 'materialize' });
     this.syncCreation(rec);
@@ -206,38 +253,53 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   private specOf(p: PartSpec): PartSpec {
-    return { label: p.label, mat: p.mat, mesh: p.mesh, shards: p.shards };
+    return { label: p.label, mat: p.mat, mesh: p.mesh, shards: p.shards, collider: p.collider, frame: p.frame };
   }
 
   private spawnBody(
     specs: PartSpec[], position: number[], quaternion: number[],
     o: { creation?: Creation | null; mode: Mode; piece?: boolean; velocity?: [number, number, number] },
   ): Live {
-    const geo = mergeParts(specs);
-    const parts: LivePart[] = specs.map((sp) => ({ ...sp, material: pbrMaterial(sp.mat).clone() }));
-    const mesh = new Mesh(geo, parts.map((p) => p.material));
-    mesh.position.fromArray(position);
-    mesh.quaternion.fromArray(quaternion);
-    const entity = this.world.createTransformEntity(mesh);
-    // the one source of physical numbers (plan v3): body and label both use it
+    // what is drawn: one mesh per piece, placed by its frame
+    const view = new Group();
+    const parts: LivePart[] = specs.map((sp) => {
+      const material = pbrMaterial(sp.mat).clone();
+      const m = new Mesh(geometryFrom(sp.mesh), material);
+      m.position.fromArray(sp.frame.p);
+      m.quaternion.fromArray(sp.frame.q);
+      view.add(m);
+      return { ...sp, material, view: m, bodyPositions: toBody(sp.mesh.positions, sp.frame) };
+    });
+    // the one source of physical numbers: body and label both use it
     const q = quaternion as [number, number, number, number];
-    const inputs: PartInput[] = specs.map((sp, i) => ({ id: i, materialId: sp.mat.id, positions: sp.mesh.positions }));
+    const inputs: PartInput[] = parts.map((lp, i) => ({ id: i, materialId: lp.mat.id, positions: lp.bodyPositions }));
     const props = computePhysicalProperties(inputs, q);
-    const bp = bodyParameters(inputs, props, hullVolume(geo.getAttribute('position').array as Float32Array), SURFACE_MATERIAL.table,
-      (a, b) => matchup(a, b).friction, q);
+    const children = parts.map((lp, i) => compoundChild(lp, props.parts[i].volume));
+    // the physics body: its "geometry" carries the compound description (never drawn)
+    const carrier = new Mesh(compoundGeometry(encodeCompound(children)), HIDDEN);
+    carrier.frustumCulled = false;
+    carrier.add(view);
+    carrier.position.fromArray(position);
+    carrier.quaternion.fromArray(quaternion);
+    const entity = this.world.createTransformEntity(carrier);
     const held = o.mode !== 'free';
-    entity.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, density: bp.density, friction: bp.friction, restitution: bp.restitution });
+    const contact = contactPart(inputs, q);
+    entity.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, density: 1000, friction: parts[contact].mat.friction, restitution: parts[contact].mat.restitution });
     entity.addComponent(PhysicsBody, {
-      state: PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: bp.centerOfMass,
+      state: PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: props.com,
     });
     entity.addComponent(PhysObject, {
-      materialId: specs[bp.contactPart].mat.id, massKg: props.mass, piece: o.piece ? 1 : 0, held: held ? 1 : 0, ignoreImpactsUntil: performance.now() + 250,
+      materialId: parts[contact].mat.id, massKg: props.mass, piece: o.piece ? 1 : 0, held: held ? 1 : 0, ignoreImpactsUntil: performance.now() + 250,
     });
     if (o.velocity) entity.addComponent(PhysicsManipulation, { linearVelocity: o.velocity });
 
-    const bb = geo.boundingBox!;
+    view.updateMatrixWorld(true);
+    const bb = new Box3().setFromObject(view);
+    const sphere = bb.getBoundingSphere(new Sphere());
+    carrier.geometry.boundingBox = bb.clone();
+    carrier.geometry.boundingSphere = sphere.clone();
     const halfH = (bb.max.y - bb.min.y) / 2;
-    const radius = geo.boundingSphere!.radius;
+    const radius = sphere.radius + sphere.center.length();
     const shadow = this.world.createTransformEntity(makeShadow(this.blob));
     let label: InfoLabel | null = null, labelEntity: Entity | null = null;
     if (o.creation) {
@@ -245,13 +307,13 @@ export class ObjectSystem extends createSystem({}) {
       labelEntity = this.world.createTransformEntity(label.sprite);
     }
     const rec: Live = {
-      entity, mesh, parts, props, contact: bp.contactPart, focusPart: 0, glow: 0, massKg: props.mass, creation: o.creation ?? null, mode: o.mode, side: null,
+      entity, mesh: carrier, view, parts, props, contact, focusPart: 0, glow: 0, massKg: props.mass, creation: o.creation ?? null, mode: o.mode, side: null,
       t0: performance.now(), expires: o.piece ? performance.now() + PIECE_LIFETIME : Infinity,
       anchor: new Vector3().fromArray(position), offset: new Vector3(), halfH, radius, shadow, label, labelEntity,
       lastInteract: performance.now(), hist: [], pending: new Map(), pendingAt: 0, pendingBy: 'user', pendingConfidence: 1, outOfReachSince: 0,
     };
     if (o.mode === 'materialize') {
-      mesh.scale.setScalar(0.3);
+      carrier.scale.setScalar(0.3);
       this.glow(rec, 0.6);
     }
     this.live.push(rec);
@@ -271,7 +333,10 @@ export class ObjectSystem extends createSystem({}) {
     this.byEntity.delete(rec.entity.index);
     rec.entity.dispose({ disposeResources: false });
     rec.mesh.geometry.dispose();
-    for (const p of rec.parts) p.material.dispose();
+    for (const p of rec.parts) {
+      p.view.geometry.dispose();
+      p.material.dispose();
+    }
     rec.shadow.dispose({ disposeResources: false });
     rec.labelEntity?.dispose({ disposeResources: false });
     rec.label?.dispose();
@@ -361,10 +426,10 @@ export class ObjectSystem extends createSystem({}) {
     if (input.xr || e.button !== 0 || e.target !== this.world.renderer.domElement) return;
     this.setNdc(e);
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);
-    const hits = this.ray.intersectObjects(this.live.map((r) => r.mesh), false);
+    const hits = this.ray.intersectObjects(this.live.map((r) => r.view), true);
     if (!hits.length) return;
-    const rec = this.live.find((r) => r.mesh === hits[0].object)!;
-    rec.focusPart = Math.min(rec.parts.length - 1, hits[0].face?.materialIndex ?? 0);
+    const rec = this.live.find((r) => r.parts.some((lp) => lp.view === hits[0].object))!;
+    rec.focusPart = Math.max(0, rec.parts.findIndex((lp) => lp.view === hits[0].object));
     this.pointerDepth = hits[0].distance;
     this.pointerPlane.copy(hits[0].point);
     this.pointerLift = 0;
@@ -379,6 +444,7 @@ export class ObjectSystem extends createSystem({}) {
   // ---------------- impacts & breaking ----------------
 
   private onImpact(e: { entityIndex: number; materialId: string; piece: boolean; deltaV: number; dir?: [number, number, number]; x: number; y: number; z: number }): void {
+    if (this.contactsSeen) return; // Havok collision events are on (see onContact)
     const rec = this.byEntity.get(e.entityIndex);
     if (!rec) return;
     const other = this.otherMaterial(rec, e.x, e.y, e.z);
@@ -408,6 +474,45 @@ export class ObjectSystem extends createSystem({}) {
     if (felt > part.mat.fragility.breakSpeed) this.breakPart(rec, index);
   }
 
+  /**
+   * A Havok contact (worker -> BroadcastChannel): each object in it feels
+   * impulse / its own mass, scaled by the material pair, at the piece nearest
+   * the contact point; that piece breaks above its material's limit.
+   */
+  private onContact(m: ContactMessage): void {
+    const a = this.byHandle.get(m.a), b = this.byHandle.get(m.b);
+    if (a) this.feel(a, b ?? null, m);
+    if (b && this.live.includes(b)) this.feel(b, a && this.live.includes(a) ? a : null, m);
+  }
+
+  private feel(rec: Live, other: Live | null, m: ContactMessage): void {
+    if (!this.live.includes(rec) || rec.entity.getValue(PhysObject, 'held') === 1 || performance.now() < (rec.entity.getValue(PhysObject, 'ignoreImpactsUntil') as number)) return;
+    const [x, y, z] = m.p;
+    const hit = this.nearestPart(rec, m.p);
+    const part = rec.parts[hit];
+    const otherMat = other ? other.parts[this.nearestPart(other, m.p)].mat.id : this.surfaceAt(x, y, z);
+    const dv = m.impulse / Math.max(rec.massKg, 1e-3);
+    const piece = rec.entity.getValue(PhysObject, 'piece') === 1;
+    const felt = feltSpeed(part.mat.id, otherMat, dv);
+    const brk = !piece && !!part.mat.fragility && felt > part.mat.fragility.breakSpeed && part.shards.length > 1;
+    if (DEBUG && dv > 0.3) console.info(`[contact] ${part.mat.id}${rec.parts.length > 1 ? ` (piece ${hit + 1}/${rec.parts.length})` : ''}${piece ? ' shard' : ''} vs ${otherMat}${other ? ' object' : ''}: ${m.impulse.toFixed(3)} N·s / ${(rec.massKg * 1000).toFixed(0)} g = ${dv.toFixed(2)} m/s, felt ${felt.toFixed(2)} (breaks at ${part.mat.fragility?.breakSpeed ?? '-'})`);
+    if (dv > SOUND_DV && (!piece || dv > 0.5)) {
+      this.audio.impact(part.mat, dv, x, y, z, { brk });
+      const mu = matchup(part.mat.id, otherMat);
+      if (other && mu.otherSound > 0 && rec.massKg <= other.massKg) this.audio.impact(getMaterial(otherMat), dv * mu.otherSound, x, y, z, { brk: false });
+    }
+    bus.emit('physics:impact', {
+      entityIndex: rec.entity.index, materialId: part.mat.id, piece, impulse: m.impulse, deltaV: dv, x, y, z,
+    });
+    if (brk) this.breakPart(rec, hit);
+    else if (!piece && part.mat.hardness >= 0.7 && dv > 1.8) this.shards.burst(x, y, z, part.mat.visual.color, 3, 0.6, 0.003);
+  }
+
+  /** Built-in surface material at a world point: the table near its top, else the floor. */
+  private surfaceAt(x: number, y: number, z: number): string {
+    return distanceToRect(surface, x, z) < 0.02 && Math.abs(y - surface.topY) < 0.04 ? SURFACE_MATERIAL.table : SURFACE_MATERIAL.floor;
+  }
+
   /** The part that reaches furthest against the velocity change: where the contact was. */
   private hitPart(rec: Live, dir: [number, number, number]): number {
     if (rec.parts.length === 1) return 0;
@@ -415,7 +520,7 @@ export class ObjectSystem extends createSystem({}) {
     const n = this.v.set(-dir[0], -dir[1], -dir[2]).applyQuaternion(this.qInv.copy(rec.mesh.quaternion).invert());
     let best = 0, bestD = -Infinity;
     rec.parts.forEach((part, i) => {
-      const p = part.mesh.positions;
+      const p = part.bodyPositions;
       for (let k = 0; k < p.length; k += 12) {
         const d = p[k] * n.x + p[k + 1] * n.y + p[k + 2] * n.z;
         if (d > bestD) (bestD = d), (best = i);
@@ -424,6 +529,7 @@ export class ObjectSystem extends createSystem({}) {
     return best;
   }
   private qInv = new Quaternion();
+  private tmp = new Vector3();
 
   /** What the object hit: another object nearby (its nearest part), else the table or the floor. */
   private otherMaterial(rec: Live, x: number, y: number, z: number): { materialId: string; object: boolean; rec?: Live; part: number } {
@@ -453,11 +559,15 @@ export class ObjectSystem extends createSystem({}) {
     const vel = rec.entity.getVectorView(PhysicsBody, '_linearVelocity');
     const v: [number, number, number] = [vel[0], vel[1], vel[2]];
     const centre = this.v3.fromArray(rec.props.parts[index].com).applyQuaternion(q).add(p);
+    const fq = this.qInv.fromArray(part.frame.q);
+    const shardQ = q.clone().multiply(fq).toArray();
+    const comLocal = this.v2.fromArray(rec.props.parts[index].com).clone();
     for (const piece of part.shards) {
-      this.v.fromArray(piece.center).applyQuaternion(q);
-      const out = this.v2.copy(this.v).normalize();
-      const world = this.v.add(p);
-      this.spawnBody([{ label: part.label, mat: part.mat, mesh: piece, shards: [] }], [world.x, world.y, world.z], q.toArray(), {
+      // shard centre: piece-local -> object-local (frame) -> world
+      const local = this.v.fromArray(piece.center).applyQuaternion(fq).add(this.tmp.fromArray(part.frame.p));
+      const out = local.clone().sub(comLocal).applyQuaternion(q).normalize();
+      const world = local.applyQuaternion(q).add(p);
+      this.spawnBody([{ label: part.label, mat: part.mat, mesh: piece, shards: [], frame: IDENTITY }], [world.x, world.y, world.z], shardQ, {
         mode: 'free',
         piece: true,
         velocity: [v[0] * 0.3 + out.x * 0.7, Math.abs(v[1]) * 0.25 + 0.6 + out.y * 0.3, v[2] * 0.3 + out.z * 0.7],
@@ -544,7 +654,7 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.creation && rec.label) {
       // preview the new numbers before the body is rebuilt
       const mats = rec.parts.map((x, i) => getMaterial(rec.pending.get(i) ?? x.mat.id));
-      const props = computePhysicalProperties(rec.parts.map((x, i) => ({ id: i, materialId: mats[i].id, positions: x.mesh.positions })));
+      const props = computePhysicalProperties(rec.parts.map((x, i) => ({ id: i, materialId: mats[i].id, positions: x.bodyPositions })));
       rec.label.set(...labelText(rec.creation, mats, props.mass), m.visual.color);
     }
   }
@@ -599,6 +709,91 @@ export class ObjectSystem extends createSystem({}) {
     return n;
   }
 
+  // ---------------- join / separate ----------------
+
+  /** The object + piece the player last touched (Material picker, Separate), or null. */
+  focusTarget(): { creationId: string; part: number; materialId: string; position: Vector3; radius: number } | null {
+    const rec = this.focus;
+    if (!rec?.creation || !this.live.includes(rec)) return null;
+    const i = Math.min(rec.focusPart, rec.parts.length - 1);
+    return { creationId: rec.creation.id, part: i, materialId: rec.pending.get(i) ?? rec.parts[i].mat.id, position: rec.mesh.position.clone(), radius: rec.radius };
+  }
+
+  /** Where a live creation is now (null if gone): for UI that follows it. */
+  placeOf(id: string): { position: Vector3; radius: number } | null {
+    const rec = this.byCreation(id);
+    return rec ? { position: rec.mesh.position, radius: rec.radius } : null;
+  }
+
+  /** Separate: the focused piece becomes its own object (it must have another piece). */
+  separate(): string {
+    const rec = this.focus;
+    if (!rec?.creation || !this.live.includes(rec)) return 'Touch a piece of an object first';
+    if (rec.parts.length < 2) return 'This object is one piece';
+    const i = Math.min(rec.focusPart, rec.parts.length - 1);
+    const part = rec.parts[i];
+    const q = rec.mesh.quaternion.clone(), pos = rec.mesh.position.clone();
+    // the piece's world pose, nudged 4 mm away from the rest so the two bodies do not start interpenetrating
+    const wq = q.clone().multiply(new Quaternion().fromArray(part.frame.q));
+    const wp = new Vector3().fromArray(part.frame.p).applyQuaternion(q).add(pos);
+    const restCom = new Vector3(), pieceCom = new Vector3().fromArray(rec.props.parts[i].com);
+    let restMass = 0;
+    rec.props.parts.forEach((pp, k) => {
+      if (k === i) return;
+      restCom.addScaledVector(new Vector3().fromArray(pp.com), pp.mass);
+      restMass += pp.mass;
+    });
+    restCom.divideScalar(Math.max(restMass, 1e-9));
+    const away = pieceCom.sub(restCom).applyQuaternion(q).normalize().multiplyScalar(0.004);
+    wp.add(away);
+    const c = rec.creation;
+    const cp = c.parts.splice(i, 1)[0];
+    const solo: Creation = { ...c, id: newCreationId(), createdAt: Date.now(), parts: [{ ...cp }], aiStatus: undefined };
+    const free = rec.mode === 'free';
+    const rest = rec.parts.filter((_, k) => k !== i).map((x) => this.specOf(x));
+    const wake: [number, number, number] = [0, -0.01, 0];
+    const n = this.rebuild(rec, { parts: rest, free, velocity: free ? wake : undefined, flash: 0.3 });
+    const s = this.spawnBody([{ ...this.specOf(part), frame: IDENTITY }], wp.toArray(), wq.toArray(), { creation: solo, mode: free ? 'free' : 'hover', velocity: free ? wake : undefined });
+    if (!free) s.anchor.copy(wp).add(away.normalize().multiplyScalar(0.03));
+    this.glow(s, 0.4);
+    this.syncCreation(s);
+    this.focus = s;
+    this.enforceLimits();
+    void n;
+    return `Separated: ${part.mat.name} piece`;
+  }
+
+  /** Join: the focused object takes in the nearest object touching it (pieces stay exactly where they are). */
+  join(): string {
+    const a = this.focus;
+    if (!a?.creation || !this.live.includes(a)) return 'Touch an object first';
+    let b: Live | null = null, best = Infinity;
+    for (const r of this.live) {
+      if (r === a || !r.creation || r.creation.id.includes('#exp')) continue;
+      if (r.mesh.position.distanceTo(a.mesh.position) > r.radius + a.radius + JOIN_GAP) continue;
+      const gap = surfaceGap(a, r);
+      if (gap < best) (best = gap), (b = r);
+    }
+    if (!b || best > JOIN_GAP) return 'Put it against another object, then Join';
+    // b's pieces in a's frame: inv(A) * B * frame
+    const A = new Matrix4().compose(a.mesh.position, a.mesh.quaternion, new Vector3(1, 1, 1));
+    const B = new Matrix4().compose(b.mesh.position, b.mesh.quaternion, new Vector3(1, 1, 1));
+    const AinvB = A.clone().invert().multiply(B);
+    const moved = b.parts.map((x) => {
+      const m = AinvB.clone().multiply(new Matrix4().compose(new Vector3().fromArray(x.frame.p), new Quaternion().fromArray(x.frame.q), new Vector3(1, 1, 1)));
+      const p = new Vector3(), q = new Quaternion(), sc = new Vector3();
+      m.decompose(p, q, sc);
+      return { ...this.specOf(x), frame: { p: p.toArray() as Frame['p'], q: q.toArray() as Frame['q'] } };
+    });
+    a.creation.parts.push(...b.creation!.parts.map((x) => ({ ...x })));
+    const specs = [...a.parts.map((x) => this.specOf(x)), ...moved];
+    const free = a.mode === 'free';
+    this.dispose(b);
+    const n = this.rebuild(a, { parts: specs, free, velocity: free ? [0, -0.01, 0] : undefined, flash: 0.5 });
+    this.focus = n;
+    return `Joined: ${n.parts.length} pieces, ${Math.round(n.massKg * 1000)} g`;
+  }
+
   // ---------------- frame ----------------
 
   update(delta: number): void {
@@ -619,6 +814,12 @@ export class ObjectSystem extends createSystem({}) {
           }
         }
       }
+    }
+
+    if (this.contacts.length) {
+      this.byHandle.clear();
+      for (const r of this.live) this.byHandle.set(r.entity.getValue(PhysicsBody, '_engineBody') as number, r);
+      for (const m of this.contacts.splice(0)) this.onContact(m);
     }
 
     for (let i = this.live.length - 1; i >= 0; i--) {
@@ -841,24 +1042,68 @@ function mainColor(rec: Live): string {
   return rec.parts[best].mat.visual.color;
 }
 
-/** One geometry for all parts; group i is drawn with part i's material. */
-function mergeParts(parts: PartSpec[]): BufferGeometry {
-  let n = 0;
-  for (const p of parts) n += p.mesh.positions.length;
-  const positions = new Float32Array(n), normals = new Float32Array(n);
+/** A piece's mesh in object-local coordinates. */
+function toBody(positions: Float32Array, f: Frame): Float32Array {
+  if (f.p.every((v) => v === 0) && f.q[3] === 1) return positions;
+  const q = new Quaternion().fromArray(f.q), v = new Vector3(), out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    v.set(positions[i], positions[i + 1], positions[i + 2]).applyQuaternion(q);
+    out[i] = v.x + f.p[0]; out[i + 1] = v.y + f.p[1]; out[i + 2] = v.z + f.p[2];
+  }
+  return out;
+}
+
+/** One compound child per piece: its collider and material, density scaled so the body's mass is the true mass. */
+function compoundChild(lp: LivePart, trueVolume: number): CompoundChild {
+  const c = lp.collider ?? hullOf(lp.mesh.positions);
+  const data = c.kind === 'hull' ? c.points : c.boxes;
+  const volume = c.kind === 'hull' ? hullVolume(c.points) : c.volume;
+  return {
+    kind: c.kind,
+    density: (lp.mat.density * trueVolume) / Math.max(volume, trueVolume * 0.2, 1e-9),
+    friction: lp.mat.friction * matchup(lp.mat.id, SURFACE_MATERIAL.table).friction,
+    restitution: lp.mat.restitution,
+    data,
+    frame: lp.frame,
+  };
+}
+
+function hullOf(positions: Float32Array): PartCollider {
+  const n = positions.length / 3, stride = Math.max(1, Math.floor(n / 256)), pts: number[] = [];
+  for (let i = 0; i < n; i += stride) pts.push(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+  return { kind: 'hull', points: new Float32Array(pts), volume: 0 };
+}
+
+/** The physics carrier's geometry: the compound description in a position attribute (never drawn). */
+function compoundGeometry(encoded: Float32Array): BufferGeometry {
   const g = new BufferGeometry();
-  let o = 0;
-  parts.forEach((p, i) => {
-    positions.set(p.mesh.positions, o);
-    normals.set(p.mesh.normals, o);
-    g.addGroup(o / 3, p.mesh.positions.length / 3, i);
-    o += p.mesh.positions.length;
-  });
-  g.setAttribute('position', new BufferAttribute(positions, 3));
-  g.setAttribute('normal', new BufferAttribute(normals, 3));
-  g.computeBoundingBox();
-  g.computeBoundingSphere();
+  g.setAttribute('position', new BufferAttribute(encoded, 3));
+  g.setDrawRange(0, 0);
   return g;
+}
+
+/** Smallest distance between two objects' surfaces (subsampled vertices, world space). */
+function surfaceGap(a: Live, b: Live): number {
+  const pa = worldPoints(a), pb = worldPoints(b);
+  let best = Infinity;
+  for (let i = 0; i < pa.length; i += 3)
+    for (let j = 0; j < pb.length; j += 3) {
+      const d = (pa[i] - pb[j]) ** 2 + (pa[i + 1] - pb[j + 1]) ** 2 + (pa[i + 2] - pb[j + 2]) ** 2;
+      if (d < best) best = d;
+    }
+  return Math.sqrt(best);
+}
+
+function worldPoints(r: Live): number[] {
+  const out: number[] = [], v = new Vector3();
+  for (const lp of r.parts) {
+    const p = lp.bodyPositions, stride = Math.max(3, Math.floor(p.length / 3 / 300) * 3);
+    for (let i = 0; i < p.length; i += stride) {
+      v.set(p[i], p[i + 1], p[i + 2]).applyQuaternion(r.mesh.quaternion).add(r.mesh.position);
+      out.push(v.x, v.y, v.z);
+    }
+  }
+  return out;
 }
 
 const easeOutBack = (t: number) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);

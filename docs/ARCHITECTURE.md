@@ -1,4 +1,4 @@
-# Architecture (as built, Phase 6b)
+# Architecture (as built, Phase 6b, plan v4)
 
 ```
 client/src
@@ -24,6 +24,10 @@ client/src
   materials/materials.ts      typed access + estimator (combines prior tables); 8 materials, old ids aliased
   materials/matchups.json/.ts material pair rules: damage, friction, sound mix; feltSpeed() for breaking
   physics/physical-properties.ts  computePhysicalProperties(parts): exact mass, COM, inertia, support/tipping; bodyParameters()
+  physics/runtime/physics-runtime-ext.ts  IWSDK's worker runtime + Havok compound shapes + collision events (swapped in by vite.config.ts)
+  physics/runtime/compound-format.ts      compound description packed in a hull vertex buffer; contact message type
+  objects/collider.ts         per-piece collider: hull, or <= 40 voxel boxes for hollow pieces
+  ui/material-picker.ts       ring of 8 materials on the touched piece (poke / click)
   objects/csg.ts              SDF CSG language for templates
   objects/templates/*.json    template library (auto-loaded)
   objects/descriptor.ts       shape descriptor (aspect, elong, fill, profile, open top, holes)

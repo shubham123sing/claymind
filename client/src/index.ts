@@ -13,6 +13,7 @@ import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
+import { MaterialPickerSystem } from './ui/material-picker.js';
 import { BallSpawnerSystem } from './spikes/ball-spawner-system.js';
 import { ImpactProbeSystem } from './spikes/impact-probe-system.js';
 import { PinchProbeSystem } from './spikes/pinch-probe-system.js';
@@ -34,6 +35,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
+    world.registerSystem(MaterialPickerSystem); // before objects: a click on the picker never grabs what is behind it
     world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);

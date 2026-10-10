@@ -46,6 +46,13 @@ export type AppEvents = {
   'mastery:toggle': Record<string, never>;
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
+  /** Open / close the material picker for the piece last touched. */
+  'material:toggle': Record<string, never>;
+  /** Join the focused object with the one touching it / separate its focused piece. */
+  'object:join': Record<string, never>;
+  'object:separate': Record<string, never>;
+  /** A short message for the player (shown above the clay). */
+  'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */
   /** A part's material changed (`part` = index into creation.parts); materialId is then the creation's main material. */
   'object:material-set': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number; partMaterialId?: string };
