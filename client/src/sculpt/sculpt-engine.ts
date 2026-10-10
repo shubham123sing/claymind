@@ -17,6 +17,8 @@ export interface Stroke {
   dx?: number;
   dy?: number;
   dz?: number;
+  /** add only: lay down clay of this piece (a new piece's first lump). */
+  piece?: number;
 }
 
 export interface LumpSpec {
@@ -35,6 +37,13 @@ export interface MeshUpdate {
   canUndo: boolean;
   canRedo: boolean;
   res: number;
+  /** Bit i set = piece i has clay. */
+  piecesMask: number;
+}
+
+interface Snapshot {
+  data: Float32Array;
+  labels: Uint8Array;
 }
 
 const CHECKPOINT_EVERY = 8;
@@ -46,11 +55,12 @@ export class SculptEngine {
   private actions: Stroke[][] = [];
   private redoStack: Stroke[][] = [];
   /** key = number of actions applied when the snapshot was taken. */
-  private checkpoints = new Map<number, Float32Array>();
+  private checkpoints = new Map<number, Snapshot>();
   private currentAction = -1;
   private chunkVolume: Float64Array;
   private chunkBounds: Float32Array;
   private prevScratch: Float32Array;
+  private prevLabels: Uint8Array;
 
   constructor(res: number, private size: number, private lump: LumpSpec) {
     this.grid = new SdfGrid(res, size);
@@ -58,8 +68,13 @@ export class SculptEngine {
     this.chunkVolume = new Float64Array(this.grid.chunksPerAxis ** 3);
     this.chunkBounds = new Float32Array(this.grid.chunksPerAxis ** 3 * 6).fill(Infinity);
     this.prevScratch = new Float32Array(this.grid.data.length);
+    this.prevLabels = new Uint8Array(this.grid.data.length);
     this.fillInitial(this.grid);
-    this.checkpoints.set(0, this.grid.data.slice());
+    this.checkpoints.set(0, this.snapshot());
+  }
+
+  private snapshot(): Snapshot {
+    return { data: this.grid.data.slice(), labels: this.grid.labels.slice() };
   }
 
   get res(): number {
@@ -75,7 +90,7 @@ export class SculptEngine {
       this.fillInitial(this.grid);
       return;
     }
-    this.grid.brush(s.op, s.x, s.y, s.z, s.r, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0);
+    this.grid.brush(s.op, s.x, s.y, s.z, s.r, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0, s.piece);
   }
 
   /** Apply strokes belonging to `actionId`. A new id starts a new undoable action. */
@@ -96,7 +111,7 @@ export class SculptEngine {
   }
 
   private saveCheckpoint(n: number): void {
-    this.checkpoints.set(n, this.grid.data.slice());
+    this.checkpoints.set(n, this.snapshot());
     if (this.checkpoints.size > MAX_CHECKPOINTS) {
       // drop the oldest non-zero checkpoint; undo far back just replays more
       const keys = [...this.checkpoints.keys()].filter((k) => k !== 0).sort((a, b) => a - b);
@@ -124,12 +139,15 @@ export class SculptEngine {
 
   private rebuild(): void {
     this.prevScratch.set(this.grid.data);
+    this.prevLabels.set(this.grid.labels);
     let best = 0;
     for (const key of this.checkpoints.keys()) if (key <= this.actions.length && key > best) best = key;
-    this.grid.data.set(this.checkpoints.get(best)!);
+    const cp = this.checkpoints.get(best)!;
+    this.grid.data.set(cp.data);
+    this.grid.labels.set(cp.labels);
     for (let a = best; a < this.actions.length; a++) for (const s of this.actions[a]) this.applyStroke(s);
     this.grid.dirty.fill(0);
-    this.grid.markChangedSince(this.prevScratch);
+    this.grid.markChangedSince(this.prevScratch, this.prevLabels);
   }
 
   /** Change grid resolution, keeping the current shape and the full history. */
@@ -141,11 +159,12 @@ export class SculptEngine {
     this.chunkVolume = new Float64Array(this.grid.chunksPerAxis ** 3);
     this.chunkBounds = new Float32Array(this.grid.chunksPerAxis ** 3 * 6).fill(Infinity);
     this.prevScratch = new Float32Array(this.grid.data.length);
+    this.prevLabels = new Uint8Array(this.grid.data.length);
     const base = new SdfGrid(res, this.size);
     this.fillInitial(base);
     this.checkpoints.clear();
-    this.checkpoints.set(0, base.data);
-    this.checkpoints.set(this.actions.length, this.grid.data.slice());
+    this.checkpoints.set(0, { data: base.data, labels: base.labels });
+    this.checkpoints.set(this.actions.length, this.snapshot());
     this.currentAction = -1;
   }
 
@@ -175,8 +194,11 @@ export class SculptEngine {
       canUndo: this.actions.length > 0,
       canRedo: this.redoStack.length > 0,
       res: this.grid.res,
+      piecesMask: chunks.length ? (this.mask = this.grid.piecesMask()) : this.mask,
     };
   }
+
+  private mask = 1;
 
   private volume(): number {
     let v = 0;

@@ -47,9 +47,13 @@ export type AppEvents = {
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */
-  'object:material-set': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number };
-  /** Ask the object system to change a creation's material (e.g. after the AI looked at it). */
-  'creation:set-material': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number };
+  /** A part's material changed (`part` = index into creation.parts); materialId is then the creation's main material. */
+  'object:material-set': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number; partMaterialId?: string };
+  /**
+   * Ask the object system to change a creation's material (e.g. after the AI looked at it).
+   * With `part`: that part only. Without: every part the player has not set themselves.
+   */
+  'creation:set-material': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number };
   /** The vision model described a creation (validated suggestion). */
   'creation:described': { creationId: string; result: import('../ai/types.js').DescribeResult };
   /** A cleaner model arrived for a creation (object-local metres, centred). */
@@ -69,6 +73,8 @@ export type AppEvents = {
     piece: boolean;
     impulse: number;
     deltaV: number;
+    /** Unit direction of the velocity change (points away from the contact). */
+    dir?: [number, number, number];
     x: number;
     y: number;
     z: number;

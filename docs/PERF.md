@@ -60,3 +60,12 @@ Notes:
 | Drop-compare experiment | Desktop browser | ~1.5 s; both balls in sync every frame, measured gap 0 ms |
 | Extra physics bodies during an experiment | | 1-2 spheres or one creation copy, removed 2.5 s after the result |
 | Agent / Mastery panels | | canvas textures, redrawn only when changed |
+
+## Phase 6b (2026-10-10)
+
+| Measurement | Where | Result |
+|---|---|---|
+| Physics tests on IWSDK's Havok runtime (headless) | Node | 8 tests, 0.3 s |
+| Bake of a 2-piece sculpt | Desktop worker | not measured separately yet (per-part mesh + up to 6 shards per part at 24³; single-piece bakes unchanged) |
+| Extra per-frame cost | | none: parts are geometry groups of one mesh, one body per object |
+| Frame time on Quest | | not measured (no device run yet) |

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1, "id": "bottle", "name": "Bottle", "category": "container",
-  "materialPriors": { "glass": 0.6, "plastic": 0.3, "aluminium": 0.1 },
+  "materialPriors": {"glass": 0.6, "plastic": 0.35, "steel": 0.05},
   "tags": ["tall", "narrow-neck", "holds-liquid"],
   "sdf": {
     "op": "union", "k": 0.02,

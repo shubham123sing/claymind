@@ -43,9 +43,17 @@ interface ShapePriorRule {
 export const MATERIALS: Material[] = data.materials as unknown as Material[];
 const byId = new Map(MATERIALS.map((m) => [m.id, m]));
 const SHAPE_PRIORS = data.shapePriors as unknown as ShapePriorRule[];
+/** Materials removed in plan v3 (12 -> 8): saved data and old priors map onto these. */
+const ALIASES: Record<string, string> = data.aliases;
+
+/** A current material id for any id (old ids map to their replacement). */
+export function normalizeMaterialId(id: string): string {
+  const a = ALIASES[id] ?? id;
+  return byId.has(a) ? a : 'clay';
+}
 
 export function getMaterial(id: string): Material {
-  return byId.get(id) ?? byId.get('clay')!;
+  return byId.get(normalizeMaterialId(id))!;
 }
 
 /** Priors from the first shape rule whose feature ranges all match. */
@@ -73,7 +81,8 @@ export function estimateMaterial(sources: { priors: Priors; weight: number }[]):
   const acc = new Map<string, number>();
   let total = 0;
   for (const s of sources) {
-    for (const [id, p] of Object.entries(s.priors)) {
+    for (const [raw, p] of Object.entries(s.priors)) {
+      const id = ALIASES[raw] ?? raw;
       if (!byId.has(id)) continue;
       acc.set(id, (acc.get(id) ?? 0) + p * s.weight);
       total += p * s.weight;

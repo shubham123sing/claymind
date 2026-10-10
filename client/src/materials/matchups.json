@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "notes": "a hits b: damageToA scales a's effective impact speed against its breakSpeed (and damageToB for b). friction multiplies the body's friction when resting on b. otherSound = how loud b's own sound joins the hit (0..1). Missing pairs use the defaults.",
+  "defaults": { "damageToA": 1, "damageToB": 1, "friction": 1, "otherSound": 0.4 },
+  "pairs": [
+    { "a": "glass", "b": "steel", "damageToA": 1.5, "damageToB": 0.3, "friction": 0.85, "otherSound": 0.7 },
+    { "a": "glass", "b": "stone", "damageToA": 1.4, "damageToB": 0.6, "otherSound": 0.6 },
+    { "a": "glass", "b": "glass", "damageToA": 1.25, "damageToB": 1.25, "friction": 0.7, "otherSound": 1 },
+    { "a": "glass", "b": "plastic", "damageToA": 0.85 },
+    { "a": "glass", "b": "clay", "damageToA": 0.6, "otherSound": 0.2 },
+    { "a": "glass", "b": "rubber", "damageToA": 0.55, "otherSound": 0.2 },
+    { "a": "glass", "b": "foam", "damageToA": 0.35, "otherSound": 0.1 },
+    { "a": "stone", "b": "steel", "damageToA": 1.3, "damageToB": 0.4, "otherSound": 0.7 },
+    { "a": "stone", "b": "stone", "damageToA": 1.15, "damageToB": 1.15, "otherSound": 1 },
+    { "a": "stone", "b": "wood", "damageToA": 0.9 },
+    { "a": "stone", "b": "clay", "damageToA": 0.6, "otherSound": 0.2 },
+    { "a": "stone", "b": "rubber", "damageToA": 0.5, "friction": 1.1, "otherSound": 0.2 },
+    { "a": "stone", "b": "foam", "damageToA": 0.3, "otherSound": 0.1 },
+    { "a": "rubber", "b": "wood", "friction": 1.15 },
+    { "a": "steel", "b": "steel", "friction": 0.8, "otherSound": 1 },
+    { "a": "steel", "b": "wood", "otherSound": 0.5 },
+    { "a": "plastic", "b": "plastic", "friction": 0.9 },
+    { "a": "clay", "b": "wood", "friction": 1.1 }
+  ],
+  "surfaces": { "table": "wood", "floor": "stone" }
+}

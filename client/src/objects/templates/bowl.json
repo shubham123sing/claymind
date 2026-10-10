@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1, "id": "bowl", "name": "Bowl", "category": "container",
-  "materialPriors": { "ceramic": 0.55, "wood": 0.2, "plastic": 0.15, "glass": 0.1 },
+  "materialPriors": {"glass": 0.35, "wood": 0.3, "plastic": 0.25, "clay": 0.1},
   "tags": ["hollow", "holds-liquid"],
   "sdf": {
     "op": "intersect",

@@ -7,7 +7,7 @@ import type { Creation } from '../../src/objects/creation';
 function creation(over: Partial<Creation> = {}): Creation {
   return {
     schemaVersion: 1, id: 'c1', createdAt: 0, name: 'Mug', category: 'container', source: 'template', templateId: 'mug',
-    matchScore: 0.85, bestGuess: { id: 'mug', name: 'Mug', similarity: 0.85 }, materialId: 'ceramic', materialConfidence: 0.65,
+    matchScore: 0.85, bestGuess: { id: 'mug', name: 'Mug', similarity: 0.85 }, materialId: 'glass', materialConfidence: 0.65,
     materialGuesses: [], massKg: 0.3, sizeCm: [11, 10, 8], volumeCm3: 130, timeToObject: 0.1, kgNodeIds: [],
     descriptor: { aspect: 0.9, elong: 0.78, fill: 0.2, openTop: 0.9, holes: 1, profile: [1, 1, 1, 1, 1], angle: 0, center: [0, 0, 0], extents: [0.1, 0.1, 0.08], volume: 1e-4 },
     ...over,
@@ -17,23 +17,23 @@ function creation(over: Partial<Creation> = {}): Creation {
 const pred = (b: Brain, id: string, beh: string) => b.predictions(id).find((p) => p.behaviorId === `beh:${beh}`);
 
 describe('reasoner (golden paths)', () => {
-  it('a ceramic mug breaks when dropped: creation -> ceramic -> fragile -> breaks', () => {
+  it('a glass mug breaks when dropped: creation -> glass -> fragile -> breaks', () => {
     const b = new Brain();
     b.seedIfEmpty();
     const id = b.addCreation(creation());
     const p = pred(b, id, 'breaks_when_dropped')!;
     expect(p).toBeTruthy();
     expect(p.path).toEqual([
-      'cre:c1|made_of|mat:ceramic',
-      'mat:ceramic|has_property|prop:fragile',
+      'cre:c1|made_of|mat:glass',
+      'mat:glass|has_property|prop:fragile',
       'prop:fragile|causes|beh:breaks_when_dropped',
     ]);
-    // 0.65 (material estimate) × 0.9 (ceramic is fragile) × 0.85 (fragile causes breaking)
+    // 0.65 (material estimate) × 0.9 (glass is fragile) × 0.85 (fragile causes breaking)
     expect(p.confidence).toBeCloseTo(0.65 * 0.9 * 0.85, 5);
     expect(p.rules).toEqual(['material-property', 'property-behavior']);
   });
 
-  it('mugs hold liquid (via being hollow) and sink (ceramic is denser than water)', () => {
+  it('mugs hold liquid (via being hollow) and sink (glass is denser than water)', () => {
     const b = new Brain();
     b.seedIfEmpty();
     const id = b.addCreation(creation());
@@ -47,11 +47,11 @@ describe('reasoner (golden paths)', () => {
     b.seedIfEmpty();
     const id = b.addCreation(creation());
     const before = pred(b, id, 'breaks_when_dropped')!.confidence;
-    b.cutEdge('mat:ceramic|has_property|prop:fragile');
+    b.cutEdge('mat:glass|has_property|prop:fragile');
     const after = pred(b, id, 'breaks_when_dropped');
     // the only remaining path is the weak "thin-walled implies fragile" one
     expect(after?.confidence ?? 0).toBeLessThan(before * 0.6);
-    expect(after?.path ?? []).not.toContain('mat:ceramic|has_property|prop:fragile');
+    expect(after?.path ?? []).not.toContain('mat:glass|has_property|prop:fragile');
     expect(b.undo()).toBe(true);
     expect(pred(b, id, 'breaks_when_dropped')!.confidence).toBeCloseTo(before, 6);
   });

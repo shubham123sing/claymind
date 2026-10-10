@@ -101,7 +101,9 @@ export class SurfaceSystem extends createSystem({
     tableMesh.receiveShadow = true;
     this.virtualTable = this.world.createTransformEntity(tableMesh);
     this.virtualTable.addComponent(PhysicsShape, {
-      shape: PhysicsShapeType.Box, dimensions: [t.width, t.thickness, t.depth], friction: 0.6, restitution: 0.2,
+      // hull, not Box: IWSDK Box colliders round their edges by ~1.4 cm (objects slid off early);
+      // friction combines by MIN and restitution by MAX in Havok, so the object's own material decides
+      shape: PhysicsShapeType.ConvexHull, friction: 1, restitution: 0,
     });
     this.virtualTable.addComponent(PhysicsBody, { state: PhysicsState.Static });
   }
@@ -112,7 +114,7 @@ export class SurfaceSystem extends createSystem({
     const floor = new Mesh(new BoxGeometry(6, 0.1, 6), new MeshStandardMaterial({ visible: false }));
     floor.position.set(0, -0.05, 0);
     const floorEntity = this.world.createTransformEntity(floor);
-    floorEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Box, dimensions: [6, 0.1, 6], friction: 0.7 });
+    floorEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Box, dimensions: [6, 0.1, 6], friction: 1, restitution: 0 });
     floorEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
 
     // In passthrough the virtual table is a translucent hint until a real one is found.
@@ -202,7 +204,7 @@ export class SurfaceSystem extends createSystem({
     mesh.position.copy(this.tmpPos).add(local);
     mesh.quaternion.copy(this.tmpQuat);
     const collider = this.world.createTransformEntity(mesh);
-    collider.addComponent(PhysicsShape, { shape: PhysicsShapeType.Box, dimensions: [w, th, d], friction: 0.6, restitution: 0.2 });
+    collider.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, friction: 1, restitution: 0 }); // see virtual table
     collider.addComponent(PhysicsBody, { state: PhysicsState.Static });
     this.colliders.set(entity.index, collider);
 

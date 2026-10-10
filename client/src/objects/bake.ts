@@ -1,9 +1,10 @@
 /**
  * Bakes a creation: from an SDF in object-local metres (origin at the bbox
- * centre) produce the render/physics mesh, its volume and size, plus N
- * pre-fractured pieces (object ∩ Voronoi cell) for breaking. Also builds the
- * object SDF for the two sources: the sculpt itself, or a template fitted to
- * the sculpt's footprint, size and orientation. Pure (worker + tests).
+ * centre) produce the mesh, its volume and size, and its parts (plan v3: the
+ * clay pieces, each a closed mesh that gets its own material) with
+ * pre-fractured shards per part (part ∩ Voronoi cell) for breaking. Also builds
+ * the object SDF for the two sources: the sculpt itself, or a template fitted
+ * to the sculpt's footprint, size and orientation. Pure (worker + tests).
  */
 import { compile, Sdf } from './csg.js';
 import { describe, rasterize, sdfBounds, ShapeDescriptor } from './descriptor.js';
@@ -21,13 +22,25 @@ export interface BakedPiece extends BakedMesh {
   center: [number, number, number];
 }
 
+/** One clay piece of the creation: a closed mesh (object-local) + its breakage shards. */
+export interface BakedPart {
+  /** Piece label from the sculpt (0..MAX_PIECES-1). */
+  label: number;
+  mesh: BakedMesh;
+  /** m^3 */
+  volume: number;
+  shards: BakedPiece[];
+}
+
 export interface BakedObject {
+  /** The whole surface (for shape analysis, snapshots and export). */
   mesh: BakedMesh;
   /** m^3 */
   volume: number;
   /** AABB size in object-local axes (m) */
   size: [number, number, number];
-  pieces: BakedPiece[];
+  /** At least one; several when the sculpt was made of pieces. */
+  parts: BakedPart[];
 }
 
 function meshGrid(g: SdfGrid): BakedMesh {
@@ -61,7 +74,10 @@ function mulberry(seed: number): () => number {
  * @param sdf     object SDF, object-local metres
  * @param extent  approximate object size (m), sets the grid cube
  */
-export function bakeFromSdf(sdf: Sdf, extent: number, opts: { res?: number; pieces?: number; pieceRes?: number; seed?: number } = {}): BakedObject {
+export function bakeFromSdf(
+  sdf: Sdf, extent: number,
+  opts: { res?: number; pieces?: number; pieceRes?: number; seed?: number; label?: (x: number, y: number, z: number) => number } = {},
+): BakedObject {
   const res = opts.res ?? 56;
   const edge = extent * 1.25 + 0.01;
   const g = rasterize(sdf, res, edge, [0, 0, 0]);
@@ -74,7 +90,46 @@ export function bakeFromSdf(sdf: Sdf, extent: number, opts: { res?: number; piec
       max[a] = Math.max(max[a], mesh.positions[i + a]);
     }
   const size: [number, number, number] = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
-  return { mesh, volume, size, pieces: fracture(g, opts.pieces ?? 6, opts.pieceRes ?? 32, opts.seed ?? 1) };
+  const shards = opts.pieces ?? 6, pieceRes = opts.pieceRes ?? 32, seed = opts.seed ?? 1;
+  const labels = opts.label ? labelGrid(g, opts.label) : null;
+  const present = labels ? presentLabels(g, labels) : [0];
+  if (present.length <= 1) {
+    return { mesh, volume, size, parts: [{ label: present[0] ?? 0, mesh, volume, shards: fracture(g, shards, pieceRes, seed) }] };
+  }
+  const parts: BakedPart[] = [];
+  for (const label of present) {
+    // the part: inside samples of other pieces count as outside, so each part is a closed mesh
+    const pg = new SdfGrid(g.res, g.size);
+    const out = g.voxel * 0.5;
+    for (let i = 0; i < g.data.length; i++) pg.data[i] = g.data[i] < 0 && labels![i] !== label ? out : g.data[i];
+    const m = meshGrid(pg);
+    if (m.positions.length < 9 * 4) continue;
+    const v = Math.abs(meshVolume(m.positions));
+    const n = Math.max(2, Math.min(6, Math.round((shards * v) / volume) + 1));
+    parts.push({ label, mesh: m, volume: v, shards: fracture(pg, n, pieceRes - 8, seed + label) });
+  }
+  return { mesh, volume, size, parts };
+}
+
+/** Piece label per sample (inside samples only; outside keep 0). */
+function labelGrid(g: SdfGrid, label: (x: number, y: number, z: number) => number): Uint8Array {
+  const out = new Uint8Array(g.data.length);
+  const { res, voxel, origin } = g;
+  for (let k = 0; k < res; k++)
+    for (let j = 0; j < res; j++)
+      for (let i = 0; i < res; i++) {
+        const idx = g.index(i, j, k);
+        if (g.data[idx] < 0) out[idx] = label(origin[0] + i * voxel, origin[1] + j * voxel, origin[2] + k * voxel);
+      }
+  return out;
+}
+
+function presentLabels(g: SdfGrid, labels: Uint8Array): number[] {
+  const count = new Map<number, number>();
+  for (let i = 0; i < g.data.length; i++) if (g.data[i] < 0) count.set(labels[i], (count.get(labels[i]) ?? 0) + 1);
+  // ignore specks (< 1% of the solid) left by smoothing at piece borders
+  const total = [...count.values()].reduce((a, b) => a + b, 0);
+  return [...count.entries()].filter(([, n]) => n >= total * 0.01).map(([l]) => l).sort((a, b) => a - b);
 }
 
 /** Voronoi fracture: piece i = object ∩ cell(seed i). Seeds are spread over solid samples. */
@@ -140,6 +195,11 @@ export function fracture(g: SdfGrid, count: number, res: number, seed: number): 
 /** SDF of the sculpt itself in object-local metres (world scale), centred at `center` (grid-local). */
 export function sculptSdf(grid: SdfGrid, center: [number, number, number], scale: number): Sdf {
   return (x, y, z) => grid.sample(center[0] + x / scale, center[1] + y / scale, center[2] + z / scale) * scale;
+}
+
+/** Piece label of the sculpt at an object-local point (nearest inside sample). */
+export function sculptLabel(grid: SdfGrid, center: [number, number, number], scale: number): (x: number, y: number, z: number) => number {
+  return (x, y, z) => grid.nearestInsideLabel(center[0] + x / scale, center[1] + y / scale, center[2] + z / scale, grid.voxel * 1.5);
 }
 
 /** Template descriptor + frame, computed the same way as for sculpts (res 40). */

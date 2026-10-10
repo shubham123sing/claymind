@@ -1,4 +1,4 @@
-# Architecture (as built, Phase 5)
+# Architecture (as built, Phase 6b)
 
 ```
 client/src
@@ -21,7 +21,9 @@ client/src
     sculpt-system.ts          orchestrates input -> tools -> worker -> view; two-hand rotate/scale; keys; HUD
   platform/input/input-system.ts  input hub: providers -> shared hands + per-hand claims (object / menu)
   materials/materials.json    12 materials (physics, fragility, sound, look) + shape-prior rules
-  materials/materials.ts      typed access + estimator (combines prior tables)
+  materials/materials.ts      typed access + estimator (combines prior tables); 8 materials, old ids aliased
+  materials/matchups.json/.ts material pair rules: damage, friction, sound mix; feltSpeed() for breaking
+  physics/physical-properties.ts  computePhysicalProperties(parts): exact mass, COM, inertia, support/tipping; bodyParameters()
   objects/csg.ts              SDF CSG language for templates
   objects/templates/*.json    template library (auto-loaded)
   objects/descriptor.ts       shape descriptor (aspect, elong, fill, profile, open top, holes)

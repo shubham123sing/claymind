@@ -6,7 +6,7 @@ import type { Creation } from '../../src/objects/creation';
 
 const mug: Creation = {
   schemaVersion: 1, id: 'm1', createdAt: 0, name: 'Mug', category: 'container', source: 'template', templateId: 'mug',
-  matchScore: 0.85, bestGuess: null, materialId: 'ceramic', materialConfidence: 0.65, materialGuesses: [], massKg: 0.3,
+  matchScore: 0.85, bestGuess: null, materialId: 'glass', materialConfidence: 0.65, materialGuesses: [], massKg: 0.3,
   sizeCm: [11, 10, 8], volumeCm3: 130, timeToObject: 0.1, kgNodeIds: [],
   descriptor: { aspect: 0.9, elong: 0.78, fill: 0.2, openTop: 0.9, holes: 1, profile: [1, 1, 1, 1, 1], angle: 0, center: [0, 0, 0], extents: [0.1, 0.1, 0.08], volume: 1e-4 },
 };
@@ -27,9 +27,9 @@ describe('brain view model', () => {
     const b = new Brain();
     b.seedIfEmpty();
     const id = b.addCreation(mug);
-    b.cutEdge(`cre:m1|made_of|mat:ceramic`);
+    b.cutEdge(`cre:m1|made_of|mat:glass`);
     const fg = focusGraph(b, id);
-    expect(fg.edges.find((e) => e.id === 'cre:m1|made_of|mat:ceramic')?.status).toBe('rejected');
+    expect(fg.edges.find((e) => e.id === 'cre:m1|made_of|mat:glass')?.status).toBe('rejected');
   });
 
   it('layout is deterministic, left-to-right by node type, within the panel', () => {
@@ -41,8 +41,8 @@ describe('brain view model', () => {
     const c = layoutGraph(fg.nodes, fg.edges);
     expect([...a.entries()]).toEqual([...c.entries()]);
     const x = (nid: string) => a.get(nid)![0];
-    expect(x(id)).toBeLessThan(x('mat:ceramic'));
-    expect(x('mat:ceramic')).toBeLessThan(x('prop:fragile'));
+    expect(x(id)).toBeLessThan(x('mat:glass'));
+    expect(x('mat:glass')).toBeLessThan(x('prop:fragile'));
     expect(x('prop:fragile')).toBeLessThan(x('beh:breaks_when_dropped'));
     for (const [, p] of a) {
       expect(Math.abs(p[0])).toBeLessThanOrEqual(0.28 + 1e-9);

@@ -67,6 +67,12 @@ See `docs/KG_SCHEMA.md` for relations.
 
 Game logic never names a vendor or model: it only sees `AiProvider` results, which are validated (`validateDescribe`) and treated as suggestions.
 
+## Material pair rules (data only)
+Add `{ "a", "b", "damageToA", "damageToB", "friction", "otherSound" }` to `client/src/materials/matchups.json`. Damage scales the speed a part feels when it hits (or is hit by) the other material, before comparing with its `fragility.breakSpeed`. Built-in surfaces are listed under `surfaces` (table, floor).
+
+## Physical numbers
+Never compute mass or balance elsewhere: call `computePhysicalProperties` (`client/src/physics/physical-properties.ts`) and use its output for both the physics body (`bodyParameters`) and anything shown to the player. Unit tests: `tests/unit/physical-properties.test.ts`; physics behaviour on IWSDK's Havok runtime: `tests/physics/` (harness `havok-sim.ts`, no browser).
+
 ## New agent experiment
 1. Measure it in `client/src/agent/experiment-system.ts`: add a kind to `ExperimentKind` and a result type, set up bodies in `run()` (use `zone()` for a clear spot; create bodies with gravity off and let the armed release start them), and fill the result in `finish()`. Report measurements, not conclusions.
 2. Teach the agent when to use it in `client/src/agent/agent.ts`: add a case to `planTests` (which prediction or belief it tests) and a `test<Kind>` method that compares the result with the prediction and calls `brain.disputeEdge` / `resolveDispute` / `confirmEdges` / `addLearnedEdge`. Always ask before changing a belief.

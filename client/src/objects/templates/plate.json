@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1, "id": "plate", "name": "Plate", "category": "container",
-  "materialPriors": { "ceramic": 0.65, "plastic": 0.15, "wood": 0.1, "glass": 0.1 },
+  "materialPriors": {"glass": 0.45, "plastic": 0.3, "wood": 0.25},
   "tags": ["flat", "thin"],
   "sdf": {
     "op": "subtract", "k": 0.003,

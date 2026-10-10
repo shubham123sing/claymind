@@ -27,7 +27,7 @@ function rig(answers: string[], lab: Partial<AgentLab> = {}) {
   const calls: string[] = [];
   const fullLab: AgentLab = {
     dropCompare: async () => (calls.push('dropCompare'), { kind: 'drop-compare', heavyKg: 0.9, lightKg: 0.006, heavyMs: 286, lightMs: 286, deltaMs: 0, heightCm: 40 }),
-    dropBreak: async () => (calls.push('dropBreak'), { kind: 'drop-break', broke: true, impactSpeed: 3.2, heightCm: 50, materialId: 'ceramic' }),
+    dropBreak: async () => (calls.push('dropBreak'), { kind: 'drop-break', broke: true, impactSpeed: 3.2, heightCm: 50, materialId: 'glass' }),
     bounce: async () => (calls.push('bounce'), { kind: 'bounce', reboundCm: 1, heightCm: 30, materialId: 'steel' }),
     ...lab,
   };
@@ -100,12 +100,12 @@ describe('agent: break and bounce experiments', () => {
   it('a predicted break that happens raises confidence along the path', async () => {
     const { brain, agent } = rig([]);
     brain.cutEdge('prop:heavy|causes|beh:falls_faster');
-    const id = brain.addCreation(creation({ id: 'c2', name: 'Mug', templateId: 'mug', materialId: 'ceramic', materialConfidence: 0.7, massKg: 0.3 }));
-    const before = brain.graph.edge('mat:ceramic|has_property|prop:fragile')!.confidence;
-    const plan = planTests(brain, id, () => 'ceramic').find((p) => p.kind === 'drop-break')!;
+    const id = brain.addCreation(creation({ id: 'c2', name: 'Mug', templateId: 'mug', materialId: 'glass', materialConfidence: 0.7, massKg: 0.3 }));
+    const before = brain.graph.edge('mat:glass|has_property|prop:fragile')!.confidence;
+    const plan = planTests(brain, id, () => 'glass').find((p) => p.kind === 'drop-break')!;
     expect(plan.prediction!.confidence).toBeGreaterThan(0.5);
     await (agent as unknown as { testBreak: (p: typeof plan, o: object) => Promise<void> }).testBreak(plan, {});
-    expect(brain.graph.edge('mat:ceramic|has_property|prop:fragile')!.confidence).toBeCloseTo(Math.min(1, before + 0.1), 6);
+    expect(brain.graph.edge('mat:glass|has_property|prop:fragile')!.confidence).toBeCloseTo(Math.min(1, before + 0.1), 6);
   });
 
   it('a surprising break proposes learning "<material> is fragile"', async () => {

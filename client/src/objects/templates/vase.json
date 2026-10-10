@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1, "id": "vase", "name": "Vase", "category": "container",
-  "materialPriors": { "ceramic": 0.5, "glass": 0.35, "stone": 0.15 },
+  "materialPriors": {"glass": 0.6, "stone": 0.25, "clay": 0.15},
   "tags": ["hollow", "tall", "decorative"],
   "sdf": {
     "op": "subtract", "k": 0.003,

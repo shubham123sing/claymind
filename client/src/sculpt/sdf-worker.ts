@@ -5,7 +5,7 @@
  * Also "bakes" the sculpt into an object: describe -> match templates -> fit
  * template or keep the sculpt -> mesh + fracture pieces. All local, no network.
  */
-import { BakedObject, bakeFromSdf, describeTemplate, fitTemplate, sculptSdf } from '../objects/bake.js';
+import { BakedObject, bakeFromSdf, describeTemplate, fitTemplate, sculptLabel, sculptSdf } from '../objects/bake.js';
 import { describe, ShapeDescriptor } from '../objects/descriptor.js';
 import { MatchResult, rank } from '../objects/matcher.js';
 import { TEMPLATES } from '../objects/templates.js';
@@ -54,7 +54,7 @@ function send(id: number, brushMs: number, full = false): void {
   const update = full ? engine!.remeshAll() : engine!.update();
   const meshMs = performance.now() - t0;
   const transfer: ArrayBuffer[] = [];
-  for (const c of update.chunks) transfer.push(c.positions.buffer as ArrayBuffer, c.normals.buffer as ArrayBuffer);
+  for (const c of update.chunks) transfer.push(c.positions.buffer as ArrayBuffer, c.normals.buffer as ArrayBuffer, c.labels.buffer as ArrayBuffer);
   post({ type: 'mesh', id, brushMs, meshMs, ...update }, transfer);
 }
 
@@ -74,16 +74,26 @@ function bake(m: Extract<SculptRequest, { type: 'bake' }>): void {
   const ranking = rank(d, lib.map((t) => ({ id: t.id, descriptor: t.descriptor })));
   const sculptShape = sculptSdf(grid, d.center, m.scale);
   const top = ranking[0];
-  const useTemplate = top && top.similarity >= m.threshold;
+  const mask = grid.piecesMask();
+  const multiPiece = (mask & (mask - 1)) !== 0;
+  // a template has no pieces: a sculpt made of pieces stays the user's own shape
+  const useTemplate = !multiPiece && top && top.similarity >= m.threshold;
   const tmpl = useTemplate ? lib.find((t) => t.id === top.id)! : null;
   const sdf = tmpl ? fitTemplate(tmpl, d, sculptShape, m.scale) : sculptShape;
   const extent = Math.max(...d.extents) * m.scale;
-  const baked = bakeFromSdf(sdf, extent, { res: tmpl ? 56 : 48, pieces: m.pieces, seed: m.seed });
-  const transfer: ArrayBuffer[] = [baked.mesh.positions.buffer as ArrayBuffer, baked.mesh.normals.buffer as ArrayBuffer];
-  for (const p of baked.pieces) transfer.push(p.positions.buffer as ArrayBuffer, p.normals.buffer as ArrayBuffer);
+  const baked = bakeFromSdf(sdf, extent, {
+    res: tmpl ? 56 : 48, pieces: m.pieces, seed: m.seed,
+    label: tmpl ? undefined : sculptLabel(grid, d.center, m.scale),
+  });
+  // transfer each buffer once (a single part shares the whole mesh's buffers)
+  const transfer = new Set<ArrayBuffer>([baked.mesh.positions.buffer as ArrayBuffer, baked.mesh.normals.buffer as ArrayBuffer]);
+  for (const part of baked.parts) {
+    transfer.add(part.mesh.positions.buffer as ArrayBuffer).add(part.mesh.normals.buffer as ArrayBuffer);
+    for (const p of part.shards) transfer.add(p.positions.buffer as ArrayBuffer).add(p.normals.buffer as ArrayBuffer);
+  }
   post(
     { type: 'baked', id: m.id, ok: true, ms: performance.now() - t0, descriptor: d, ranking, source: tmpl ? 'template' : 'sculpt', templateId: tmpl?.id ?? null, baked },
-    transfer,
+    [...transfer],
   );
 }
 

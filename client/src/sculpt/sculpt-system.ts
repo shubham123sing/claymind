@@ -1,7 +1,8 @@
 /**
  * Sculpting: clay lump on the work surface, hand/mouse tools, mirror,
  * undo/redo, two-hand rotate/scale, size readout, squish audio, wrist menu,
- * and "Bring to life" (bake the sculpt into a physical object, all local).
+ * "New piece" (a creation is made of up to 4 joined pieces, each later gets
+ * its own material) and "Bring to life" (bake into a physical object, all local).
  */
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
@@ -17,9 +18,9 @@ import { aiEnabled } from '../ai/ai-state.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
 import { MenuItem, WristMenu } from '../ui/wrist-menu.js';
-import { ClayView } from './clay-view.js';
+import { ClayView, PIECE_COLORS } from './clay-view.js';
 import { SculptClient } from './sculpt-client.js';
-import type { BrushOp } from './sdf-grid.js';
+import { BrushOp, MAX_PIECES } from './sdf-grid.js';
 import { createHandToolState, HandToolState, SculptTool, ToolContext, TOOLS } from './tools.js';
 
 const GRID_SIZE = 0.25;
@@ -64,6 +65,9 @@ export class SculptSystem extends createSystem({}) {
   private placeTmp = [0, 0];
   private lastToolbarRefresh = 0;
   private frameMs = 16;
+  /** "New piece" pressed: the next Add stroke lays down this piece (null = none). */
+  private armedPiece: number | null = null;
+  private armedUsed = false;
   /** Clay surface frozen at mouse-press time (see PointerProvider). */
   private dragSnapshot: Mesh[] | null = null;
 
@@ -100,7 +104,7 @@ export class SculptSystem extends createSystem({}) {
     this.world.createTransformEntity(this.menu.root);
     this.toolbar = new Toolbar(
       items,
-      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · Enter: bring to life · drag objects (wheel lifts) and release to drop',
+      'Drag the clay to pull · Shift+drag to poke · drag empty space to turn · N: new piece · Enter: bring to life · click a part of an object, then Material · drag objects (wheel lifts) and release to drop',
       () => this.audio.tickSound(),
     );
 
@@ -128,6 +132,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
       { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
+      { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('object:cycle-material', {}) },
       ...(devKgView
         ? [
@@ -185,6 +190,8 @@ export class SculptSystem extends createSystem({}) {
   private ctx: ToolContext = {
     clayCenter: this.clayCenter,
     beginAction: () => {
+      // the stroke that laid down a new piece is finished: back to extending pieces
+      if (this.armedUsed) this.armedPiece = null;
       this.client.beginAction();
     },
     nearClay: (p, margin) => {
@@ -202,8 +209,10 @@ export class SculptSystem extends createSystem({}) {
         dx = this.v2.x - this.v.x; dy = this.v2.y - this.v.y; dz = this.v2.z - this.v.z;
       }
       const r = radius / s;
-      this.client.push({ op, x: this.v.x, y: this.v.y, z: this.v.z, r, dx, dy, dz });
-      if (this.mirror) this.client.push({ op, x: -this.v.x, y: this.v.y, z: this.v.z, r, dx: -dx, dy, dz });
+      const piece = op === 'add' && this.armedPiece !== null ? this.armedPiece : undefined;
+      if (piece !== undefined) this.armedUsed = true;
+      this.client.push({ op, x: this.v.x, y: this.v.y, z: this.v.z, r, dx, dy, dz, piece });
+      if (this.mirror) this.client.push({ op, x: -this.v.x, y: this.v.y, z: this.v.z, r, dx: -dx, dy, dz, piece });
       this.strokesThisFrame++;
     },
   };
@@ -324,6 +333,10 @@ export class SculptSystem extends createSystem({}) {
       materialId: mat.id,
       materialConfidence: guesses[0].prob,
       materialGuesses: guesses.slice(0, 4),
+      parts: b.parts.map((part) => ({
+        label: part.label, materialId: mat.id, materialConfidence: guesses[0].prob, by: 'guess' as const,
+        massKg: mat.density * part.volume, volumeCm3: part.volume * 1e6,
+      })),
       massKg: mat.density * b.volume,
       sizeCm: [b.size[0] * 100, b.size[1] * 100, b.size[2] * 100],
       volumeCm3: b.volume * 1e6,
@@ -334,7 +347,8 @@ export class SculptSystem extends createSystem({}) {
     root.updateMatrixWorld(true);
     const p = new Vector3(...d.center).applyMatrix4(root.matrixWorld);
     const q = root.getWorldQuaternion(new Quaternion());
-    const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name} ${Math.round(creation.materialConfidence * 100)}%`;
+    const pieces = b.parts.length > 1 ? ` · ${b.parts.length} pieces` : '';
+    const guess = `${creation.name}${tmpl ? '?' : ''} · ${mat.name} ${Math.round(creation.materialConfidence * 100)}%${pieces}`;
     this.showStatus(guess, 3500, mat.visual.color);
     bus.emit('creation:baked', {
       creation, baked: b, position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w],
@@ -353,6 +367,31 @@ export class SculptSystem extends createSystem({}) {
       this.fade = { from: 0, to: 1, t0: performance.now(), ms: 600 };
       this.baking = false;
     }, 1400);
+  }
+
+  /** Lowest piece label not in use, or null when all MAX_PIECES exist. */
+  private freePiece(): number | null {
+    const mask = this.client?.last?.piecesMask ?? 1;
+    for (let i = 0; i < MAX_PIECES; i++) if (!(mask & (1 << i))) return i;
+    return null;
+  }
+
+  /**
+   * Start another piece: switches to Add, and the next Add stroke (wherever it
+   * starts on the sculpt) lays down clay of the new piece in its own colour.
+   * Pieces join where they touch. Later strokes extend whichever piece they touch.
+   */
+  newPiece(): void {
+    const piece = this.freePiece();
+    if (piece === null || this.baking) {
+      if (piece === null) this.showStatus(`Up to ${MAX_PIECES} pieces`, 2000, '#d9534f');
+      return;
+    }
+    this.armedPiece = piece;
+    this.armedUsed = false;
+    this.tool = TOOLS.find((t) => t.id === 'add') ?? this.tool;
+    this.audio.tickSound(1.4);
+    this.showStatus(`Piece ${piece + 1}: add clay where it goes`, 4000, PIECE_COLORS[piece]);
   }
 
   private showStatus(text: string, ms: number, accent?: string): void {
@@ -415,6 +454,7 @@ export class SculptSystem extends createSystem({}) {
       if (kb.getKeyDown(`Digit${i + 1}`)) this.tool = t;
     });
     if (kb.getKeyDown('KeyM')) this.mirror = !this.mirror;
+    if (kb.getKeyDown('KeyN')) this.newPiece();
     if (kb.getKeyDown('Enter')) void this.bringToLife();
     if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
     if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});

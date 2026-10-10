@@ -19,12 +19,12 @@ from .base import ModelProgress, ProviderError
 
 # typical materials per category (mirrors template priors; mock only)
 _TYPICAL = {
-    "mug": ["ceramic", "plastic", "glass"],
-    "bowl": ["ceramic", "wood", "plastic"],
-    "plate": ["ceramic", "plastic", "glass"],
-    "vase": ["ceramic", "glass", "stone"],
-    "bottle": ["glass", "plastic", "aluminium"],
-    "can": ["aluminium", "steel", "plastic"],
+    "mug": ["glass", "plastic", "steel"],
+    "bowl": ["glass", "wood", "plastic"],
+    "plate": ["glass", "plastic", "wood"],
+    "vase": ["glass", "stone", "clay"],
+    "bottle": ["glass", "plastic", "steel"],
+    "can": ["steel", "plastic"],
     "ball": ["rubber", "plastic", "foam"],
     "block": ["wood", "plastic", "stone"],
     "ring": ["rubber", "foam", "plastic"],

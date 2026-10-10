@@ -39,6 +39,7 @@ export class ImpactSystem extends createSystem({
           piece: e.getValue(PhysObject, 'piece') === 1,
           impulse: (e.getValue(PhysObject, 'massKg') as number) * dv,
           deltaV: dv,
+          dir: [(v[0] - p[0]) / dv, (v[1] - p[1]) / dv, (v[2] - p[2]) / dv],
           x: o.position.x,
           y: o.position.y,
           z: o.position.z,

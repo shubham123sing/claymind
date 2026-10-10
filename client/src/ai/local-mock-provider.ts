@@ -8,8 +8,8 @@
 import { AiProvider, DescribeRequest, DescribeResult, GenerateRequest } from './types.js';
 
 const TYPICAL: Record<string, string[]> = {
-  mug: ['ceramic', 'plastic', 'glass'], bowl: ['ceramic', 'wood', 'plastic'], plate: ['ceramic', 'plastic', 'glass'],
-  vase: ['ceramic', 'glass', 'stone'], bottle: ['glass', 'plastic', 'aluminium'], can: ['aluminium', 'steel', 'plastic'],
+  mug: ['glass', 'plastic', 'steel'], bowl: ['glass', 'wood', 'plastic'], plate: ['glass', 'plastic', 'wood'],
+  vase: ['glass', 'stone', 'clay'], bottle: ['glass', 'plastic', 'steel'], can: ['steel', 'plastic'],
   ball: ['rubber', 'plastic', 'foam'], block: ['wood', 'plastic', 'stone'], ring: ['rubber', 'foam', 'plastic'],
   plank: ['wood', 'steel', 'plastic'],
 };

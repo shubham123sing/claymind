@@ -29,11 +29,15 @@ export interface ChunkMesh {
   chunk: number;
   positions: Float32Array;
   normals: Float32Array;
+  /** Piece label per vertex (the inside sample of the cut edge). */
+  labels: Uint8Array;
 }
 
 export class ChunkMesher {
   private pos = new Float32Array(MAX_FLOATS);
   private nrm = new Float32Array(MAX_FLOATS);
+  private lab = new Uint8Array(MAX_FLOATS / 3);
+  private el = new Uint8Array(12);
   private cv = new Float32Array(8);
   private cg = new Float32Array(24);
   private ep = new Float32Array(36);
@@ -58,7 +62,7 @@ export class ChunkMesher {
     const i0 = ci * CHUNK_CELLS, i1 = Math.min(i0 + CHUNK_CELLS, cells);
     const j0 = cj * CHUNK_CELLS, j1 = Math.min(j0 + CHUNK_CELLS, cells);
     const k0 = ck * CHUNK_CELLS, k1 = Math.min(k0 + CHUNK_CELLS, cells);
-    const { pos, nrm, cv, cg, ep, en } = this;
+    const { pos, nrm, lab, cv, cg, ep, en, el } = this;
     const v = g.voxel, o = g.origin;
     let n = 0;
     for (let k = k0; k < k1; k++)
@@ -78,6 +82,8 @@ export class ChunkMesher {
             const a = EDGE_CORNERS[e][0], b = EDGE_CORNERS[e][1];
             const va = cv[a], vb = cv[b];
             const t = va === vb ? 0.5 : va / (va - vb);
+            const inside = va < 0 ? a : b;
+            el[e] = g.labels[g.index(i + CORNER[inside][0], j + CORNER[inside][1], k + CORNER[inside][2])];
             ep[e * 3] = o[0] + (i + CORNER[a][0] + t * (CORNER[b][0] - CORNER[a][0])) * v;
             ep[e * 3 + 1] = o[1] + (j + CORNER[a][1] + t * (CORNER[b][1] - CORNER[a][1])) * v;
             ep[e * 3 + 2] = o[2] + (k + CORNER[a][2] + t * (CORNER[b][2] - CORNER[a][2])) * v;
@@ -94,11 +100,12 @@ export class ChunkMesher {
               const e = triTable[base + t + WINDING[s]];
               pos[n] = ep[e * 3]; pos[n + 1] = ep[e * 3 + 1]; pos[n + 2] = ep[e * 3 + 2];
               nrm[n] = en[e * 3]; nrm[n + 1] = en[e * 3 + 1]; nrm[n + 2] = en[e * 3 + 2];
+              lab[n / 3] = el[e];
               n += 3;
             }
           }
         }
-    return { chunk: g.chunkIndex(ci, cj, ck), positions: pos.slice(0, n), normals: nrm.slice(0, n) };
+    return { chunk: g.chunkIndex(ci, cj, ck), positions: pos.slice(0, n), normals: nrm.slice(0, n), labels: lab.slice(0, n / 3) };
   }
 
   /** Mesh all dirty chunks and clear their flags. */

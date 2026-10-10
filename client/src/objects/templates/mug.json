@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1, "id": "mug", "name": "Mug", "category": "container",
-  "materialPriors": { "ceramic": 0.65, "plastic": 0.15, "steel": 0.1, "glass": 0.1 },
+  "materialPriors": {"glass": 0.45, "plastic": 0.3, "steel": 0.15, "stone": 0.1},
   "tags": ["hollow", "handle", "holds-liquid"],
   "sdf": {
     "op": "union", "k": 0.004,

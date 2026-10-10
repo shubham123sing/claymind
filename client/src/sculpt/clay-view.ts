@@ -1,6 +1,7 @@
 /**
  * Visuals for the live sculpt: chunk meshes under a transform group, a soft
  * contact shadow, a size readout (label + ring on the surface) and brush cursors.
+ * Each piece of clay has its own tint so the player can see the pieces.
  */
 import {
   BufferAttribute, BufferGeometry, CanvasTexture, Color, DoubleSide, Group, Mesh, MeshBasicMaterial,
@@ -11,7 +12,7 @@ import type { SculptResponse } from './sdf-worker.js';
 export class ClayView {
   /** Moves/rotates/scales the sculpt. Grid-local coordinates live inside it. */
   readonly root = new Group();
-  readonly material = new MeshStandardMaterial({ color: 0xc98a5e, roughness: 0.82, metalness: 0 });
+  readonly material = new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.82, metalness: 0 });
   /** Surface-aligned group (not rotated/scaled with the clay). */
   readonly ground = new Group();
   readonly cursors: Mesh[] = [];
@@ -98,6 +99,7 @@ export class ClayView {
       const geo = new BufferGeometry();
       geo.setAttribute('position', new BufferAttribute(c.positions, 3));
       geo.setAttribute('normal', new BufferAttribute(c.normals, 3));
+      geo.setAttribute('color', new BufferAttribute(pieceColors(c.labels), 3));
       geo.computeBoundingSphere();
       if (mesh) {
         mesh.geometry.dispose();
@@ -205,6 +207,19 @@ export class ClayView {
   setClayColor(hex: number): void {
     this.material.color = new Color(hex);
   }
+}
+
+/** Clay tints per piece (sRGB): terracotta, slate blue, olive, plum. */
+export const PIECE_COLORS = ['#c98a5e', '#7f9cc0', '#a3b067', '#b07aa6'];
+const PIECE_LINEAR = PIECE_COLORS.map((h) => new Color(h)); // Color() converts sRGB hex to linear
+
+function pieceColors(labels: Uint8Array): Float32Array {
+  const out = new Float32Array(labels.length * 3);
+  for (let v = 0; v < labels.length; v++) {
+    const c = PIECE_LINEAR[labels[v] % PIECE_LINEAR.length];
+    out[v * 3] = c.r; out[v * 3 + 1] = c.g; out[v * 3 + 2] = c.b;
+  }
+  return out;
 }
 
 function radialTexture(): CanvasTexture {

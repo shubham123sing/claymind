@@ -9,7 +9,7 @@ Source of truth: `client/src/kg/schema.ts` (`KG_SCHEMA_VERSION = 1`). Saved snap
 |---|---|---|---|
 | Creation | `cre:` | `cre:c_…` (one per baked object, last 20 kept) | Bring to life |
 | Concept | `concept:` | `concept:mug`, `concept:ball` | one per template |
-| Material | `mat:` | `mat:ceramic` | `materials.json` |
+| Material | `mat:` | `mat:glass` | `materials.json` |
 | ShapeFeature | `feat:` | hollow, round, flat, thin-walled, tall, has a hole, long | `kg/seed/knowledge.json` |
 | Property | `prop:` | fragile, bouncy, denser/lighter than water, heavy, can hold liquid, rolls easily, stackable, flexible, hard | seed |
 | Behavior | `beh:` | breaks when dropped, bounces, sinks, floats, rolls, holds liquid, stacks, falls faster | seed |
