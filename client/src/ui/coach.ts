@@ -10,7 +10,7 @@ import { AppEvents, bus } from '../core/event-bus.js';
 import { setSetting, settings, settingsReady } from '../core/settings.js';
 import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
-import { bindPanelMouse, CanvasPanel, ui } from './canvas-panel.js';
+import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
 const W = 900, H = 250;
 const SIZE: [number, number] = [0.26, (0.26 * H) / W];
@@ -143,7 +143,7 @@ export class CoachSystem extends createSystem({}) {
     // above the clay, facing the viewer
     const eye = this.world.camera.getWorldPosition(this.v);
     const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.at);
-    m.scale.setScalar(input.xr ? 1 : 0.6);
+    m.scale.setScalar(input.xr ? XR_TEXT_SCALE : 0.6);
     m.position.copy(at);
     m.position.y += input.xr ? 0.2 : 0.15; // above the clay's size label
     m.lookAt(eye);

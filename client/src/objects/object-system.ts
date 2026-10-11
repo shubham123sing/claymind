@@ -543,7 +543,14 @@ export class ObjectSystem extends createSystem({}) {
       entityIndex: rec.entity.index, materialId: part.mat.id, piece, impulse: m.impulse, deltaV: dv, x, y, z,
     });
     if (brk) this.breakPart(rec, hit);
-    else if (!piece && part.mat.hardness >= 0.7 && dv > 1.8) this.shards.burst(x, y, z, part.mat.visual.color, 3, 0.6, 0.003);
+    else if (!piece) this.impactFx(part.mat, dv, x, y, z);
+  }
+
+  /** A little visual for a hit, by material: sparks off metal, chips off stone / glass, a puff off soft clay / foam / rubber. */
+  private impactFx(m: Material, dv: number, x: number, y: number, z: number): void {
+    if (m.visual.metalness > 0.5 && dv > 1.2) this.shards.burst(x, y, z, '#ffd98a', Math.min(8, Math.round(dv * 2)), 0.9, 0.002);
+    else if (m.hardness >= 0.7 && dv > 1.5) this.shards.burst(x, y, z, m.visual.color, 3, 0.6, 0.003);
+    else if (m.hardness <= 0.2 && dv > 0.9) this.shards.burst(x, y, z, m.visual.color, 5, 0.25, 0.004);
   }
 
   /** Built-in surface material at a world point: the table near its top, else the floor. */

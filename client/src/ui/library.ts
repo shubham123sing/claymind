@@ -16,7 +16,7 @@ import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { deleteFromLibrary, loadLibrary, SavedCreation, saveToLibrary } from '../storage/library.js';
 import { setSetting, settings, settingsReady } from '../core/settings.js';
 import { buildSamples } from '../objects/samples.js';
-import { CanvasPanel, ui } from './canvas-panel.js';
+import { CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
 const W = 1000, H = 640;
 const SIZE: [number, number] = [0.3, (0.3 * H) / W];
@@ -216,7 +216,7 @@ export class LibrarySystem extends createSystem({}) {
     const toEye = this.toEye.copy(eye).sub(at).setY(0).normalize();
     const left = this.left.set(-toEye.z, 0, toEye.x);
     if (input.xr) {
-      m.scale.setScalar(1);
+      m.scale.setScalar(XR_TEXT_SCALE);
       m.position.copy(at).addScaledVector(toEye, 0.1).addScaledVector(left, -0.24);
       m.position.y += 0.14;
     } else {

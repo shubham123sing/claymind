@@ -3,6 +3,7 @@
  * in a compact two-column panel at the left edge (the clay stays in view), with
  * the keyboard hint as one line at the bottom.
  */
+import { onSettings, settings } from '../core/settings.js';
 import type { MenuItem } from './wrist-menu.js';
 
 export class Toolbar {
@@ -40,14 +41,21 @@ export class Toolbar {
     });
     document.body.appendChild(this.el);
     document.body.appendChild(tip);
+    onSettings(() => this.refresh());
     this.refresh();
   }
 
   refresh(): void {
+    const hc = settings.highContrast;
+    this.el.style.background = hc ? '#000' : 'rgba(20,22,27,0.78)';
+    this.el.style.outline = hc ? '2px solid #fff' : 'none';
+    this.tip.style.background = hc ? '#000' : 'rgba(20,22,27,0.6)';
+    this.tip.style.color = hc ? '#fff' : 'rgba(255,255,255,.7)';
     for (const { item, el } of this.buttons) {
       const sel = item.selected?.() ?? false;
       const en = item.enabled?.() ?? true;
-      el.style.background = sel ? `#${item.color.toString(16).padStart(6, '0')}` : 'rgba(255,255,255,0.08)';
+      el.style.background = sel ? `#${item.color.toString(16).padStart(6, '0')}` : hc ? '#222' : 'rgba(255,255,255,0.08)';
+      el.style.outline = hc ? '1px solid #fff' : 'none';
       el.style.opacity = en ? '1' : '0.4';
       el.disabled = !en;
     }

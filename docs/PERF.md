@@ -78,3 +78,12 @@ Notes:
 | Library thumbnail | Desktop | 128 px JPEG, ~3 KB, one offscreen render |
 | Play Kit | | 18 bodies (10 pebbles, 7 dominoes, 1 plate); meshes baked once |
 | Frame time on Quest | | not measured |
+
+## Phase 9 (2026-10-11)
+
+| Measurement | Where | Result |
+|---|---|---|
+| Busy scene: Play Kit + 3 samples + 1 pinned creation + clay | Browser | 22 bodies, 77 draw calls, 30.7k triangles |
+| Frame time | Browser pane (active) | ~18 ms; the pane throttles to 0.2-1.3 s per frame when not in front |
+| Reflection map | Device | generated once (RoomEnvironment, PMREM), no download |
+| Frame time on Quest | | not measured |

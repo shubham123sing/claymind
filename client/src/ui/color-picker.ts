@@ -13,7 +13,7 @@ import { ObjectSystem } from '../objects/object-system.js';
 import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { brush } from '../sculpt/tools.js';
-import { CanvasPanel, ui } from './canvas-panel.js';
+import { CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
 const W = 960, H = 600;
 const SIZE: [number, number] = [0.27, (0.27 * H) / W];
@@ -197,7 +197,7 @@ export class ColorPickerSystem extends createSystem({}) {
     toEye.normalize();
     const left = this.left.set(-toEye.z, 0, toEye.x); // the viewer's left of the target
     if (input.xr) {
-      m.scale.setScalar(1);
+      m.scale.setScalar(XR_TEXT_SCALE);
       m.position.copy(at).addScaledVector(toEye, 0.08).addScaledVector(left, radius + SIZE[0] / 2);
       m.position.y += 0.05;
     } else {

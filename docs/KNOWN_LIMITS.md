@@ -167,6 +167,15 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 - **Performance:** panels that follow the clay no longer allocate vectors every frame. Quest frame time still not measured.
 - **The browser pane is slow at times** (0.6-1.3 s per frame while hidden or in the background) and the page only starts while the pane is visible; checks that need several frames were done when it was visible.
 
+### Phase 9 (polish), second pass: verified in the browser
+- **Tutorial, all 5 steps** advanced on real actions (drag, paint dab, Bring to life, material, Pin) and ended with "Done in 0:17! It is saved in your Library." Pinning straight after choosing steel kept steel (5.30 kg): the lost-material fix holds.
+- **Settings by real clicks:** High contrast turned every canvas panel solid black with white outlines (and now the HTML toolbar too); Reduced motion stopped the hover bob (0 mm vs ~10 mm); Sound off muted everything; all three survived a reload. **Reset everything** (two taps) brought back defaults, the tutorial and the 3 samples, and removed the pinned creation.
+- **Steel now reflects** the generated room environment (clearly shiny instead of flat grey).
+- **Impact effects by material:** sparks off metal, chips off stone / glass, a soft puff off clay / foam / rubber (in addition to material sounds).
+- **Readable in the headset:** headset panels are drawn 25% larger so body text is >= ~2.5 cm at 1 m equivalent at the ~0.5 m they float from the eyes.
+- **Scene cost** with the Play Kit, 3 samples and a pinned creation: 22 bodies, 77 draw calls, 30.7k triangles (browser). Quest frame time still not measured; the browser pane's own frame time (18 ms when active) is not meaningful while it is throttled.
+- **Not verified:** Left-handed and One-handed menu (need hands in XR); poking panels in XR.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

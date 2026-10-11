@@ -8,7 +8,7 @@ import { bus } from '../core/event-bus.js';
 import { setSetting, settings, Settings } from '../core/settings.js';
 import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
-import { bindPanelMouse, CanvasPanel, ui } from './canvas-panel.js';
+import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
 const W = 760, H = 700;
 const SIZE: [number, number] = [0.24, (0.24 * H) / W];
@@ -106,9 +106,11 @@ export class SettingsSystem extends createSystem({}) {
     const eye = this.world.camera.getWorldPosition(this.v);
     const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.at);
     const toEye = this.toEye.copy(eye).sub(at).setY(0).normalize();
-    m.scale.setScalar(input.xr ? 1 : 0.55);
+    m.scale.setScalar(input.xr ? XR_TEXT_SCALE : 0.5);
     m.position.copy(at).addScaledVector(toEye, 0.14);
     m.position.y += input.xr ? 0.16 : 0.07;
+    // desktop: right of the clay, clear of the toolbar on the left of the screen
+    if (!input.xr) m.position.x += toEye.z * 0.06, m.position.z -= toEye.x * 0.06;
     m.lookAt(eye);
   }
 
