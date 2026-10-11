@@ -1,15 +1,23 @@
 # ClayMind (working title)
 
-Hands-only mixed-reality sculpting for Meta Quest 3/3S (WebXR). Shape clay, bring it to life as a physical object, and inspect and correct the AI's reasoning graph. The full brief is kept by the project owner. Phase status is tracked in `docs/`.
+Sculpt, paint and build with real materials in your own room (Meta Quest 3/3S, WebXR, hands only, seated). What you make is heavy, bouncy, fragile or slippery for real: every piece has its own material, and the physics (weight, balance, friction, bounce, breaking, sound) follows it. Fully offline: no server, no account, no AI. Plan: `docs/PLAN.md`; status and limits: `docs/`.
+
+## Play it
+Open the public link in **Quest Browser**, press **Start in mixed reality**, and follow the card above the clay. (A desktop browser works too, with the mouse.)
 
 ## Run (development)
-1. `cd client && npm install`
+1. Install Node 24, then `cd client && npm install`
 2. `npm run dev` starts an HTTPS dev server on port 8081 and opens the IWSDK emulator browser.
 3. Quest: same Wi-Fi, open `https://<your-pc-ip>:8081/` in Quest Browser, accept the certificate warning, then press **Enter XR**.
-4. Tests: `npm test` · types: `npm run typecheck` · SDF bench: `npx vite-node tests/bench/sdf-bench.ts`
+4. Tests: `npm test` · types: `npm run typecheck`
 
-## Controls (Phases 1-5: sculpt, bring to life, play, edit and debug the brain)
-- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Shape, Add, Carve, Smooth, Mirror, Undo, Redo, Material, Brain, Check beliefs, Mastery, AI, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** cycles the material of the last object you touched.
+## Release build and deploy
+1. `cd client && NODE_ENV=production npm run build` -> `client/dist/` (about 10 MB, static files only).
+2. GitHub Pages: push to GitHub, then Settings -> Pages -> Source: **GitHub Actions**. `.github/workflows/pages.yml` tests, builds and publishes on every push.
+3. Headset test: `docs/QUEST_TEST.md`.
+
+## Controls
+- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Bring to life, Shape, Add, Carve, Smooth, Paint, Eraser, Mirror, Undo, Redo, New piece, Material, Color, Join, Pin / Unpin, Play Kit, Library, Settings, Separate, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** opens a ring of materials for the piece you touched last.
 - **Browser:** drag on the clay = pull (Shape) or use the selected tool · Shift+drag = poke · drag empty space = turn · 1-4 tools · M mirror · Ctrl+Z / Ctrl+Y · **N = new piece** · **Enter = bring to life** · click a part of an object, then **Material** to change that part · drag an object to move it, **mouse wheel lifts it**, release to drop or throw · H debug HUD (`?debug`) · with `?devKgView`: G brain · B check beliefs · P mastery.
 - **Pieces:** **New piece** (`N`) starts another piece in its own clay colour: the next Add stroke lays it down (e.g. a head on a handle). After Bring to life, touch a piece and press **Material** (`T`) to pick its material from the ring; mass, balance, friction, bounce and breaking follow. **Separate** (`K`) makes the touched piece its own object; **Join** (`J`) sticks the touched object to one touching it.
 - **Colour and paint:** **Color** (`C`) opens the colour picker: pick a colour, then **Whole piece** colours the piece, or **Paint** (`5`) draws on the clay with your fingertip / mouse (**Eraser** `6`, brush size `[` `]`). Paint stays on the clay while you keep sculpting and carries over when it comes to life. Colour never changes the physics.

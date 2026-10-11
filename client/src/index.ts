@@ -52,5 +52,14 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(ExperimentSystem);
     // Debug-the-Brain agent + Mastery: development only in plan v3 (experiments stay, for Predict then Test)
     if (devKgView) world.registerSystem(AgentSystem);
+    // ?debug: systems by stable names (class names are minified in release builds)
+    if (new URLSearchParams(location.search).has('debug')) {
+      Object.assign(window, {
+        __sys: {
+          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem),
+          coach: world.getSystem(CoachSystem), settings: world.getSystem(SettingsSystem),
+        },
+      });
+    }
   }
 });
