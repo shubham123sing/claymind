@@ -8,6 +8,7 @@ import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vect
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
 import { devAi, devKgView } from '../core/flags.js';
+import { settings } from '../core/settings.js';
 import { Hud } from '../devtools/hud.js';
 import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
 import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
@@ -149,6 +150,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
       { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:spawn', {}) },
       { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
+      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
       ...(devKgView
         ? [
@@ -232,6 +234,7 @@ export class SculptSystem extends createSystem({}) {
       if (!this.actionTouched) {
         this.actionTouched = true;
         this.lastClayTouch = performance.now();
+        bus.emit(op === 'paint' ? 'clay:painted' : 'clay:touched', {});
         const label = piece ?? this.view.pieceAt(this.v);
         if (label >= 0) this.activePiece = label;
       }
@@ -267,13 +270,25 @@ export class SculptSystem extends createSystem({}) {
     }
 
     const xr = this.world.session != null;
+    this.dominant = settings.leftHanded ? 'left' : 'right';
     const offHand: Handedness = this.dominant === 'right' ? 'left' : 'right';
-    // the off hand's palm-up menu is unavailable while that hand holds an object
-    const offClaim = input.claims[offHand];
-    const offBusy = offClaim !== null && offClaim !== 'menu';
-    const menuOpen = xr && !offBusy && this.menu.update(this.hands[offHand], this.hands[this.dominant], this.world.camera, dt, performance.now());
-    if (!xr || offBusy) this.menu.root.visible = false;
-    if (!offBusy) input.claims[offHand] = menuOpen ? 'menu' : null;
+    if (settings.oneHanded) {
+      // one-handed: the menu stays open beside the clay (off-hand side), either hand pokes it
+      if (xr) {
+        this.world.camera.getWorldDirection(this.fwd);
+        const side = (settings.leftHanded ? 1 : -1) * 0.2;
+        this.v2.set(this.clayCenter[0] - this.fwd.z * side, this.clayCenter[1] + 0.1, this.clayCenter[2] + this.fwd.x * side);
+        this.menu.updateFixed(this.v2, [this.hands.left, this.hands.right], this.world.camera, dt, performance.now());
+      } else this.menu.root.visible = false;
+      if (input.claims[offHand] === 'menu') input.claims[offHand] = null;
+    } else {
+      // the off hand's palm-up menu is unavailable while that hand holds an object
+      const offClaim = input.claims[offHand];
+      const offBusy = offClaim !== null && offClaim !== 'menu';
+      const menuOpen = xr && !offBusy && this.menu.update(this.hands[offHand], this.hands[this.dominant], this.world.camera, dt, performance.now());
+      if (!xr || offBusy) this.menu.root.visible = false;
+      if (!offBusy) input.claims[offHand] = menuOpen ? 'menu' : null;
+    }
 
     for (const side of SIDES) {
       const h = this.hands[side];
@@ -409,6 +424,7 @@ export class SculptSystem extends createSystem({}) {
 
   /** Colour a whole clay piece (null = its default tint). Looks only. */
   setPieceColor(piece: number, color: string | null): void {
+    bus.emit('clay:painted', {});
     this.chosen[piece] = color;
     this.view.setPieceColors(this.chosen.map((c, i) => c ?? PIECE_COLORS[i]));
   }
@@ -418,8 +434,8 @@ export class SculptSystem extends createSystem({}) {
   }
 
   /** World-space centre of the clay. */
-  clayCenterWorld(): Vector3 {
-    return new Vector3(this.clayCenter[0], this.clayCenter[1], this.clayCenter[2]);
+  clayCenterWorld(out = new Vector3()): Vector3 {
+    return out.set(this.clayCenter[0], this.clayCenter[1], this.clayCenter[2]);
   }
 
   /** Pick a sculpt tool by id ('paint', 'erase', ...). */
@@ -472,7 +488,7 @@ export class SculptSystem extends createSystem({}) {
       if (t >= 1 && this.fade.to === 1) this.fade = null;
     }
     // gentle "breathing" while the sculpt is being looked at
-    const breathe = this.baking && !this.fade ? 1 + Math.sin(now / 180) * 0.015 : 1;
+    const breathe = this.baking && !this.fade && !settings.reducedMotion ? 1 + Math.sin(now / 180) * 0.015 : 1;
     for (const c of this.view.root.children) c.scale.setScalar(breathe);
   }
 
@@ -531,6 +547,7 @@ export class SculptSystem extends createSystem({}) {
     if (kb.getKeyDown('KeyP')) bus.emit(devKgView ? 'mastery:toggle' : 'object:pin', {});
     if (kb.getKeyDown('KeyO')) bus.emit('playkit:spawn', {});
     if (kb.getKeyDown('KeyL')) bus.emit('library:toggle', {});
+    if (kb.getKeyDown('KeyS') && !ctrl) bus.emit('settings:toggle', {});
     if (kb.getKeyDown('KeyH')) {
       if (this.hud) this.hud.setVisible(!this.hud.visible);
       else this.hud = new Hud(this.world);

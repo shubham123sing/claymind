@@ -156,6 +156,17 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 - **Distance grab (XR):** a pinch that is not near an object casts a ray from an estimated shoulder through the pinch; the object it hits (up to 3 m) follows the ray at its distance. **Not verified** (needs the headset / emulator hands); in the browser the mouse already grabs at any distance.
 - **Seen while testing:** the browser pane's mouse can be used by the person watching at the same time; strokes then appear on the clay (13 drag strokes in 3 s without any scripted input). Not a bug, noted so the spiky clay in screenshots is explained.
 
+### Phase 9 (polish), first pass
+- **First five minutes:** a card above the clay walks through shape -> colour / paint -> Bring to life -> material -> pin; each step advances when the player does it; Skip any time; shown once (Settings -> Tutorial again); ends with the time taken. Browser: steps 1-3 advanced on real actions (a drag, a paint dab, Bring to life). Steps 4-5 not yet re-checked after the fix below (the browser pane was hidden).
+- **Bug found and fixed:** a Pin (or Join, Separate, break) right after a material change rebuilt the body from the old material, so the change was lost (seen in the browser: pinned but still clay). Materials waiting to be built in are now committed first everywhere a body is rebuilt or saved.
+- **Samples:** on the first run the Library gets a hammer (wood + stone, 321 g), a painted cup (white stone, blue band, 425 g) and a striped rubber ball (206 g), with thumbnails (browser: all three appeared, thumbnails correct).
+- **Settings** (menu `Settings`, key `S`): reduced motion (no hover bob, no clay breathing, menus without easing), high contrast (solid black panels, white outlines, in all canvas panels and the wrist menu), left-handed (the left hand catches new creations; the right palm opens the menu), one-handed menu (the menu stays open beside the clay in XR, either hand pokes it), sound on / off (suspends the audio context), tutorial again, reset everything (two taps: deletes the IndexedDB database and reloads). Not yet checked in the browser or headset.
+- **Looks:** steel, glass and other materials reflect a small generated room environment (three's RoomEnvironment through PMREM, made once on the device, no download). Not yet compared side by side in the browser.
+- **Sounds:** pin (chime), unpin (tick), join (chime), separate (snip), tutorial steps (chime), on top of the existing UI ticks and material impacts.
+- **No flashing above 3 Hz:** the only pulsing is the clay breathing while baking (~0.9 Hz; off with reduced motion).
+- **Performance:** panels that follow the clay no longer allocate vectors every frame. Quest frame time still not measured.
+- **The browser pane is slow at times** (0.6-1.3 s per frame while hidden or in the background) and the page only starts while the pane is visible; checks that need several frames were done when it was visible.
+
 ### Other
 - MediaPipe wasm is copied locally (`scripts/copy-vendor.mjs`). The hand **model** still loads from storage.googleapis.com; vendor it before the judge build (Phase 7).
 - `@types/three` mis-declares the `edgeTable`/`triTable` types; cast in `marching-cubes.ts`.

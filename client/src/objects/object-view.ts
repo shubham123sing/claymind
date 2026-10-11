@@ -10,6 +10,7 @@ import {
 import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import type { Material } from '../materials/materials.js';
 import type { BakedMesh } from './bake.js';
+import { envFor } from './env-map.js';
 
 const materialCache = new Map<string, MeshStandardMaterial>();
 
@@ -26,6 +27,13 @@ export function pbrMaterial(m: Material): MeshStandardMaterial {
       emissiveIntensity: 0,
     });
     materialCache.set(m.id, mat);
+  }
+  // reflections become available after the renderer exists (env-map.ts)
+  const env = envFor(m.visual.metalness, m.visual.roughness);
+  if (mat.envMap !== env.map) {
+    mat.envMap = env.map;
+    mat.envMapIntensity = env.intensity;
+    mat.needsUpdate = true;
   }
   return mat;
 }

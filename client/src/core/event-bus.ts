@@ -61,6 +61,12 @@ export type AppEvents = {
   'object:pin': Record<string, never>;
   'playkit:spawn': Record<string, never>;
   'library:toggle': Record<string, never>;
+  'settings:toggle': Record<string, never>;
+  'tutorial:start': Record<string, never>;
+  /** Tutorial signals: the clay was shaped / painted (or coloured); an object was pinned. */
+  'clay:touched': Record<string, never>;
+  'clay:painted': Record<string, never>;
+  'object:pinned': { creationId: string };
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */

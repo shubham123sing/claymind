@@ -32,6 +32,8 @@ import { getMaterial, Material, MATERIALS } from '../materials/materials.js';
 import { computePhysicalProperties, contactPart, PartInput, PhysicalProperties } from '../physics/physical-properties.js';
 import { CompoundChild, CONTACT_CHANNEL, ContactMessage, encodeCompound } from '../physics/runtime/compound-format.js';
 import { input } from '../platform/input/input-system.js';
+import { settings } from '../core/settings.js';
+import { uiSounds } from '../audio/ui-sounds.js';
 import { distanceToRect, nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import type { BakedMesh, BakedObject, BakedPiece } from './bake.js';
 import type { PartCollider } from './collider.js';
@@ -40,6 +42,7 @@ import { bakeFromSdf } from './bake.js';
 import type { SavedCreation } from '../storage/library.js';
 import { fromSurfaceFrame, LIBRARY_SCHEMA, toSurfaceFrame } from '../storage/library.js';
 import { renderThumbnail } from './thumbnail.js';
+import { envFor, initEnvMap } from './env-map.js';
 import { PhysObject } from './object-components.js';
 import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
 
@@ -168,6 +171,7 @@ export class ObjectSystem extends createSystem({}) {
 
   init(): void {
     this.physics = this.world.getSystem(PhysicsSystem);
+    initEnvMap(this.world.renderer);
     this.world.createTransformEntity(this.shards.mesh);
     if (typeof BroadcastChannel !== 'undefined') {
       const channel = new BroadcastChannel(CONTACT_CHANNEL);
@@ -588,6 +592,7 @@ export class ObjectSystem extends createSystem({}) {
 
   /** Shatter one part into its shards; the rest of the object carries on without it. */
   private breakPart(rec: Live, index: number): void {
+    this.flushPending(rec);
     const part = rec.parts[index];
     const p = rec.mesh.position, q = rec.mesh.quaternion;
     const vel = rec.entity.getVectorView(PhysicsBody, '_linearVelocity');
@@ -680,6 +685,9 @@ export class ObjectSystem extends createSystem({}) {
     if (!lp.color) recolor(lp.view, lp.mesh, m.visual.color);
     mat.roughness = m.visual.roughness;
     mat.metalness = m.visual.metalness;
+    const env = envFor(m.visual.metalness, m.visual.roughness);
+    mat.envMap = env.map;
+    mat.envMapIntensity = env.intensity;
     mat.transparent = m.visual.opacity < 1;
     mat.opacity = m.visual.opacity;
     mat.emissiveIntensity = 0.35;
@@ -695,7 +703,18 @@ export class ObjectSystem extends createSystem({}) {
 
   /** Apply chosen materials: rebuild the body (shape properties are not reactive in IWSDK). */
   private applyPending(rec: Live): void {
-    const c = rec.creation!;
+    if (!this.flushPending(rec)) return;
+    this.changed(this.rebuild(rec, {}));
+  }
+
+  /**
+   * Commit materials chosen but not yet built into the body (to the parts and
+   * the creation). Anything that rebuilds or saves an object calls this first,
+   * so a Pin / Join / Separate right after a material change never loses it.
+   */
+  private flushPending(rec: Live): boolean {
+    const c = rec.creation;
+    if (!c || !rec.pending.size) return false;
     const changed = [...rec.pending.entries()];
     rec.pending.clear();
     for (const [i, id] of changed) {
@@ -707,16 +726,16 @@ export class ObjectSystem extends createSystem({}) {
         cp.by = rec.pendingBy;
       }
     }
-    const n = this.rebuild(rec, {});
-    this.changed(n);
+    syncMainMaterial(c);
     for (const [i, id] of changed) {
       bus.emit('object:material-set', { creationId: c.id, materialId: c.materialId, by: rec.pendingBy, confidence: rec.pendingConfidence, part: i, partMaterialId: id });
     }
-    void n;
+    return true;
   }
 
   /** Rebuild a creation's body (new materials or parts), keeping how it is held. */
   private rebuild(rec: Live, o: { parts?: PartSpec[]; flash?: number; free?: boolean; velocity?: [number, number, number]; pinned?: boolean; pose?: { p: number[]; q: number[] } }): Live {
+    if (!o.parts) this.flushPending(rec);
     const c = rec.creation!;
     const specs = o.parts ?? rec.parts.map((x) => this.specOf(x));
     const pinned = o.pinned ?? rec.pinned;
@@ -748,6 +767,11 @@ export class ObjectSystem extends createSystem({}) {
 
   // ---------------- room: pin, library, play kit, distance grab ----------------
 
+  /** The hand that catches new creations (Left-handed setting). */
+  private get dominant(): Handedness {
+    return settings.leftHanded ? 'left' : 'right';
+  }
+
   private changed(rec: Live): void {
     if (rec.kind === 'creation' && rec.creation && !rec.creation.id.includes('#exp')) bus.emit('creation:changed', { creationId: rec.creation.id });
   }
@@ -763,10 +787,15 @@ export class ObjectSystem extends createSystem({}) {
   /** Pinned = a static body resting where it is (snapped onto the table / floor within 3 cm). */
   setPinned(rec: Live, pinned: boolean): Live {
     if (rec.pinned === pinned) return rec;
+    this.flushPending(rec);
     const pose = { p: rec.mesh.position.toArray(), q: rec.mesh.quaternion.toArray() };
     if (pinned) pose.p[1] += this.snapOffset(rec);
     const n = this.rebuild(rec, { pinned, free: true, pose, velocity: pinned ? undefined : [0, -0.01, 0], flash: 0.3 });
     this.changed(n);
+    if (pinned) {
+      uiSounds.chime();
+      if (n.creation) bus.emit('object:pinned', { creationId: n.creation.id });
+    } else uiSounds.tick(2);
     return n;
   }
 
@@ -789,6 +818,7 @@ export class ObjectSystem extends createSystem({}) {
   serialize(id: string): SavedCreation | null {
     const rec = this.byCreation(id);
     if (!rec?.creation || rec.kind !== 'creation') return null;
+    if (rec.pending.size) return null; // saved again once the material is built in
     const local = toSurfaceFrame(surface, rec.mesh.position.toArray() as [number, number, number], rec.mesh.quaternion.toArray() as [number, number, number, number]);
     const { aiStatus: _drop, ...creation } = rec.creation;
     void _drop;
@@ -831,6 +861,37 @@ export class ObjectSystem extends createSystem({}) {
     this.focus = rec;
     this.enforceLimits();
     return `${creation.name} is back`;
+  }
+
+  /** A Library entry for a creation that is not in the room (samples): true masses, a thumbnail, resting on the table centre. */
+  makeSaved(creation: Creation, parts: SavedCreation['parts']): SavedCreation {
+    const props = computePhysicalProperties(parts.map((p, i) => ({ id: i, materialId: p.materialId, positions: toBody(p.mesh.positions, p.frame) })));
+    props.parts.forEach((pp, i) => {
+      const cp = creation.parts[i];
+      if (cp) (cp.massKg = pp.mass), (cp.volumeCm3 = pp.volume * 1e6);
+    });
+    creation.massKg = props.mass;
+    creation.volumeCm3 = props.volume * 1e6;
+    const view = new Group();
+    for (const p of parts) {
+      const mat = pbrMaterial(getMaterial(p.materialId)).clone();
+      mat.vertexColors = true;
+      mat.color.set(0xffffff);
+      const geo = geometryFrom(p.mesh);
+      geo.setAttribute('color', new BufferAttribute(meshColors(p.mesh, p.color ?? getMaterial(p.materialId).visual.color), 3));
+      const m = new Mesh(geo, mat);
+      m.position.fromArray(p.frame.p);
+      m.quaternion.fromArray(p.frame.q);
+      view.add(m);
+    }
+    let bottom = Infinity;
+    for (const p of parts) for (let i = 1; i < p.mesh.positions.length; i += 3) bottom = Math.min(bottom, p.mesh.positions[i] + p.frame.p[1]);
+    const thumb = renderThumbnail(this.world.renderer, view);
+    for (const m of view.children as Mesh[]) {
+      m.geometry.dispose();
+      (m.material as MeshStandardMaterial).dispose();
+    }
+    return { schemaVersion: LIBRARY_SCHEMA, id: creation.id, savedAt: Date.now(), creation, parts, pinned: false, pose: { p: [0, -bottom, 0], q: [0, 0, 0, 1] }, thumb };
   }
 
   /** Ids of the creations in the room now. */
@@ -929,6 +990,7 @@ export class ObjectSystem extends createSystem({}) {
     const rec = this.focus;
     if (!rec?.creation || !this.live.includes(rec)) return 'Touch a piece of an object first';
     if (rec.parts.length < 2) return 'This object is one piece';
+    this.flushPending(rec);
     const i = Math.min(rec.focusPart, rec.parts.length - 1);
     const part = rec.parts[i];
     const q = rec.mesh.quaternion.clone(), pos = rec.mesh.position.clone();
@@ -946,6 +1008,7 @@ export class ObjectSystem extends createSystem({}) {
     const away = pieceCom.sub(restCom).applyQuaternion(q).normalize().multiplyScalar(0.004);
     wp.add(away);
     const c = rec.creation;
+    uiSounds.snip();
     const cp = c.parts.splice(i, 1)[0];
     const solo: Creation = { ...c, id: newCreationId(), createdAt: Date.now(), parts: [{ ...cp }], aiStatus: undefined };
     const free = rec.mode === 'free';
@@ -976,6 +1039,8 @@ export class ObjectSystem extends createSystem({}) {
       if (gap < best) (best = gap), (b = r);
     }
     if (!b || best > JOIN_GAP) return 'Put it against another object, then Join';
+    this.flushPending(a);
+    this.flushPending(b);
     // b's pieces in a's frame: inv(A) * B * frame
     const A = new Matrix4().compose(a.mesh.position, a.mesh.quaternion, new Vector3(1, 1, 1));
     const B = new Matrix4().compose(b.mesh.position, b.mesh.quaternion, new Vector3(1, 1, 1));
@@ -986,6 +1051,7 @@ export class ObjectSystem extends createSystem({}) {
       m.decompose(p, q, sc);
       return { ...this.specOf(x), frame: { p: p.toArray() as Frame['p'], q: q.toArray() as Frame['q'] } };
     });
+    uiSounds.chime();
     a.creation.parts.push(...b.creation!.parts.map((x) => ({ ...x })));
     const specs = [...a.parts.map((x) => this.specOf(x)), ...moved];
     const free = a.mode === 'free';
@@ -1042,7 +1108,7 @@ export class ObjectSystem extends createSystem({}) {
 
   private step(rec: Live, dt: number, now: number, xr: boolean): void {
     const age = now - rec.t0;
-    const dom = input.hands.right;
+    const dom = input.hands[this.dominant];
     switch (rec.mode) {
       case 'materialize': {
         const t = Math.min(1, age / 380);
@@ -1054,8 +1120,8 @@ export class ObjectSystem extends createSystem({}) {
           if (xr && dom.tracked) {
             rec.mode = 'fly';
             rec.t0 = now;
-            rec.side = 'right';
-            input.claims.right = 'object';
+            rec.side = this.dominant;
+            input.claims[this.dominant] = 'object';
           } else {
             // browser: float beside the clay (to the viewer's right) so the fresh lump stays visible
             rec.mode = 'hover';
@@ -1086,7 +1152,7 @@ export class ObjectSystem extends createSystem({}) {
       }
       case 'hover': {
         this.v.copy(rec.anchor);
-        this.v.y += Math.sin(age / 500) * 0.006;
+        if (!settings.reducedMotion) this.v.y += Math.sin(age / 500) * 0.006;
         // glide toward the hover spot instead of jumping
         this.v2.copy(rec.mesh.position).lerp(this.v, 1 - Math.exp(-dt * 8));
         this.teleport(rec, this.v2);

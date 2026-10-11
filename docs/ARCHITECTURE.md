@@ -30,6 +30,11 @@ client/src
   ui/material-picker.ts       ring of 8 materials on the touched piece (poke / click)
   ui/color-picker.ts          hue ring, lightness, swatches, whole-piece colour, paint / eraser, brush size
   ui/library.ts               auto-save to IndexedDB, restore pinned creations, the Library shelf panel
+  ui/settings-panel.ts        accessibility settings, tutorial again, reset
+  ui/coach.ts                 first-five-minutes tutorial card (advances on the player's actions)
+  core/settings.ts            settings store (IndexedDB) read by all systems
+  objects/samples.ts          first-run sample creations
+  objects/env-map.ts          generated reflection environment for the materials
   storage/library.ts          saved-creation format, table-relative poses
   objects/thumbnail.ts        offscreen thumbnail of an object
   objects/csg.ts              SDF CSG language for templates

@@ -124,6 +124,7 @@ export class ColorPickerSystem extends createSystem({}) {
   private tip = new Vector3();
   private v = new Vector3();
   private goal = new Vector3();
+  private left = new Vector3();
 
   init(): void {
     const m = this.panel.mesh;
@@ -194,7 +195,7 @@ export class ColorPickerSystem extends createSystem({}) {
     const toEye = this.goal.copy(eye).sub(at).setY(0);
     if (toEye.lengthSq() < 1e-6) toEye.set(0, 0, 1);
     toEye.normalize();
-    const left = new Vector3(-toEye.z, 0, toEye.x); // the viewer's left of the target
+    const left = this.left.set(-toEye.z, 0, toEye.x); // the viewer's left of the target
     if (input.xr) {
       m.scale.setScalar(1);
       m.position.copy(at).addScaledVector(toEye, 0.08).addScaledVector(left, radius + SIZE[0] / 2);

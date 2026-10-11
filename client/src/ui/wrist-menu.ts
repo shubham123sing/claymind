@@ -2,10 +2,13 @@
  * Palm-up wrist menu (non-dominant hand). Buttons are poked with the other
  * hand's index fingertip. Opens when the palm faces up for ~0.2 s, animates in
  * with an ease-out scale, and stays face-on to the user's head.
+ * One-handed setting: `updateFixed` keeps it open beside the clay instead,
+ * poked by either hand. Reduced motion: no ease, no hover growth.
  */
 import {
   CanvasTexture, Group, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, SRGBColorSpace, Vector3,
 } from '@iwsdk/core';
+import { settings } from '../core/settings.js';
 import type { HandState } from '../platform/input/hand-state.js';
 
 export interface MenuItem {
@@ -72,10 +75,7 @@ export class WristMenu {
     const palmUp = menuHand.tracked && menuHand.palmNormal[1] > 0.55 && !menuHand.pinching;
     this.openTime = palmUp ? this.openTime + dt : 0;
     const wantOpen = this.openTime > OPEN_DELAY;
-    // ease-out ~200 ms
-    this.openAmount += ((wantOpen ? 1 : 0) - this.openAmount) * (1 - Math.exp(-dt * 14));
-    this.isOpen = this.openAmount > 0.5;
-    this.root.visible = this.openAmount > 0.02;
+    this.ease(wantOpen, dt);
     if (!this.root.visible) return false;
 
     // float 7 cm above the palm, facing the head
@@ -86,45 +86,69 @@ export class WristMenu {
       menuHand.palmCenter[2] + menuHand.palmNormal[2] * 0.07,
     );
     this.root.lookAt(this.head);
-    const s = 0.6 + 0.4 * this.openAmount;
-    this.root.scale.setScalar(s);
+    this.root.scale.setScalar(0.6 + 0.4 * this.openAmount);
+    this.pokeButtons([poker], now);
+    return this.isOpen;
+  }
 
+  /** One-handed: always open at `at` (world), facing the head; either hand pokes. */
+  updateFixed(at: Vector3, pokers: HandState[], headObj: Object3D, dt: number, now: number): boolean {
+    this.ease(true, dt);
+    headObj.getWorldPosition(this.head);
+    this.root.position.copy(at);
+    this.root.lookAt(this.head);
+    this.root.scale.setScalar(0.6 + 0.4 * this.openAmount);
+    this.pokeButtons(pokers, now);
+    return this.isOpen;
+  }
+
+  private ease(wantOpen: boolean, dt: number): void {
+    // ease-out ~200 ms (instant with reduced motion)
+    const target = wantOpen ? 1 : 0;
+    this.openAmount = settings.reducedMotion ? target : this.openAmount + (target - this.openAmount) * (1 - Math.exp(-dt * 14));
+    this.isOpen = this.openAmount > 0.5;
+    this.root.visible = this.openAmount > 0.02;
+  }
+
+  private pokeButtons(pokers: HandState[], now: number): void {
     for (const b of this.buttons) {
       const enabled = b.item.enabled?.() ?? true;
       let hover = false;
-      if (poker.tracked && this.isOpen) {
+      for (const poker of pokers) {
+        if (!poker.tracked || !this.isOpen) continue;
         this.tmp.set(poker.indexTip[0], poker.indexTip[1], poker.indexTip[2]);
         this.local.copy(this.tmp);
         b.mesh.worldToLocal(this.local);
         const inside = Math.abs(this.local.x) < BTN / 2 && Math.abs(this.local.y) < BTN / 2;
-        hover = inside && this.local.z < 0.03 && this.local.z > -0.02;
         const front = this.local.z > 0.006;
         // press = fingertip crosses the button plane from the front
+        const h = inside && this.local.z < 0.03 && this.local.z > -0.02;
+        hover ||= h;
         if (inside && b.wasFront && !front && this.local.z > -0.02 && enabled && now - this.lastPress > 350) {
           this.lastPress = now;
           b.item.onPress();
           this.onTick();
         }
-        b.wasFront = inside ? front : true;
+        if (inside || pokers.length === 1) b.wasFront = inside ? front : true;
       }
       this.draw(b, hover, enabled);
     }
-    return this.isOpen;
   }
 
   private draw(b: Button, hover: boolean, enabled: boolean): void {
     const selected = b.item.selected?.() ?? false;
-    const key = `${hover}|${enabled}|${selected}`;
+    const key = `${hover}|${enabled}|${selected}|${settings.highContrast}`;
     if (key === b.state) return;
     b.state = key;
     const ctx = b.canvas.getContext('2d')!;
     const accent = `#${b.item.color.toString(16).padStart(6, '0')}`;
     ctx.clearRect(0, 0, 192, 192);
-    ctx.fillStyle = selected ? accent : hover ? 'rgba(70,74,84,0.95)' : 'rgba(28,30,36,0.9)';
+    const hc = settings.highContrast;
+    ctx.fillStyle = selected ? accent : hover ? (hc ? '#555' : 'rgba(70,74,84,0.95)') : hc ? '#000' : 'rgba(28,30,36,0.9)';
     ctx.beginPath();
     ctx.roundRect(6, 6, 180, 180, 36);
     ctx.fill();
-    if (hover) {
+    if (hover || hc) {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 6;
       ctx.stroke();
@@ -139,6 +163,6 @@ export class WristMenu {
     ctx.fillText(b.item.label, 96, 152);
     ctx.globalAlpha = 1;
     b.tex.needsUpdate = true;
-    b.mesh.scale.setScalar(hover ? 1.06 : 1);
+    b.mesh.scale.setScalar(hover && !settings.reducedMotion ? 1.06 : 1);
   }
 }

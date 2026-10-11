@@ -14,6 +14,8 @@ import { input } from '../platform/input/input-system.js';
 import { surface } from '../platform/surface/surface-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { deleteFromLibrary, loadLibrary, SavedCreation, saveToLibrary } from '../storage/library.js';
+import { setSetting, settings, settingsReady } from '../core/settings.js';
+import { buildSamples } from '../objects/samples.js';
 import { CanvasPanel, ui } from './canvas-panel.js';
 
 const W = 1000, H = 640;
@@ -111,6 +113,9 @@ export class LibrarySystem extends createSystem({}) {
   private ndc = new Vector2();
   private tip = new Vector3();
   private v = new Vector3();
+  private at = new Vector3();
+  private toEye = new Vector3();
+  private left = new Vector3();
   private loaded = false;
 
   init(): void {
@@ -132,10 +137,12 @@ export class LibrarySystem extends createSystem({}) {
       removeEventListener('pointerdown', onDown, { capture: true });
       removeEventListener('pointermove', onMove);
     });
-    void loadLibrary().then((items) => {
+    void Promise.all([loadLibrary(), settingsReady]).then(([items]) => {
       this.panel.items = items;
       this.loaded = true;
       console.info(`[library] ${items.length} saved, ${items.filter((s) => s.pinned).length} pinned`);
+      // first run: a few ready-made creations so the shelf is never empty
+      if (!settings.samplesAdded && items.length === 0) setTimeout(() => void this.addSamples(), 2500);
     });
   }
 
@@ -155,6 +162,18 @@ export class LibrarySystem extends createSystem({}) {
     await saveToLibrary(s);
     this.panel.items = [s, ...this.panel.items.filter((x) => x.id !== id)];
     this.panel.invalidate();
+  }
+
+  private async addSamples(): Promise<void> {
+    setSetting('samplesAdded', true);
+    const t0 = performance.now();
+    for (const s of buildSamples()) {
+      const saved = this.objects.makeSaved(s.creation, s.parts);
+      await saveToLibrary(saved);
+      this.panel.items.push(saved);
+    }
+    this.panel.invalidate();
+    console.info(`[library] added ${this.panel.items.length} samples in ${Math.round(performance.now() - t0)} ms`);
   }
 
   private async remove(id: string): Promise<void> {
@@ -193,9 +212,9 @@ export class LibrarySystem extends createSystem({}) {
   private place(): void {
     const m = this.panel.mesh;
     const eye = this.world.camera.getWorldPosition(this.v);
-    const at = this.world.getSystem(SculptSystem)!.clayCenterWorld();
-    const toEye = eye.clone().sub(at).setY(0).normalize();
-    const left = new Vector3(-toEye.z, 0, toEye.x);
+    const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.at);
+    const toEye = this.toEye.copy(eye).sub(at).setY(0).normalize();
+    const left = this.left.set(-toEye.z, 0, toEye.x);
     if (input.xr) {
       m.scale.setScalar(1);
       m.position.copy(at).addScaledVector(toEye, 0.1).addScaledVector(left, -0.24);
