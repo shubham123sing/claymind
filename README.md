@@ -29,6 +29,7 @@ Open the public link in **Quest Browser**, press **Start in mixed reality**, and
 ## Library and Download
 - Nothing goes into the Library by itself. **Add to Library** (menu or the Library panel) asks a name (default "Clay 1", "Clay 2"; the headset uses the default) and saves a copy with a thumbnail.
 - **Library** shows a grid. Select an item, then: **Use** (a copy into the room; the item never changes), **Edit** (a linked copy: changes you make are saved back to the item), **Rename** (browser), **Download**, **Delete** (two taps, then 5 s to Undo). **Import** adds a `.claymind.json` file (or drop the file on the page).
+- **Remove from scene** (main menu for the object you touched last, or the button in an object's material ring) takes that copy off the table with a 5-second Undo; **Clear scene** (press twice) removes every object placed from the Library. Neither ever changes the Library, unlike **Delete from Library** (the saved item, forever) and **Delete this creation** (what you are making), which are red.
 - Pinned creations still come back to their spot after a reload (kept separately from the Library).
 - Stored in this browser only (IndexedDB); no account, no upload.
 

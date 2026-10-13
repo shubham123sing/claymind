@@ -78,6 +78,7 @@ export class Toolbar {
       const sel = item.selected?.() ?? false;
       const en = item.enabled?.() ?? true;
       el.style.background = sel ? `#${item.color.toString(16).padStart(6, '0')}` : hc ? '#222' : 'rgba(255,255,255,0.08)';
+      el.style.color = item.danger && !sel ? '#ff8a80' : '#fff';
       el.style.outline = hc ? '1px solid #fff' : 'none';
       el.style.opacity = en ? '1' : '0.4';
       el.disabled = !en;

@@ -22,6 +22,8 @@ export interface MenuItem {
   /** Returns true if shown as selected/on. */
   selected?: () => boolean;
   enabled?: () => boolean;
+  /** Erases something (drawn in red so it is never confused with a harmless action). */
+  danger?: boolean;
   onPress: () => void;
 }
 
@@ -196,7 +198,8 @@ export class WristMenu {
     ctx.font = '600 72px system-ui, sans-serif';
     ctx.fillText(b.item.icon, 96, 82);
     ctx.font = '600 32px system-ui, sans-serif';
-    ctx.fillText(b.item.label, 96, 152);
+    if (b.item.danger && !selected) ctx.fillStyle = '#ff8a80';
+    ctx.fillText(b.item.label, 96, 152, 180);
     ctx.globalAlpha = 1;
     b.tex.needsUpdate = true;
     b.mesh.scale.setScalar(hover && !settings.reducedMotion ? 1.06 : 1);

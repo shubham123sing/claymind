@@ -68,6 +68,10 @@ export type AppEvents = {
   'library:import': Record<string, never>;
   /** Download a Library item as a file. */
   'library:download': { item: import('../storage/library.js').SavedCreation };
+  /** Take a placed object (default: the one touched last) off the table; the Library is not touched. */
+  'scene:remove': { creationId?: string };
+  /** Take every object placed from the Library off the table (asks to confirm first). */
+  'scene:clear': Record<string, never>;
   /** Menu: delete the current creation (asks to confirm first). */
   'creation:delete': Record<string, never>;
   /** Browser tool menu shown or hidden with its round button. */

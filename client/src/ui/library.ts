@@ -26,8 +26,10 @@ const COLS = 4, ROWS = 2, PER_PAGE = COLS * ROWS;
 const SAVE_DELAY_MS = 800;
 const IDLE_CLOSE_MS = 30000;
 const CONFIRM_MS = 3000;
+/** Ids of objects placed from the Library (Use / Edit) end with this. */
+export const PLACED_SUFFIX = '_lib';
 const ACTIONS = [
-  ['use', 'Use'], ['edit', 'Edit'], ['rename', 'Rename'], ['download', 'Download'], ['delete', 'Delete'],
+  ['use', 'Use', 110], ['edit', 'Edit', 110], ['rename', 'Rename', 130], ['download', 'Download', 150], ['delete', 'Delete from Library', 230],
 ] as const;
 
 class LibraryPanel extends CanvasPanel {
@@ -107,10 +109,12 @@ class LibraryPanel extends CanvasPanel {
     btn(20, 72, '◀', 'prev', this.page > 0);
     btn(100, 72, '▶', 'next', this.page < pages - 1);
     const has = this.selected !== null;
-    ACTIONS.forEach(([id, label], i) => {
-      const text = id === 'delete' && this.armedDelete ? 'Sure?' : label;
-      btn(190 + i * 158, 150, text, id, has, id === 'delete' && this.armedDelete);
-    });
+    let x = 190;
+    for (const [id, label, w] of ACTIONS) {
+      const text = id === 'delete' && this.armedDelete ? 'Tap again: forever' : label;
+      btn(x, w, text, id, has, has && id === 'delete'); // red: erases the saved item
+      x += w + 8;
+    }
   }
 }
 
@@ -238,6 +242,15 @@ export class LibrarySystem extends createSystem({}) {
     offerUndo(`Added "${name}" to the Library`, () => void this.removeItem(item.id), input.xr);
   }
 
+  /** Library item a placed copy is editing (Edit), or null. */
+  editLinkOf(liveId: string): string | null {
+    return this.editing.get(liveId) ?? null;
+  }
+
+  relink(liveId: string, libId: string): void {
+    if (this.panel.items.some((x) => x.id === libId)) this.editing.set(liveId, libId);
+  }
+
   /** Put an imported item in the Library (always under a new id). */
   async addItem(s: SavedCreation): Promise<void> {
     const item = copySaved(s, `lib_${Date.now().toString(36)}`);
@@ -257,7 +270,7 @@ export class LibrarySystem extends createSystem({}) {
   }
 
   private bringIn(s: SavedCreation, link: boolean): void {
-    const copy = copySaved(s, `c_${Date.now().toString(36)}_lib`);
+    const copy = copySaved(s, `c_${Date.now().toString(36)}${PLACED_SUFFIX}`);
     copy.pinned = false;
     bus.emit('ui:toast', { text: link ? `Editing "${s.creation.name}": changes are saved to the Library` : this.objects.restore(copy, 'present') });
     if (link) {
@@ -290,13 +303,13 @@ export class LibrarySystem extends createSystem({}) {
       if (!p.armedDelete || now - this.armedAt > CONFIRM_MS) {
         p.armedDelete = true;
         this.armedAt = now;
-        bus.emit('ui:toast', { text: `Delete "${s.creation.name}"? Tap again. It goes after 5 s unless you Undo` });
+        bus.emit('ui:toast', { text: `Delete "${s.creation.name}" from the Library forever? Tap again (5 s to Undo)` });
         return;
       }
       p.armedDelete = false;
       const index = p.items.indexOf(s);
       void this.removeItem(s.id);
-      offerUndo(`Deleted "${s.creation.name}"`, () => {
+      offerUndo(`Deleted "${s.creation.name}" from the Library`, () => {
         void saveToLibrary(s);
         p.items.splice(Math.min(index, p.items.length), 0, s);
         p.selected = s.id;

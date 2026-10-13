@@ -373,6 +373,10 @@ export class ObjectSystem extends createSystem({}) {
       p.view.geometry.dispose();
       p.material.dispose();
     }
+    // the blob shadow has its own plane and material (its texture is shared: keep it)
+    const shadowMesh = rec.shadow.object3D as Mesh | undefined;
+    shadowMesh?.geometry.dispose();
+    (shadowMesh?.material as MeshBasicMaterial | undefined)?.dispose();
     rec.shadow.dispose({ disposeResources: false });
     rec.labelEntity?.dispose({ disposeResources: false });
     rec.label?.dispose();

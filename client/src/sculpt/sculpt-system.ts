@@ -154,7 +154,10 @@ export class SculptSystem extends createSystem({}) {
       { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
-      { id: 'delete', label: 'Delete', icon: '🗑', color: 0xd9534f, onPress: () => bus.emit('creation:delete', {}) },
+      // three different things, worded and coloured apart: take a copy off the table (blue) vs erase (red)
+      { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
+      { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
+      { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
       ...(devKgView
         ? [
             { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },

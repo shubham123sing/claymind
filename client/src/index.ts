@@ -15,6 +15,7 @@ import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
 import { DeleteSystem } from './ui/delete-creation.js';
 import { DownloadSystem } from './ui/download-dialog.js';
+import { SceneActionsSystem } from './ui/scene-actions.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { SettingsSystem } from './ui/settings-panel.js';
@@ -52,6 +53,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(SculptSystem);
     world.registerSystem(DeleteSystem);
     world.registerSystem(DownloadSystem);
+    world.registerSystem(SceneActionsSystem);
     if (devAi) world.registerSystem(AiSystem); // plan v4: no AI and no network unless ?devAi
     world.registerSystem(ExperimentSystem);
     // Debug-the-Brain agent + Mastery: development only in plan v3 (experiments stay, for Predict then Test)
