@@ -1,0 +1,125 @@
+<!doctype html>
+<!--
+  Update 1, Step 0: phone AR check. Plain WebXR, no app code, so it shows what
+  the phone itself supports. Open it on the phone, press the buttons, then
+  "Copy results" and paste them back.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ClayMind AR check</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #111; color: #eee; font: 16px/1.4 system-ui, sans-serif; }
+  main { padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  button { font: inherit; min-height: 48px; padding: 0 18px; margin: 0 8px 8px 0; border: 0; border-radius: 10px; background: #f0c040; color: #111; font-weight: 600; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #000; padding: 12px; border-radius: 8px; font-size: 13px; }
+  #overlay { position: fixed; inset: 0; pointer-events: none; display: none; }
+  #overlay.on { display: block; }
+  #ovText { position: absolute; left: 12px; right: 12px; top: calc(12px + env(safe-area-inset-top)); background: rgba(0,0,0,.7); color: #fff; padding: 10px; border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
+  #ovEnd { position: absolute; left: 12px; bottom: calc(16px + env(safe-area-inset-bottom)); pointer-events: auto; }
+  #ovTouch { position: absolute; inset: 0; pointer-events: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ClayMind phone AR check</h1>
+  <p>1. Press <b>Start AR test</b>. 2. Point the phone at a table, tap the screen a few times. 3. Press <b>End</b>. 4. <b>Copy results</b> and send them.</p>
+  <button id="start">Start AR test</button><button id="copy">Copy results</button>
+  <pre id="log"></pre>
+</main>
+<div id="overlay"><div id="ovTouch"></div><div id="ovText"></div><button id="ovEnd">End</button></div>
+<script>
+const out = document.getElementById('log');
+const lines = [];
+const log = (s) => { lines.push(s); out.textContent = lines.join('\n'); };
+const ovText = document.getElementById('ovText');
+
+log('UA: ' + navigator.userAgent);
+log('devicePixelRatio: ' + devicePixelRatio + ' · screen: ' + screen.width + 'x' + screen.height);
+log('secure context: ' + isSecureContext + ' · navigator.xr: ' + !!navigator.xr);
+(async () => {
+  if (!navigator.xr) { log('RESULT: no WebXR in this browser (iPhone Safari never has it).'); return; }
+  for (const m of ['immersive-ar', 'immersive-vr']) {
+    try { log(`isSessionSupported('${m}'): ` + await navigator.xr.isSessionSupported(m)); }
+    catch (e) { log(`isSessionSupported('${m}') threw: ` + e); }
+  }
+})();
+
+document.getElementById('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(lines.join('\n')); log('(copied)'); }
+  catch { log('(copy failed: select the text above by hand)'); }
+};
+
+document.getElementById('start').onclick = async () => {
+  const overlay = document.getElementById('overlay');
+  let session;
+  try {
+    session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay', 'local-floor', 'anchors', 'plane-detection', 'hand-tracking'],
+      domOverlay: { root: overlay },
+    });
+  } catch (e) { log('requestSession failed: ' + e); return; }
+  overlay.classList.add('on');
+  log('session started · enabledFeatures: ' + JSON.stringify(session.enabledFeatures ?? '(not reported)'));
+  log('domOverlayState: ' + JSON.stringify(session.domOverlayState ?? null));
+
+  const canvas = document.createElement('canvas');
+  const gl = canvas.getContext('webgl2', { xrCompatible: true, alpha: true });
+  await gl.makeXRCompatible();
+  const layer = new XRWebGLLayer(session, gl);
+  session.updateRenderState({ baseLayer: layer });
+  log('framebuffer: ' + layer.framebufferWidth + 'x' + layer.framebufferHeight + ' (native scale ' + XRWebGLLayer.getNativeFramebufferScaleFactor(session) + ')');
+
+  let ref, refType;
+  for (const t of ['local-floor', 'local']) {
+    try { ref = await session.requestReferenceSpace(t); refType = t; break; } catch {}
+  }
+  log('reference space: ' + refType);
+  const viewer = await session.requestReferenceSpace('viewer');
+  let hitSource = null;
+  try { hitSource = await session.requestHitTestSource({ space: viewer }); log('hit-test source: ok'); }
+  catch (e) { log('hit-test source failed: ' + e); }
+
+  let xrSelects = 0, domTouches = 0, modes = new Set(), hits = 0, frames = 0, t0 = 0, fps = 0, lastHit = '';
+  session.addEventListener('selectstart', (e) => { xrSelects++; modes.add(e.inputSource.targetRayMode); });
+  const touch = document.getElementById('ovTouch');
+  touch.addEventListener('pointerdown', () => domTouches++);
+  session.addEventListener('beforexrselect', () => {}); // presence only
+  document.getElementById('ovEnd').onclick = () => session.end();
+
+  session.addEventListener('end', () => {
+    overlay.classList.remove('on');
+    log(`frames: ${frames} · fps ~${fps.toFixed(0)}`);
+    log(`taps: XR select events ${xrSelects} (modes: ${[...modes].join(',') || '-'}) · DOM overlay pointer events ${domTouches}`);
+    log(`hit-test frames with a surface: ${hits} · last: ${lastHit || '-'}`);
+    log('hand input sources seen: ' + handsSeen);
+    log('session ended');
+  });
+
+  let handsSeen = false;
+  session.requestAnimationFrame(function onFrame(t, frame) {
+    session.requestAnimationFrame(onFrame);
+    frames++;
+    if (!t0) t0 = t;
+    if (t - t0 > 1000) { fps = frames * 1000 / (t - t0); }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    for (const s of session.inputSources) if (s.hand) handsSeen = true;
+    if (hitSource) {
+      const r = frame.getHitTestResults(hitSource);
+      if (r.length) {
+        hits++;
+        const p = r[0].getPose(ref)?.transform.position;
+        if (p) lastHit = `y=${p.y.toFixed(2)} m`;
+      }
+    }
+    ovText.textContent = `fps ~${fps.toFixed(0)} · surface under centre: ${lastHit || 'searching…'}\nXR taps ${xrSelects} · overlay taps ${domTouches}`;
+  });
+};
+</script>
+</body>
+</html>
