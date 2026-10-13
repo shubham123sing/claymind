@@ -16,13 +16,39 @@ Open the public link in **Quest Browser**, press **Start in mixed reality**, and
 2. GitHub Pages: push to GitHub, then Settings -> Pages -> Source: **GitHub Actions**. `.github/workflows/pages.yml` tests, builds and publishes on every push.
 3. Headset test: `docs/QUEST_TEST.md`.
 
+## Supported devices
+- **Meta Quest 3 / 3S** (Quest Browser): the full hands-only mixed-reality experience.
+- **Desktop browsers** (Chrome, Edge, Firefox, Safari): the 3D view with the mouse, plus the Library, Download and Import.
+- Phone AR is not part of this update (unchanged).
+
+## Menu
+- **Browser:** the round button at the bottom left hides or shows all tools (and the hint line and welcome card), so the view can show only your creation, the scene and that button. The choice is remembered.
+- **Quest:** turn your palm up for the menu (it hides when you lower the hand). With **Settings -> One-handed menu** the menu stays beside the clay; its small **Hide** button folds it down to one **Tools** button.
+- **Delete** removes what you are making now (the object you touched last, otherwise the clay): press it twice within 3 s, then you have 5 s to **Undo** (the toast's Undo button, the menu's Undo, or Ctrl+Z).
+
+## Library and Download
+- Nothing goes into the Library by itself. **Add to Library** (menu or the Library panel) asks a name (default "Clay 1", "Clay 2"; the headset uses the default) and saves a copy with a thumbnail.
+- **Library** shows a grid. Select an item, then: **Use** (a copy into the room; the item never changes), **Edit** (a linked copy: changes you make are saved back to the item), **Rename** (browser), **Download**, **Delete** (two taps, then 5 s to Undo). **Import** adds a `.claymind.json` file (or drop the file on the page).
+- Pinned creations still come back to their spot after a reload (kept separately from the Library).
+- Stored in this browser only (IndexedDB); no account, no upload.
+
+## Download format (for game developers)
+**Download** asks the licence, *Keep my rights* or *Anyone may use this (CC0)*, which is written into the GLB's `asset.copyright`, then the file:
+- **`<name>.glb`**: binary glTF 2.0 for Unity, Unreal, Godot, Blender and three.js.
+  - A root node named after the creation, with one child node per piece named `piece_<n>_<materialId>` (for example `piece_1_steel`).
+  - One PBR material per piece, named after its material type, with base colour = the piece colour, plus roughness, metalness and opacity (glass uses alpha blending).
+  - Painted pieces carry the paint as vertex colours (`COLOR_0`) on a white base colour.
+  - Welded, indexed triangles; metres; Y-up; origin at the centre of the base.
+  - Physics on the root node: `extras.claymind = { schemaVersion, name, pieces: [{ id, materialId, massKg, density, friction, restitution }], totalMassKg, centerOfMass: [x, y, z] }` (kg, kg/m3, metres in the model's frame).
+- **`<name>.claymind.json`**: the full ClayMind project (pieces, paint, colliders, materials, colours) to import again; checked on import, at most 10 MB.
+
 ## Controls
-- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Bring to life, Shape, Add, Carve, Smooth, Paint, Eraser, Mirror, Undo, Redo, New piece, Material, Color, Join, Pin / Unpin, Play Kit, Library, Settings, Separate, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** opens a ring of materials for the piece you touched last.
+- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Bring to life, Shape, Add, Carve, Smooth, Paint, Eraser, Mirror, Undo, Redo, New piece, Material, Color, Join, Pin / Unpin, Play Kit, Library, Add to Library, Settings, Separate, Delete, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** opens a ring of materials for the piece you touched last.
 - **Browser:** drag on the clay = pull (Shape) or use the selected tool · Shift+drag = poke · drag empty space = turn · 1-4 tools · M mirror · Ctrl+Z / Ctrl+Y · **N = new piece** · **Enter = bring to life** · click a part of an object, then **Material** to change that part · drag an object to move it, **mouse wheel lifts it**, release to drop or throw · H debug HUD (`?debug`) · with `?devKgView`: G brain · B check beliefs · P mastery.
 - **Pieces:** **New piece** (`N`) starts another piece in its own clay colour: the next Add stroke lays it down (e.g. a head on a handle). After Bring to life, touch a piece and press **Material** (`T`) to pick its material from the ring; mass, balance, friction, bounce and breaking follow. **Separate** (`K`) makes the touched piece its own object; **Join** (`J`) sticks the touched object to one touching it.
 - **Colour and paint:** **Color** (`C`) opens the colour picker: pick a colour, then **Whole piece** colours the piece, or **Paint** (`5`) draws on the clay with your fingertip / mouse (**Eraser** `6`, brush size `[` `]`). Paint stays on the clay while you keep sculpting and carries over when it comes to life. Colour never changes the physics.
-- **Room:** **Pin / Unpin** (`P`) fixes an object where it is (snapped onto the table); grabbing it unpins it. **Library** (`L`): everything you make is saved; pinned things come back to their spot when you return; tap a thumbnail to bring one back. **Play Kit** (`O`): pebbles, dominoes and a glass plate to play with. In the headset, pinch at a far object to grab it with a ray.
-- **Settings** (`S`): reduced motion, high contrast, left-handed, one-handed menu, sound, the tutorial again, and Reset everything. The first time you start, a short tutorial card guides you from clay to a painted, pinned object; the Library starts with three samples.
+- **Room:** **Pin / Unpin** (`P`) fixes an object where it is (snapped onto the table); grabbing it unpins it. **Library** (`L`): see *Library and Download* above; pinned things come back to their spot when you return. **Play Kit** (`O`): pebbles, dominoes and a glass plate to play with. In the headset, pinch at a far object to grab it with a ray.
+- **Settings** (`S`): reduced motion, high contrast, left-handed, one-handed menu, sound, the tutorial again, and Reset everything. The first time you start, a short tutorial card guides you from clay to a painted, pinned object.
 
 ## Phase 0 spike pages
 - `/?spikes`: MR scene. Ball drop on the table (real plane on Quest, virtual elsewhere), pinch probe, impact/CCD probe, camera probe (`?camera=1`). Keys: B drop · F fast shot · N spawn 10 · R clear · C camera.

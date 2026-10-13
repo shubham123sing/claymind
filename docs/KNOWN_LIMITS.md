@@ -187,3 +187,12 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 4. Open `https://<pc-ip>:8081/?camera=1` → Enter XR → read the `camera` line.
 5. Open `/spikes/sdf.html` in Quest Browser → Run benchmark → read worker p95 and frame ms.
 6. Open `/spikes/hands.html` on a laptop/phone → Start camera → read fps and inference ms.
+
+## Menu, Library and export update (2026-10-13, branch update-menu-library-export)
+- Verified in a desktop browser: hide/show button (remembered), Delete with two-press confirm and 5-second Undo (object and clay), Add to Library (exactly one item; cancel adds none), Use / Edit (changes saved back) / Rename / Delete with Undo, reload keeps the Library and the pinned creations, GLB and `.claymind.json` download, Import (drag and drop; wrong files refused).
+- GLB checked by the Khronos glTF validator (0 errors, 0 warnings) and re-loaded with three.js's GLTFLoader: right piece count, size within 1 mm, colours and paint as made. **Not yet opened in Blender, Unity, Unreal or Godot by hand.**
+- **Not verified on a Quest:** the one-handed menu's Hide / Tools button, Delete and Library pokes in the headset. In the headset, Download, Import and Rename say to use the browser view (no file dialog or keyboard there); Add to Library uses the default name.
+- Vertex colours: engines that ignore `COLOR_0` by default (e.g. Unity's standard shader) show painted pieces white; unpainted pieces carry their colour in the material and look right everywhere.
+- The Library no longer adds sample items on first run. Items saved automatically by older versions stay in the Library until deleted. Pinned creations from older versions are not put back automatically (pin them again).
+- Phone AR: untouched in this update (its diagnosis and touch fix are in pull request #1, not merged).
+
