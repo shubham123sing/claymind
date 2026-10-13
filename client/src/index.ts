@@ -13,6 +13,7 @@ import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
+import { DeleteSystem } from './ui/delete-creation.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { SettingsSystem } from './ui/settings-panel.js';
@@ -48,6 +49,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
+    world.registerSystem(DeleteSystem);
     if (devAi) world.registerSystem(AiSystem); // plan v4: no AI and no network unless ?devAi
     world.registerSystem(ExperimentSystem);
     // Debug-the-Brain agent + Mastery: development only in plan v3 (experiments stay, for Predict then Test)

@@ -18,6 +18,7 @@ import { input } from '../platform/input/input-system.js';
 import { aiEnabled } from '../ai/ai-state.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
+import { hasUndo, takeUndo } from '../ui/undo-toast.js';
 import { MenuItem, WristMenu } from '../ui/wrist-menu.js';
 import { ClayView, PIECE_COLORS } from './clay-view.js';
 import { SculptClient } from './sculpt-client.js';
@@ -141,7 +142,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
       ...tools,
       { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
-      { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => !!this.client?.last?.canUndo, onPress: () => this.client.undo() },
+      { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => hasUndo() || !!this.client?.last?.canUndo, onPress: () => this.undo() },
       { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
       { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
       { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
@@ -152,6 +153,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
+      { id: 'delete', label: 'Delete', icon: '🗑', color: 0xd9534f, onPress: () => bus.emit('creation:delete', {}) },
       ...(devKgView
         ? [
             { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
@@ -173,6 +175,23 @@ export class SculptSystem extends createSystem({}) {
         },
       },
     ];
+  }
+
+  /** Undo: a just-deleted creation first (5 s offer), else the last sculpt action. */
+  private undo(): void {
+    if (!takeUndo()) this.client.undo();
+  }
+
+  /** Delete the clay being made: a fresh lump, as one undoable action. */
+  clearClay(): boolean {
+    if (this.baking || !this.client) return false;
+    this.client.beginAction();
+    this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
+    return true;
+  }
+
+  undoClear(): void {
+    this.client.undo();
   }
 
   // ---------- placement & transforms ----------
@@ -528,7 +547,7 @@ export class SculptSystem extends createSystem({}) {
     const kb = this.input.keyboard;
     const ctrl = kb.getKeyPressed('ControlLeft') || kb.getKeyPressed('ControlRight') || kb.getKeyPressed('MetaLeft');
     const shift = kb.getKeyPressed('ShiftLeft') || kb.getKeyPressed('ShiftRight');
-    if (ctrl && kb.getKeyDown('KeyZ')) shift ? this.client.redo() : this.client.undo();
+    if (ctrl && kb.getKeyDown('KeyZ')) shift ? this.client.redo() : this.undo();
     if (ctrl && kb.getKeyDown('KeyY')) this.client.redo();
     TOOLS.forEach((t, i) => {
       if (kb.getKeyDown(`Digit${i + 1}`)) this.tool = t;
