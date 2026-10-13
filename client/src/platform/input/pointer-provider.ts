@@ -3,6 +3,9 @@
  *   drag on clay        -> pinch (pinchPoint depth-locked, aimPoint follows surface)
  *   Shift + drag        -> index poke into the surface
  *   drag on empty space -> orbit (rotate the clay), exposed as `orbitDx`
+ * Phone AR: screen touches arrive as transient XR input sources
+ * (targetRayMode 'screen'), not DOM events; the input hub feeds their ray in
+ * through touchStart / touchMove / touchEnd and the same rules apply.
  */
 import { PerspectiveCamera, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import type { Handedness } from '../../core/event-bus.js';
@@ -28,6 +31,10 @@ export class PointerProvider implements InputProvider {
   private hit: Vector3 | null = null;
   private tmp = new Vector3();
   private last = new Vector3();
+  /** Phone AR: driven by XR screen touches instead of DOM pointer events. */
+  xrTouch = false;
+  private touching = false;
+  private camRight = new Vector3();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -42,7 +49,7 @@ export class PointerProvider implements InputProvider {
   }
 
   active(): boolean {
-    return !this.isXr();
+    return !this.isXr() || this.xrTouch;
   }
 
   private setNdc(e: PointerEvent): void {
@@ -51,12 +58,16 @@ export class PointerProvider implements InputProvider {
   }
 
   private onDown = (e: PointerEvent): void => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || this.isXr()) return;
     this.setNdc(e);
     this.ray.setFromCamera(this.ndc, this.camera);
-    const hit = this.raycast(this.ray, false);
-    this.shift = e.shiftKey;
     this.lastX = e.clientX;
+    this.press(e.shiftKey);
+  };
+
+  private press(shift: boolean): void {
+    const hit = this.raycast(this.ray, false);
+    this.shift = shift;
     if (hit) {
       this.down = true;
       this.startedThisFrame = true;
@@ -64,9 +75,40 @@ export class PointerProvider implements InputProvider {
     } else {
       this.orbiting = true;
     }
-  };
+  }
+
+  /** Horizontal ray swing in "pixels" (same scale as a mouse drag) for orbiting by touch. */
+  private swing(dir: Vector3): number {
+    this.camRight.setFromMatrixColumn(this.camera.matrixWorld, 0);
+    return dir.dot(this.camRight) * 500;
+  }
+
+  touchStart(origin: Vector3, dir: Vector3): void {
+    this.xrTouch = true;
+    this.touching = true;
+    this.ray.ray.origin.copy(origin);
+    this.ray.ray.direction.copy(dir);
+    this.lastX = this.swing(dir);
+    this.press(false);
+  }
+
+  touchMove(origin: Vector3, dir: Vector3): void {
+    this.ray.ray.origin.copy(origin);
+    this.ray.ray.direction.copy(dir);
+    if (this.orbiting) {
+      const x = this.swing(dir);
+      this.pendingDx += x - this.lastX;
+      this.lastX = x;
+    }
+  }
+
+  touchEnd(): void {
+    this.touching = false;
+    this.onUp();
+  }
 
   private onMove = (e: PointerEvent): void => {
+    if (this.isXr()) return;
     this.setNdc(e);
     if (this.orbiting) {
       this.pendingDx += e.clientX - this.lastX;
@@ -85,8 +127,10 @@ export class PointerProvider implements InputProvider {
     hands.left.tracked = false;
     this.orbitDx = this.pendingDx;
     this.pendingDx = 0;
-    this.ray.setFromCamera(this.ndc, this.camera);
-    this.hit = this.raycast(this.ray, this.down);
+    const xr = this.isXr();
+    if (!xr) this.ray.setFromCamera(this.ndc, this.camera);
+    // phone AR: no hover between touches (the last ray is stale)
+    this.hit = xr && !this.touching ? null : this.raycast(this.ray, this.down);
 
     h.tracked = this.down || this.hit !== null;
     h.stableFrames = 10;
