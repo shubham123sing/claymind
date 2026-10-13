@@ -64,6 +64,8 @@ export type AppEvents = {
   'settings:toggle': Record<string, never>;
   /** Save the current creation to the Library (asks a name). */
   'library:add': Record<string, never>;
+  /** Import a ClayMind project file into the Library (file picker). */
+  'library:import': Record<string, never>;
   /** Download a Library item as a file. */
   'library:download': { item: import('../storage/library.js').SavedCreation };
   /** Menu: delete the current creation (asks to confirm first). */

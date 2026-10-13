@@ -238,7 +238,8 @@ export class ColorPickerSystem extends createSystem({}) {
   }
 
   private onPointer(e: PointerEvent, down: boolean): void {
-    if (!this.panel.mesh.visible || input.xr) return;
+    // only presses on the 3D view: HTML on top (menu, dialogs) keeps its own clicks
+    if (!this.panel.mesh.visible || input.xr || e.target !== this.world.renderer.domElement) return;
     const r = this.world.renderer.domElement.getBoundingClientRect();
     this.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);

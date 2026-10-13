@@ -60,12 +60,13 @@ class LibraryPanel extends CanvasPanel {
     ctx.fillText('Library', 32, 44);
     ctx.font = '500 22px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(244,241,236,0.7)';
-    ctx.fillText(this.items.length ? `${this.items.length} saved` : 'Empty: make something, then Add', 175, 46);
+    ctx.fillText(this.items.length ? `${this.items.length} saved` : 'Empty', 175, 46);
     const hb = (x: number, w: number, label: string, id: string, enabled = true) => {
       if (enabled) add(x, 18, w, 52, id);
       ui.button(ctx, x, 18, w, 52, label, { hover: this.hover === id, enabled });
     };
-    if (this.canReplace) hb(W - 20 - 250 - 12 - 220, 220, 'Re-place pinned', 'replace');
+    if (this.canReplace) hb(W - 20 - 250 - 12 - 140 - 12 - 220, 220, 'Re-place pinned', 'replace');
+    hb(W - 20 - 250 - 12 - 140, 140, 'Import', 'import');
     hb(W - 20 - 250, 250, '+ Add to Library', 'add');
 
     const cw = (W - 40) / COLS, ch = 210, top = 86;
@@ -237,6 +238,16 @@ export class LibrarySystem extends createSystem({}) {
     offerUndo(`Added "${name}" to the Library`, () => void this.removeItem(item.id), input.xr);
   }
 
+  /** Put an imported item in the Library (always under a new id). */
+  async addItem(s: SavedCreation): Promise<void> {
+    const item = copySaved(s, `lib_${Date.now().toString(36)}`);
+    await saveToLibrary(item);
+    this.panel.items = [item, ...this.panel.items];
+    this.panel.selected = item.id;
+    this.panel.page = 0;
+    this.panel.invalidate();
+  }
+
   private async removeItem(id: string): Promise<void> {
     await deleteFromLibrary(id);
     this.panel.items = this.panel.items.filter((x) => x.id !== id);
@@ -345,6 +356,7 @@ export class LibrarySystem extends createSystem({}) {
     if (id === 'prev' || id === 'next') p.page += id === 'next' ? 1 : -1;
     else if (id === 'replace') bus.emit('ui:toast', { text: `Re-placed ${this.placePinned()} pinned creation(s) on the table` });
     else if (id === 'add') void this.add();
+    else if (id === 'import') bus.emit('library:import', {});
     else if (id.startsWith('o')) {
       p.selected = id.slice(1);
       p.armedDelete = false;
@@ -354,7 +366,8 @@ export class LibrarySystem extends createSystem({}) {
   }
 
   private onPointer(e: PointerEvent, down: boolean): void {
-    if (!this.panel.mesh.visible || input.xr) return;
+    // only presses on the 3D view: HTML on top (menu, dialogs) keeps its own clicks
+    if (!this.panel.mesh.visible || input.xr || e.target !== this.world.renderer.domElement) return;
     const r = this.world.renderer.domElement.getBoundingClientRect();
     this.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);
