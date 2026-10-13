@@ -6,6 +6,7 @@
  */
 
 import { createSystem, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
+import { bus } from './core/event-bus.js';
 
 export class PanelSystem extends createSystem({}) {
   init(): void {
@@ -15,6 +16,10 @@ export class PanelSystem extends createSystem({}) {
     if (xrButton == null || exitButton == null) {
       return;
     }
+    // the welcome card goes away with the browser tool menu (clean view)
+    // (in the browser the card is drawn in screen space from its UIKit document, not the asset group)
+    const card = (panel as unknown as { document?: { visible: boolean } }).document ?? panel!;
+    this.cleanupFuncs.push(bus.on('ui:tools', (e) => (card.visible = e.open)));
     if (!this.world.xrEnabled) {
       xrButton.setProperties({ display: 'none' });
       exitButton.setProperties({ display: 'none' });

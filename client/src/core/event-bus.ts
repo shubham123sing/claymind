@@ -62,6 +62,8 @@ export type AppEvents = {
   'playkit:spawn': Record<string, never>;
   'library:toggle': Record<string, never>;
   'settings:toggle': Record<string, never>;
+  /** Browser tool menu shown or hidden with its round button. */
+  'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;
   /** Tutorial signals: the clay was shaped / painted (or coloured); an object was pinned. */
   'clay:touched': Record<string, never>;
