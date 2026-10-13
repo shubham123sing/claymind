@@ -187,3 +187,15 @@ Headless tests call the Havok build IWSDK ships, through IWSDK's runtime (`tests
 4. Open `https://<pc-ip>:8081/?camera=1` → Enter XR → read the `camera` line.
 5. Open `/spikes/sdf.html` in Quest Browser → Run benchmark → read worker p95 and frame ms.
 6. Open `/spikes/hands.html` on a laptop/phone → Start camera → read fps and inference ms.
+
+## Update 1, Step 0: phone AR diagnosis (2026-10-13)
+Root cause (code): **in phone AR there is no input at all.** `PointerProvider.active()` is false whenever an XR session runs, and `XrHandsProvider` reads only `inputSource.hand`. A phone has no hands: screen taps arrive as transient XR input sources (`targetRayMode: 'screen'`, `select*` events) that nothing reads. DOM pointer events do not reach the canvas in AR either, so the canvas-drawn menus (picker, Library, Settings) cannot be tapped.
+Other findings:
+- Session (IWSDK `buildSessionInit`): `immersive-ar` with optional `local-floor`, `hit-test`, `anchors`, `plane-detection`, `mesh-detection`, `hand-tracking`. **No `dom-overlay`** (IWSDK has no option for it), so there are no HTML menus in AR.
+- Reference space `local-floor` (falls back to `local`). The render loop is `renderer.setAnimationLoop`, which uses the session's rAF in XR. OK.
+- Placement: no hit-test reticle. The clay sits on a fixed virtual table (y 0.79 m) until an XR plane arrives; Android Chrome usually reports no planes, so the table floats at a fixed spot.
+- Menu: the palm-up wrist menu needs hands, so it is unreachable on a phone.
+- Pixel ratio: `renderer.setPixelRatio(devicePixelRatio)` uncapped (about 2.6-3.5 on phones) for the non-AR view; in AR the framebuffer uses the XR default scale.
+- Needs the phone: `isSessionSupported('immersive-ar')`, Chrome version, fps, console errors -> `/xr-check.html` measures these.
+- **Phone results** (`/xr-check.html`, Android 10, Chrome 154): `immersive-ar` supported; granted `local-floor`, `hit-test`, `plane-detection`, `dom-overlay`, `anchors`; no hands. Taps arrive as XR `select` events with `targetRayMode: 'screen'`, and DOM-overlay pointer events also arrive. Hit-test finds surfaces (table at y 0.78 m). About **30 fps** (the AR camera rate on this phone), framebuffer 1080x2408, devicePixelRatio 3.
+- **Fix (Step 0):** the input hub listens for `screen` touches on the XR session and feeds their ray to the pointer provider: one finger on the clay sculpts with the current tool, one finger beside it turns the clay. Quest hands and the desktop mouse are unchanged. Still open for Steps 1 and 4: menus in AR (dom-overlay), tap-to-place on a surface, two-finger scale/rotate, pixel-ratio cap.
