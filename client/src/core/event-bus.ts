@@ -62,6 +62,10 @@ export type AppEvents = {
   'playkit:spawn': Record<string, never>;
   'library:toggle': Record<string, never>;
   'settings:toggle': Record<string, never>;
+  /** Save the current creation to the Library (asks a name). */
+  'library:add': Record<string, never>;
+  /** Download a Library item as a file. */
+  'library:download': { item: import('../storage/library.js').SavedCreation };
   /** Menu: delete the current creation (asks to confirm first). */
   'creation:delete': Record<string, never>;
   /** Browser tool menu shown or hidden with its round button. */

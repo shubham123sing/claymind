@@ -4,8 +4,9 @@
  * tests), so the game never fails because storage failed.
  */
 const DB_NAME = 'claymind';
-const DB_VERSION = 2;
-export const STORES = ['kg', 'creations', 'settings', 'ai'] as const;
+const DB_VERSION = 3;
+/** creations: the Library (only what the player added) · room: pinned creations, put back after a reload. */
+export const STORES = ['kg', 'creations', 'settings', 'ai', 'room'] as const;
 export type StoreName = (typeof STORES)[number];
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;

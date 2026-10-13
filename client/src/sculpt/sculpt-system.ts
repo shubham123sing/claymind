@@ -151,6 +151,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
       { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:spawn', {}) },
       { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
+      { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
       { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
       { id: 'delete', label: 'Delete', icon: '🗑', color: 0xd9534f, onPress: () => bus.emit('creation:delete', {}) },
