@@ -58,6 +58,13 @@ class PickerPanel extends CanvasPanel {
     ctx.font = '500 28px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(244,241,236,0.8)';
     ui.wrap(ctx, materialTraits(m).join(', '), c - 120 + 120, c + 24, 240, 34, 2);
+    // this object only: take the copy off the table (the Library keeps its item)
+    ui.button(ctx, c - 92, c + 72, 184, 52, '', { hover: this.hover === 'remove' });
+    ctx.fillStyle = '#9fd0f5';
+    ctx.font = '700 21px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('↧ Remove from scene', c, c + 99, 172);
+    add(c - 92, c + 72, 184, 52, 'remove');
     ctx.textAlign = 'left';
   }
 }
@@ -139,6 +146,12 @@ export class MaterialPickerSystem extends createSystem({}) {
 
   private pick(id: string): void {
     if (!this.target) return;
+    if (id === 'remove') {
+      bus.emit('scene:remove', { creationId: this.target.creationId });
+      uiSounds.tick();
+      this.close();
+      return;
+    }
     const m = getMaterial(id);
     bus.emit('creation:set-material', { creationId: this.target.creationId, materialId: m.id, by: 'user', confidence: 1, part: this.target.part });
     bus.emit('ui:toast', { text: `${m.name} · ${materialTraits(m).join(', ')}`, color: m.visual.color });
@@ -147,7 +160,8 @@ export class MaterialPickerSystem extends createSystem({}) {
   }
 
   private onPointer(e: PointerEvent, down: boolean): void {
-    if (!this.panel.mesh.visible || input.xr) return;
+    // only presses on the 3D view: HTML on top (menu, dialogs) keeps its own clicks
+    if (!this.panel.mesh.visible || input.xr || e.target !== this.world.renderer.domElement) return;
     const r = this.world.renderer.domElement.getBoundingClientRect();
     this.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);

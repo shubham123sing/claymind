@@ -3,7 +3,9 @@
  * hand's index fingertip. Opens when the palm faces up for ~0.2 s, animates in
  * with an ease-out scale, and stays face-on to the user's head.
  * One-handed setting: `updateFixed` keeps it open beside the clay instead,
- * poked by either hand. Reduced motion: no ease, no hover growth.
+ * poked by either hand, with a small Hide / Tools button above it that folds
+ * the menu down to that one button (the palm-up menu hides by itself).
+ * Reduced motion: no ease, no hover growth.
  */
 import {
   CanvasTexture, Group, Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, SRGBColorSpace, Vector3,
@@ -20,6 +22,8 @@ export interface MenuItem {
   /** Returns true if shown as selected/on. */
   selected?: () => boolean;
   enabled?: () => boolean;
+  /** Erases something (drawn in red so it is never confused with a harmless action). */
+  danger?: boolean;
   onPress: () => void;
 }
 
@@ -48,6 +52,9 @@ export class WristMenu {
   private local = new Vector3();
   private head = new Vector3();
   isOpen = false;
+  /** One-handed menu folded down to its Hide / Tools button. */
+  collapsed = false;
+  private toggle: Button;
 
   constructor(items: MenuItem[], private onTick: () => void) {
     this.root.add(this.panel);
@@ -64,7 +71,32 @@ export class WristMenu {
       this.panel.add(mesh);
       this.buttons.push({ item, mesh, canvas, tex, state: '', wasFront: false });
     });
+    const toggleItem: MenuItem = {
+      id: 'tools', label: 'Hide', icon: '▾', color: 0x8fa3b8,
+      onPress: () => {
+        this.collapsed = !this.collapsed;
+        toggleItem.label = this.collapsed ? 'Tools' : 'Hide';
+        toggleItem.icon = this.collapsed ? '☰' : '▾';
+        this.toggle.state = ''; // redraw
+      },
+    };
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 192;
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    const mesh = new Mesh(new PlaneGeometry(BTN, BTN), new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+    mesh.position.set(-(COLS - 1) / 2 * (BTN + GAP), ((rows - 1) / 2 + 1) * (BTN + GAP) + GAP, 0); // above the top-left button
+    mesh.renderOrder = 20;
+    mesh.visible = false;
+    this.panel.add(mesh);
+    this.toggle = { item: toggleItem, mesh, canvas, tex, state: '', wasFront: false };
+    this.buttons.push(this.toggle);
     this.root.visible = false;
+  }
+
+  /** Palm-up: every tool button, no Hide button. One-handed: Hide button, tools unless folded. */
+  private layout(fixed: boolean): void {
+    for (const b of this.buttons) b.mesh.visible = b === this.toggle ? fixed : !(fixed && this.collapsed);
   }
 
   /**
@@ -77,6 +109,7 @@ export class WristMenu {
     const wantOpen = this.openTime > OPEN_DELAY;
     this.ease(wantOpen, dt);
     if (!this.root.visible) return false;
+    this.layout(false);
 
     // float 7 cm above the palm, facing the head
     headObj.getWorldPosition(this.head);
@@ -98,6 +131,7 @@ export class WristMenu {
     this.root.position.copy(at);
     this.root.lookAt(this.head);
     this.root.scale.setScalar(0.6 + 0.4 * this.openAmount);
+    this.layout(true);
     this.pokeButtons(pokers, now);
     return this.isOpen;
   }
@@ -112,6 +146,10 @@ export class WristMenu {
 
   private pokeButtons(pokers: HandState[], now: number): void {
     for (const b of this.buttons) {
+      if (!b.mesh.visible) {
+        b.wasFront = false;
+        continue;
+      }
       const enabled = b.item.enabled?.() ?? true;
       let hover = false;
       for (const poker of pokers) {
@@ -160,7 +198,8 @@ export class WristMenu {
     ctx.font = '600 72px system-ui, sans-serif';
     ctx.fillText(b.item.icon, 96, 82);
     ctx.font = '600 32px system-ui, sans-serif';
-    ctx.fillText(b.item.label, 96, 152);
+    if (b.item.danger && !selected) ctx.fillStyle = '#ff8a80';
+    ctx.fillText(b.item.label, 96, 152, 180);
     ctx.globalAlpha = 1;
     b.tex.needsUpdate = true;
     b.mesh.scale.setScalar(hover && !settings.reducedMotion ? 1.06 : 1);

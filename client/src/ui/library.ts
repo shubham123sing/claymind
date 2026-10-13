@@ -1,9 +1,12 @@
 /**
- * Library (plan v4, section 6): creations are saved automatically (IndexedDB)
- * whenever they change; pinned ones come back to their spot on the table after
- * a reload. The shelf panel shows thumbnails: tap one to bring it back, tap its
- * x twice to delete it, "Re-place pinned" puts pinned creations back on the
- * table as it is found now (anchors are unverified on Quest Browser).
+ * Library: only what the player adds. "Add to Library" (menu or the panel's
+ * button) saves a named copy of the current creation with a thumbnail. The
+ * panel shows a grid; select an item, then Use (a copy into the room, the item
+ * never changes), Edit (a linked copy: its changes are saved back to the item),
+ * Rename, Download or Delete (two taps, then a 5-second Undo).
+ * Pinned creations are kept separately (the 'room' store) and come back to
+ * their spot on the table after a reload; "Re-place pinned" puts them back on
+ * the table as it is found now (anchors are unverified on Quest Browser).
  */
 import { createSystem, PerspectiveCamera, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
@@ -13,22 +16,28 @@ import { ObjectSystem } from '../objects/object-system.js';
 import { input } from '../platform/input/input-system.js';
 import { surface } from '../platform/surface/surface-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
-import { deleteFromLibrary, loadLibrary, SavedCreation, saveToLibrary } from '../storage/library.js';
-import { setSetting, settings, settingsReady } from '../core/settings.js';
-import { buildSamples } from '../objects/samples.js';
+import { copySaved, deleteFromLibrary, loadLibrary, nextClayName, SavedCreation, saveToLibrary } from '../storage/library.js';
 import { CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
+import { offerUndo } from './undo-toast.js';
 
 const W = 1000, H = 640;
 const SIZE: [number, number] = [0.3, (0.3 * H) / W];
 const COLS = 4, ROWS = 2, PER_PAGE = COLS * ROWS;
 const SAVE_DELAY_MS = 800;
 const IDLE_CLOSE_MS = 30000;
+const CONFIRM_MS = 3000;
+/** Ids of objects placed from the Library (Use / Edit) end with this. */
+export const PLACED_SUFFIX = '_lib';
+const ACTIONS = [
+  ['use', 'Use', 110], ['edit', 'Edit', 110], ['rename', 'Rename', 130], ['download', 'Download', 150], ['delete', 'Delete from Library', 230],
+] as const;
 
 class LibraryPanel extends CanvasPanel {
   items: SavedCreation[] = [];
   page = 0;
-  armedDelete: string | null = null;
-  inRoom = new Set<string>();
+  selected: string | null = null;
+  armedDelete = false;
+  canReplace = false;
   private images = new Map<string, HTMLImageElement>();
   constructor() {
     super([W, H], SIZE);
@@ -51,64 +60,74 @@ class LibraryPanel extends CanvasPanel {
     ctx.font = '700 36px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.fillText('Library', 32, 44);
-    ctx.font = '500 24px system-ui, sans-serif';
+    ctx.font = '500 22px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(244,241,236,0.7)';
-    ctx.fillText(this.items.length ? `${this.items.length} saved · tap one to bring it back` : 'Bring something to life: it is saved here', 190, 46);
-    const cw = (W - 40) / COLS, ch = 230, top = 90;
+    ctx.fillText(this.items.length ? `${this.items.length} saved` : 'Empty', 175, 46);
+    const hb = (x: number, w: number, label: string, id: string, enabled = true) => {
+      if (enabled) add(x, 18, w, 52, id);
+      ui.button(ctx, x, 18, w, 52, label, { hover: this.hover === id, enabled });
+    };
+    if (this.canReplace) hb(W - 20 - 250 - 12 - 140 - 12 - 220, 220, 'Re-place pinned', 'replace');
+    hb(W - 20 - 250 - 12 - 140, 140, 'Import', 'import');
+    hb(W - 20 - 250, 250, '+ Add to Library', 'add');
+
+    const cw = (W - 40) / COLS, ch = 210, top = 86;
     const pageItems = this.items.slice(this.page * PER_PAGE, (this.page + 1) * PER_PAGE);
     pageItems.forEach((s, i) => {
-      const x = 20 + (i % COLS) * cw, y = top + Math.floor(i / COLS) * (ch + 14);
+      const x = 20 + (i % COLS) * cw, y = top + Math.floor(i / COLS) * (ch + 12);
+      const sel = this.selected === s.id;
       const hover = this.hover === `o${s.id}`;
-      ctx.fillStyle = hover ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)';
+      ctx.fillStyle = sel ? 'rgba(240,180,41,0.35)' : hover ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)';
       ctx.beginPath();
       ctx.roundRect(x + 6, y, cw - 12, ch, 18);
       ctx.fill();
+      if (sel) {
+        ctx.strokeStyle = '#f0b429';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
       add(x + 6, y, cw - 12, ch, `o${s.id}`);
       const img = this.image(s);
-      if (img) ctx.drawImage(img, x + (cw - 150) / 2, y + 10, 150, 150);
+      if (img) ctx.drawImage(img, x + (cw - 136) / 2, y + 8, 136, 136);
       ctx.fillStyle = '#f4f1ec';
       ctx.font = '600 22px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      const mats = [...new Set(s.parts.map((p) => getMaterial(p.materialId).name))].join(' + ');
-      ctx.fillText(mats, x + cw / 2, y + 180, cw - 24);
-      ctx.font = '500 18px system-ui, sans-serif';
+      ctx.fillText(s.creation.name, x + cw / 2, y + 164, cw - 24);
+      ctx.font = '500 17px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(244,241,236,0.65)';
-      const tags = [s.pinned ? 'pinned' : '', this.inRoom.has(s.id) ? 'in the room' : ''].filter(Boolean).join(' · ');
-      ctx.fillText(tags || `${Math.round(s.creation.massKg * 1000)} g`, x + cw / 2, y + 208, cw - 24);
+      const mats = [...new Set(s.parts.map((p) => getMaterial(p.materialId).name))].join(' + ');
+      ctx.fillText(`${mats} · ${Math.round(s.creation.massKg * 1000)} g`, x + cw / 2, y + 190, cw - 24);
       ctx.textAlign = 'left';
-      // delete (two taps)
-      const dx = x + cw - 52, dy = y + 6, armed = this.armedDelete === s.id;
-      ctx.fillStyle = armed ? '#d9534f' : this.hover === `x${s.id}` ? 'rgba(217,83,79,0.6)' : 'rgba(0,0,0,0.35)';
-      ctx.beginPath();
-      ctx.arc(dx + 20, dy + 20, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = '700 24px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(armed ? '?' : '×', dx + 20, dy + 21);
-      ctx.textAlign = 'left';
-      add(dx, dy, 40, 40, `x${s.id}`);
     });
+
     const pages = Math.max(1, Math.ceil(this.items.length / PER_PAGE));
-    const by = H - 70;
-    const btn = (x: number, w: number, label: string, id: string, enabled = true) => {
+    const by = H - 72;
+    const btn = (x: number, w: number, label: string, id: string, enabled = true, danger = false) => {
       if (enabled) add(x, by, w, 56, id);
-      ui.button(ctx, x, by, w, 56, label, { hover: this.hover === id, enabled });
+      ui.button(ctx, x, by, w, 56, label, { hover: this.hover === id, enabled, accent: danger ? '#d9534f' : undefined });
     };
-    btn(20, 90, '◀', 'prev', this.page > 0);
-    btn(120, 90, '▶', 'next', this.page < pages - 1);
-    ctx.fillStyle = 'rgba(244,241,236,0.7)';
-    ctx.font = '500 22px system-ui, sans-serif';
-    ctx.fillText(`${this.page + 1} / ${pages}`, 230, by + 29);
-    btn(W - 20 - 300, 300, 'Re-place pinned', 'replace', this.items.some((s) => s.pinned));
+    btn(20, 72, '◀', 'prev', this.page > 0);
+    btn(100, 72, '▶', 'next', this.page < pages - 1);
+    const has = this.selected !== null;
+    let x = 190;
+    for (const [id, label, w] of ACTIONS) {
+      const text = id === 'delete' && this.armedDelete ? 'Tap again: forever' : label;
+      btn(x, w, text, id, has, has && id === 'delete'); // red: erases the saved item
+      x += w + 8;
+    }
   }
 }
 
 export class LibrarySystem extends createSystem({}) {
   private panel = new LibraryPanel();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Pinned creations (room store), put back after a reload. */
+  private room: SavedCreation[] = [];
+  /** Live creation id -> Library item it edits (Edit). */
+  private editing = new Map<string, string>();
   private restoredFor = -1;
   private openedAt = 0;
+  private armedAt = -Infinity;
   private ray = new Raycaster();
   private ndc = new Vector2();
   private tip = new Vector3();
@@ -126,8 +145,9 @@ export class LibrarySystem extends createSystem({}) {
     this.world.createTransformEntity(m);
     this.cleanupFuncs.push(
       bus.on('creation:changed', (e) => this.scheduleSave(e.creationId)),
-      bus.on('creation:removed', (e) => void this.remove(e.creationId)),
+      bus.on('creation:removed', (e) => this.forget(e.creationId)),
       bus.on('library:toggle', () => (m.visible ? this.close() : this.open())),
+      bus.on('library:add', () => void this.add()),
     );
     const onDown = (e: PointerEvent) => this.onPointer(e, true);
     const onMove = (e: PointerEvent) => this.onPointer(e, false);
@@ -137,12 +157,11 @@ export class LibrarySystem extends createSystem({}) {
       removeEventListener('pointerdown', onDown, { capture: true });
       removeEventListener('pointermove', onMove);
     });
-    void Promise.all([loadLibrary(), settingsReady]).then(([items]) => {
+    void Promise.all([loadLibrary(), loadLibrary('room')]).then(([items, room]) => {
       this.panel.items = items;
+      this.room = room.filter((s) => s.pinned);
       this.loaded = true;
-      console.info(`[library] ${items.length} saved, ${items.filter((s) => s.pinned).length} pinned`);
-      // first run: a few ready-made creations so the shelf is never empty
-      if (!settings.samplesAdded && items.length === 0) setTimeout(() => void this.addSamples(), 2500);
+      console.info(`[library] ${items.length} in the Library, ${this.room.length} pinned in the room`);
     });
   }
 
@@ -150,44 +169,159 @@ export class LibrarySystem extends createSystem({}) {
     return this.world.getSystem(ObjectSystem)!;
   }
 
+  // ---------- room (pinned) and Edit links: saved as they change ----------
+
   private scheduleSave(id: string): void {
     clearTimeout(this.timers.get(id));
-    this.timers.set(id, setTimeout(() => void this.save(id), SAVE_DELAY_MS));
+    this.timers.set(id, setTimeout(() => void this.saveLive(id), SAVE_DELAY_MS));
   }
 
-  private async save(id: string): Promise<void> {
+  private async saveLive(id: string): Promise<void> {
     this.timers.delete(id);
     const s = this.objects.serialize(id);
     if (!s) return;
-    await saveToLibrary(s);
-    this.panel.items = [s, ...this.panel.items.filter((x) => x.id !== id)];
-    this.panel.invalidate();
-  }
-
-  private async addSamples(): Promise<void> {
-    setSetting('samplesAdded', true);
-    const t0 = performance.now();
-    for (const s of buildSamples()) {
-      const saved = this.objects.makeSaved(s.creation, s.parts);
-      await saveToLibrary(saved);
-      this.panel.items.push(saved);
+    if (s.pinned) {
+      await saveToLibrary(s, 'room');
+      this.room = [s, ...this.room.filter((x) => x.id !== id)];
+    } else if (this.room.some((x) => x.id === id)) this.dropRoom(id);
+    const libId = this.editing.get(id);
+    const item = libId && this.panel.items.find((x) => x.id === libId);
+    if (item) {
+      const updated = copySaved(s, item.id, item.creation.name);
+      updated.pinned = false;
+      await saveToLibrary(updated);
+      this.panel.items = this.panel.items.map((x) => (x.id === item.id ? updated : x));
+      this.panel.invalidate();
     }
-    this.panel.invalidate();
-    console.info(`[library] added ${this.panel.items.length} samples in ${Math.round(performance.now() - t0)} ms`);
   }
 
-  private async remove(id: string): Promise<void> {
+  private forget(id: string): void {
     clearTimeout(this.timers.get(id));
+    this.editing.delete(id);
+    if (this.room.some((x) => x.id === id)) this.dropRoom(id);
+  }
+
+  private dropRoom(id: string): void {
+    this.room = this.room.filter((x) => x.id !== id);
+    void deleteFromLibrary(id, 'room');
+  }
+
+  // ---------- Library actions ----------
+
+  /** The creation being worked on: the object touched last, else the newest one in the room. */
+  private current(): string | null {
+    const t = this.objects.focusTarget();
+    if (t) return t.creationId;
+    const ids = this.objects.liveCreationIds().filter((x) => !x.includes('#exp'));
+    return ids[ids.length - 1] ?? null;
+  }
+
+  private askName(title: string, fallback: string): string | null {
+    if (input.xr || typeof prompt !== 'function') return fallback; // no keyboard in the headset: the default name
+    const name = prompt(title, fallback);
+    return name === null ? null : name.trim().slice(0, 40) || fallback;
+  }
+
+  async add(): Promise<void> {
+    const id = this.current();
+    const s = id ? this.objects.serialize(id) : null;
+    if (!s) {
+      bus.emit('ui:toast', { text: id ? 'One moment, the material is still settling' : 'Bring something to life first, then Add to Library' });
+      return;
+    }
+    const name = this.askName('Name for the Library', nextClayName(this.panel.items.map((x) => x.creation.name)));
+    if (name === null) return;
+    const item = copySaved(s, `lib_${Date.now().toString(36)}`, name);
+    item.pinned = false;
+    await saveToLibrary(item);
+    this.panel.items = [item, ...this.panel.items];
+    this.panel.selected = item.id;
+    this.panel.page = 0;
+    this.panel.invalidate();
+    uiSounds.tick();
+    offerUndo(`Added "${name}" to the Library`, () => void this.removeItem(item.id), input.xr);
+  }
+
+  /** Library item a placed copy is editing (Edit), or null. */
+  editLinkOf(liveId: string): string | null {
+    return this.editing.get(liveId) ?? null;
+  }
+
+  relink(liveId: string, libId: string): void {
+    if (this.panel.items.some((x) => x.id === libId)) this.editing.set(liveId, libId);
+  }
+
+  /** Put an imported item in the Library (always under a new id). */
+  async addItem(s: SavedCreation): Promise<void> {
+    const item = copySaved(s, `lib_${Date.now().toString(36)}`);
+    await saveToLibrary(item);
+    this.panel.items = [item, ...this.panel.items];
+    this.panel.selected = item.id;
+    this.panel.page = 0;
+    this.panel.invalidate();
+  }
+
+  private async removeItem(id: string): Promise<void> {
     await deleteFromLibrary(id);
     this.panel.items = this.panel.items.filter((x) => x.id !== id);
+    if (this.panel.selected === id) this.panel.selected = null;
+    for (const [live, lib] of this.editing) if (lib === id) this.editing.delete(live);
     this.panel.invalidate();
+  }
+
+  private bringIn(s: SavedCreation, link: boolean): void {
+    const copy = copySaved(s, `c_${Date.now().toString(36)}${PLACED_SUFFIX}`);
+    copy.pinned = false;
+    bus.emit('ui:toast', { text: link ? `Editing "${s.creation.name}": changes are saved to the Library` : this.objects.restore(copy, 'present') });
+    if (link) {
+      this.objects.restore(copy, 'present');
+      this.editing.set(copy.id, s.id);
+    }
+    this.objects.focusOn(copy.id);
+  }
+
+  private action(id: string): void {
+    const p = this.panel;
+    const s = p.items.find((x) => x.id === p.selected);
+    if (!s) return;
+    if (id !== 'delete') p.armedDelete = false;
+    if (id === 'use') this.bringIn(s, false);
+    else if (id === 'edit') this.bringIn(s, true);
+    else if (id === 'rename') {
+      if (input.xr) {
+        bus.emit('ui:toast', { text: 'Rename needs a keyboard: open ClayMind in a browser' });
+        return;
+      }
+      const name = this.askName('New name', s.creation.name);
+      if (name === null || name === s.creation.name) return;
+      const renamed: SavedCreation = { ...s, creation: { ...s.creation, name } };
+      void saveToLibrary(renamed);
+      p.items = p.items.map((x) => (x.id === s.id ? renamed : x));
+    } else if (id === 'download') bus.emit('library:download', { item: s });
+    else if (id === 'delete') {
+      const now = performance.now();
+      if (!p.armedDelete || now - this.armedAt > CONFIRM_MS) {
+        p.armedDelete = true;
+        this.armedAt = now;
+        bus.emit('ui:toast', { text: `Delete "${s.creation.name}" from the Library forever? Tap again (5 s to Undo)` });
+        return;
+      }
+      p.armedDelete = false;
+      const index = p.items.indexOf(s);
+      void this.removeItem(s.id);
+      offerUndo(`Deleted "${s.creation.name}" from the Library`, () => {
+        void saveToLibrary(s);
+        p.items.splice(Math.min(index, p.items.length), 0, s);
+        p.selected = s.id;
+        p.invalidate();
+      }, input.xr);
+    }
   }
 
   /** Pinned creations back on the table (after loading, and on "Re-place pinned"). */
   private placePinned(): number {
     let n = 0;
-    for (const s of this.panel.items) {
-      if (!s.pinned) continue;
+    for (const s of this.room) {
       if (this.objects.liveCreationIds().includes(s.id)) this.objects.removeCreation(s.id);
       this.objects.restore(s, 'saved');
       n++;
@@ -196,7 +330,7 @@ export class LibrarySystem extends createSystem({}) {
   }
 
   private open(): void {
-    this.panel.inRoom = new Set(this.objects.liveCreationIds());
+    this.panel.canReplace = this.room.length > 0;
     this.panel.invalidate();
     this.place();
     this.panel.mesh.visible = true;
@@ -206,7 +340,7 @@ export class LibrarySystem extends createSystem({}) {
 
   private close(): void {
     this.panel.mesh.visible = false;
-    this.panel.armedDelete = null;
+    this.panel.armedDelete = false;
   }
 
   private place(): void {
@@ -220,8 +354,10 @@ export class LibrarySystem extends createSystem({}) {
       m.position.copy(at).addScaledVector(toEye, 0.1).addScaledVector(left, -0.24);
       m.position.y += 0.14;
     } else {
+      // beside the clay on a wide window; centred in front of it on a narrow one (all buttons in view)
+      const narrow = (this.world.camera as PerspectiveCamera).aspect < 1.3;
       m.scale.setScalar(0.5);
-      m.position.copy(at).addScaledVector(toEye, 0.12).addScaledVector(left, -0.12);
+      m.position.copy(at).addScaledVector(toEye, narrow ? 0.16 : 0.12).addScaledVector(left, narrow ? 0 : -0.12);
       m.position.y += 0.06;
     }
     m.lookAt(eye);
@@ -232,27 +368,19 @@ export class LibrarySystem extends createSystem({}) {
     this.openedAt = performance.now();
     if (id === 'prev' || id === 'next') p.page += id === 'next' ? 1 : -1;
     else if (id === 'replace') bus.emit('ui:toast', { text: `Re-placed ${this.placePinned()} pinned creation(s) on the table` });
-    else if (id.startsWith('x')) {
-      const sid = id.slice(1);
-      if (p.armedDelete === sid) {
-        p.armedDelete = null;
-        void this.remove(sid);
-        bus.emit('ui:toast', { text: 'Deleted from the Library' });
-      } else {
-        p.armedDelete = sid;
-        bus.emit('ui:toast', { text: 'Tap again to delete it' });
-      }
-    } else if (id.startsWith('o')) {
-      const s = p.items.find((x) => x.id === id.slice(1));
-      if (s) bus.emit('ui:toast', { text: this.objects.restore(s, s.pinned ? 'saved' : 'present') });
-      p.inRoom = new Set(this.objects.liveCreationIds());
-    }
+    else if (id === 'add') void this.add();
+    else if (id === 'import') bus.emit('library:import', {});
+    else if (id.startsWith('o')) {
+      p.selected = id.slice(1);
+      p.armedDelete = false;
+    } else this.action(id);
     uiSounds.tick();
     p.invalidate();
   }
 
   private onPointer(e: PointerEvent, down: boolean): void {
-    if (!this.panel.mesh.visible || input.xr) return;
+    // only presses on the 3D view: HTML on top (menu, dialogs) keeps its own clicks
+    if (!this.panel.mesh.visible || input.xr || e.target !== this.world.renderer.domElement) return;
     const r = this.world.renderer.domElement.getBoundingClientRect();
     this.ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(this.ndc, this.world.camera as PerspectiveCamera);
@@ -265,12 +393,12 @@ export class LibrarySystem extends createSystem({}) {
   }
 
   update(): void {
-    // pinned creations come back once the library is loaded and the work surface is known
+    // pinned creations come back once loaded and the work surface is known
     if (this.loaded && this.restoredFor < 0 && performance.now() > 1500) {
       this.restoredFor = surface.version;
       const n = this.placePinned();
       if (n) bus.emit('ui:toast', { text: `${n} pinned creation(s) back on the table` });
-    } else if (this.restoredFor >= 0 && surface.real && surface.version !== this.restoredFor && this.panel.items.some((s) => s.pinned)) {
+    } else if (this.restoredFor >= 0 && surface.real && surface.version !== this.restoredFor && this.room.length) {
       this.restoredFor = surface.version;
       bus.emit('ui:toast', { text: 'Table found: Library -> Re-place pinned puts your pinned things on it' });
     }

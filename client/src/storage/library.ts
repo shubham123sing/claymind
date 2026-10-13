@@ -1,10 +1,10 @@
 /**
- * The Library (plan v4, section 6): every creation is saved in IndexedDB with
- * its pieces (meshes, paint, colliders, breakage shards, frames), materials,
- * colours, whether it is pinned and its pose relative to the work surface, plus
- * a small thumbnail. Pinned creations come back to the same spot on the table
- * after a reload (relative to the table, since anchors are unverified on Quest
- * Browser); others wait on the Library shelf.
+ * Saved creations in IndexedDB, with their pieces (meshes, paint, colliders,
+ * breakage shards, frames), materials, colours, pose relative to the work
+ * surface and a small thumbnail. Two stores:
+ * - 'creations': the Library, only what the player chose to add (named copies);
+ * - 'room': pinned creations, put back on the table after a reload (relative to
+ *   the table, since anchors are unverified on Quest Browser).
  */
 import type { BakedMesh, BakedPiece } from '../objects/bake.js';
 import type { PartCollider } from '../objects/collider.js';
@@ -39,17 +39,39 @@ export interface SavedCreation {
 const TIMEOUT_MS = 2500;
 const withTimeout = <T>(p: Promise<T>, fallback: T) => Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), TIMEOUT_MS))]);
 
-export function saveToLibrary(s: SavedCreation): Promise<void> {
-  return withTimeout(idbSet('creations', s.id, s), undefined);
+type Store = 'creations' | 'room';
+
+export function saveToLibrary(s: SavedCreation, store: Store = 'creations'): Promise<void> {
+  return withTimeout(idbSet(store, s.id, s), undefined);
 }
 
-export function deleteFromLibrary(id: string): Promise<void> {
-  return withTimeout(idbDelete('creations', id), undefined);
+export function deleteFromLibrary(id: string, store: Store = 'creations'): Promise<void> {
+  return withTimeout(idbDelete(store, id), undefined);
 }
 
-export async function loadLibrary(): Promise<SavedCreation[]> {
-  const all = await withTimeout(idbGetAll<SavedCreation>('creations'), []);
+export async function loadLibrary(store: Store = 'creations'): Promise<SavedCreation[]> {
+  const all = await withTimeout(idbGetAll<SavedCreation>(store), []);
   return all.filter((s) => s && s.schemaVersion === LIBRARY_SCHEMA && Array.isArray(s.parts)).sort((a, b) => b.savedAt - a.savedAt);
+}
+
+/** Next free default name: "Clay 1", "Clay 2", ... */
+export function nextClayName(names: string[]): string {
+  let n = 0;
+  for (const name of names) {
+    const m = /^Clay (\d+)$/.exec(name);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  return `Clay ${n + 1}`;
+}
+
+/** A copy of a saved creation under a new id (and name), so playing with it never changes the original. */
+export function copySaved(s: SavedCreation, id: string, name = s.creation.name): SavedCreation {
+  const c = structuredClone(s);
+  c.id = id;
+  c.creation.id = id;
+  c.creation.name = name;
+  c.savedAt = Date.now();
+  return c;
 }
 
 /** World pose -> surface frame (and back), for poses that survive the table being found again at a new spot. */

@@ -373,6 +373,10 @@ export class ObjectSystem extends createSystem({}) {
       p.view.geometry.dispose();
       p.material.dispose();
     }
+    // the blob shadow has its own plane and material (its texture is shared: keep it)
+    const shadowMesh = rec.shadow.object3D as Mesh | undefined;
+    shadowMesh?.geometry.dispose();
+    (shadowMesh?.material as MeshBasicMaterial | undefined)?.dispose();
     rec.shadow.dispose({ disposeResources: false });
     rec.labelEntity?.dispose({ disposeResources: false });
     rec.label?.dispose();
@@ -643,6 +647,26 @@ export class ObjectSystem extends createSystem({}) {
     rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 150);
     rec.expires = performance.now() + 12000; // never left lying around
     return c.id;
+  }
+
+  /** Delete a creation the player made; returns what Undo needs to bring it back (null if it cannot go). */
+  deleteCreation(id: string): SavedCreation | null {
+    const rec = this.byCreation(id);
+    if (!rec || rec.kind !== 'creation') return null;
+    this.flushPending(rec);
+    const saved = this.serialize(id);
+    if (!saved) return null;
+    this.dispose(rec);
+    bus.emit('creation:removed', { creationId: id });
+    return saved;
+  }
+
+  /** Make a live creation the one the player is working on (as if just touched). */
+  focusOn(id: string): void {
+    const rec = this.byCreation(id);
+    if (!rec) return;
+    this.focus = rec;
+    rec.lastInteract = performance.now();
   }
 
   removeCreation(id: string): void {

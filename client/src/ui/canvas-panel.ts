@@ -103,7 +103,8 @@ onSettings(() => {
 export function bindPanelMouse(world: World, panel: CanvasPanel, press: (id: string) => void, xr: () => boolean): () => void {
   const ray = new Raycaster(), ndc = new Vector2();
   const handle = (e: PointerEvent, down: boolean) => {
-    if (!panel.mesh.visible || xr()) return;
+    // only presses on the 3D view: HTML on top (menu, dialogs) keeps its own clicks
+    if (!panel.mesh.visible || xr() || e.target !== world.renderer.domElement) return;
     const r = world.renderer.domElement.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, world.camera as PerspectiveCamera);

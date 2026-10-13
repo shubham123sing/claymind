@@ -62,6 +62,20 @@ export type AppEvents = {
   'playkit:spawn': Record<string, never>;
   'library:toggle': Record<string, never>;
   'settings:toggle': Record<string, never>;
+  /** Save the current creation to the Library (asks a name). */
+  'library:add': Record<string, never>;
+  /** Import a ClayMind project file into the Library (file picker). */
+  'library:import': Record<string, never>;
+  /** Download a Library item as a file. */
+  'library:download': { item: import('../storage/library.js').SavedCreation };
+  /** Take a placed object (default: the one touched last) off the table; the Library is not touched. */
+  'scene:remove': { creationId?: string };
+  /** Take every object placed from the Library off the table (asks to confirm first). */
+  'scene:clear': Record<string, never>;
+  /** Menu: delete the current creation (asks to confirm first). */
+  'creation:delete': Record<string, never>;
+  /** Browser tool menu shown or hidden with its round button. */
+  'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;
   /** Tutorial signals: the clay was shaped / painted (or coloured); an object was pinned. */
   'clay:touched': Record<string, never>;
