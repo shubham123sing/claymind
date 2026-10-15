@@ -5,7 +5,7 @@
  * can be in both. IndexedDB stores 'kit' and 'sets'; download / import as a
  * `.claymind.json` kit file (same typed-array encoding and checks as a project).
  */
-import { checkSaved, decodeJson, encodeJson, ImportError } from '../export/project-file.js';
+import { checkSaved, decodeJson, encodeJson, ImportError, MAX_KIT_BYTES } from '../export/project-file.js';
 import { getMaterial } from '../materials/materials.js';
 import { copySaved, type SavedCreation } from '../storage/library.js';
 import { idbDelete, idbGetAll, idbSet } from '../storage/idb.js';
@@ -99,17 +99,32 @@ export function suggestRole(st: KitStats): RoleTag {
 
 /** Size of each built-in shape (largest dimension, m), to compare kit items with. */
 export const FALLBACK_SIZE: Record<FallbackShape, number> = {
-  block: 0.04, ball: 0.036, marble: 0.02, disc: 0.036, coin: 0.028, board: 0.36, cup: 0.07, ramp: 0.38,
+  block: 0.04, ball: 0.036, marble: 0.02, disc: 0.036, coin: 0.028, board: 0.36, cup: 0.07, ramp: 0.32,
 };
 
-/** How well a kit item fits a role: tag match first, then size. Null = it does not fit. */
+/** Does the shape suit what the built-in shape does (stack, roll, slide, hold)? */
+export function shapeFits(st: KitStats, shape: FallbackShape): boolean {
+  const d = [...st.sizeCm].sort((a, b) => a - b), [small, mid, big] = d;
+  const even = small / Math.max(big, 0.1), long = mid / Math.max(big, 0.1);
+  switch (shape) {
+    case 'block': return st.fill >= 0.65; // stacks: flat faces
+    case 'ball': case 'marble': return even >= 0.7 && st.fill < 0.7; // rolls
+    case 'coin': case 'disc': return even < 0.6 && long > 0.7; // slides flat
+    case 'board': return even < 0.15 && long >= 0.5;
+    case 'cup': return st.fill < 0.6;
+    case 'ramp': return long < 0.5;
+  }
+}
+
+/** How well a kit item fits a role: tag match first, then shape and size. Null = it does not fit. */
 export function fitScore(item: KitItem, role: RoleSpec): number | null {
   const t = role.tags.indexOf(item.role);
-  if (t < 0) return null;
+  if (t < 0 || !shapeFits(item.stats, role.fallback)) return null;
   const big = Math.max(...item.stats.sizeCm) / 100;
-  const sizeMiss = Math.abs(Math.log(Math.max(big, 0.005) / FALLBACK_SIZE[role.fallback]));
-  if (sizeMiss > Math.log(4)) return null; // more than 4x off: it would not play
-  return 3 - t - sizeMiss;
+  const ratio = Math.max(big, 0.005) / FALLBACK_SIZE[role.fallback];
+  // several pieces stand close together in a layout: a much bigger toy would overlap its neighbours
+  if (ratio > (role.count > 1 ? 1.6 : 3) || ratio < 1 / 3) return null;
+  return 3 - t - Math.abs(Math.log(ratio));
 }
 
 /** Best kit item for each role (null = use the built-in shape). */
@@ -156,7 +171,7 @@ const isVec = (x: unknown, n: number) => Array.isArray(x) && x.length === n && x
 
 /** Parse and check a kit file; throws ImportError with a player-readable reason. */
 export function kitFromJson(text: string): { items: KitItem[]; sets: PlaySet[] } {
-  const d = decodeJson(text) as { format?: unknown; version?: unknown; items?: unknown[]; sets?: unknown[] };
+  const d = decodeJson(text, MAX_KIT_BYTES) as { format?: unknown; version?: unknown; items?: unknown[]; sets?: unknown[] };
   if (d?.format !== KIT_FILE_FORMAT) throw new ImportError('Not a ClayMind kit file');
   if (d.version !== KIT_SCHEMA) throw new ImportError('Made by a newer ClayMind');
   if (!Array.isArray(d.items) || d.items.length > 50 || !Array.isArray(d.sets) || d.sets.length > 50) throw new ImportError('Damaged kit file');

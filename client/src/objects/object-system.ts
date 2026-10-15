@@ -48,7 +48,8 @@ import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMateri
 
 type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free';
 /** creation = made by the player; shard = a breakage piece (fades); prop = a Play Kit item. */
-type Kind = 'creation' | 'shard' | 'prop';
+/** toy: a Play Kit piece (no label, its own limit, driven by the Play Kit). */
+type Kind = 'creation' | 'shard' | 'prop' | 'toy';
 
 /** Where a piece sits in its object (piece-local -> object-local). */
 interface Frame {
@@ -83,6 +84,10 @@ interface LivePart extends PartSpec {
 
 interface Live {
   kind: Kind;
+  /** Play Kit piece id (kind 'toy'). */
+  toyId?: string;
+  /** Cannot be grabbed (a game's board, ramp, cups while playing). */
+  locked?: boolean;
   /** Static body resting where it was pinned. */
   pinned: boolean;
   /** 'ray' grab: distance along the hand ray. */
@@ -140,6 +145,10 @@ const MATERIAL_REBUILD_DELAY = 400;
 const MAX_CREATIONS = 8;
 const MAX_PIECES = 24;
 const MAX_THROW = 6;
+/** Play Kit pieces on the table at once. */
+const MAX_TOYS = 40;
+/** Fingertip flick: speeds (m/s) and how long a piece ignores the next flick (ms). */
+const FLICK_MIN = 0.35, FLICK_MAX = 2.5, FLICK_COOLDOWN_MS = 400;
 const PIECE_LIFETIME = 7000;
 const GRAB_MARGIN = 0.035;
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -440,6 +449,10 @@ export class ObjectSystem extends createSystem({}) {
     }
     // Always set a velocity: a held body was teleported with zero velocity, so
     // Havok has put it to sleep and re-enabling gravity alone does not wake it.
+    if (rec.toyId) {
+      if (this.v.length() > 0.3) bus.emit('toy:shot', { toyId: rec.toyId });
+      bus.emit('toy:released', { toyId: rec.toyId });
+    }
     if (this.v.lengthSq() < 1e-4) this.v.set(0, -0.01, 0);
     if (!rec.entity.hasComponent(PhysicsManipulation))
       rec.entity.addComponent(PhysicsManipulation, { linearVelocity: [this.v.x, this.v.y, this.v.z] });
@@ -449,7 +462,7 @@ export class ObjectSystem extends createSystem({}) {
   private nearest(p: number[]): Live | null {
     let best: Live | null = null, bestD = Infinity;
     for (const r of this.live) {
-      if (r.side || r === this.pointerHeld) continue;
+      if (r.side || r === this.pointerHeld || r.locked) continue;
       const d = Math.hypot(p[0] - r.mesh.position.x, p[1] - r.mesh.position.y, p[2] - r.mesh.position.z) - r.radius;
       if (d < GRAB_MARGIN && d < bestD) {
         bestD = d;
@@ -471,6 +484,7 @@ export class ObjectSystem extends createSystem({}) {
     const hits = this.ray.intersectObjects(this.live.map((r) => r.view), true);
     if (!hits.length) return;
     let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hits[0].object))!;
+    if (rec.locked) return;
     const touched = Math.max(0, rec.parts.findIndex((lp) => lp.view === hits[0].object));
     if (rec.pinned) rec = this.setPinned(rec, false);
     rec.focusPart = touched;
@@ -525,6 +539,7 @@ export class ObjectSystem extends createSystem({}) {
    */
   private onContact(m: ContactMessage): void {
     const a = this.byHandle.get(m.a), b = this.byHandle.get(m.b);
+    if (a?.toyId && b?.toyId) bus.emit('toy:contact', { a: a.toyId, b: b.toyId });
     if (a) this.feel(a, b ?? null, m);
     if (b && this.live.includes(b)) this.feel(b, a && this.live.includes(a) ? a : null, m);
   }
@@ -663,6 +678,100 @@ export class ObjectSystem extends createSystem({}) {
     return saved;
   }
 
+  // ---------------- Play Kit pieces (toys) ----------------
+
+  private byToy(id: string): Live | undefined {
+    return this.live.find((r) => r.toyId === id);
+  }
+
+  /** A Play Kit piece from saved parts (a kit item) at a world pose; false when the table is full. */
+  spawnToy(toyId: string, parts: SavedCreation['parts'], pos: number[], quat: number[], pinned: boolean): boolean {
+    if (this.live.filter((r) => r.kind === 'toy').length >= MAX_TOYS) return false;
+    const specs: PartSpec[] = parts.map((sp) => ({
+      label: sp.label, mat: getMaterial(sp.materialId), mesh: sp.mesh, shards: sp.shards, collider: sp.collider, frame: sp.frame, color: sp.color,
+    }));
+    const rec = this.spawnBody(specs, pos, quat, { mode: 'free', kind: 'toy', pinned, velocity: pinned ? undefined : [0, -0.01, 0] });
+    rec.toyId = toyId;
+    return true;
+  }
+
+  toyIds(): string[] {
+    return this.live.filter((r) => r.toyId).map((r) => r.toyId!);
+  }
+
+  removeToy(id: string): void {
+    const rec = this.byToy(id);
+    if (rec) this.dispose(rec);
+  }
+
+  /** Where a piece is and how it moves (world). */
+  toyState(id: string, out: { p: Vector3; q: Quaternion }): { speed: number; held: boolean; top: number; halfH: number; pinned: boolean } | null {
+    const rec = this.byToy(id);
+    if (!rec) return null;
+    out.p.copy(rec.mesh.position);
+    out.q.copy(rec.mesh.quaternion);
+    const v = rec.entity.getVectorView(PhysicsBody, '_linearVelocity');
+    const held = rec.side !== null || this.pointerHeld === rec;
+    return { speed: rec.pinned || held ? 0 : Math.hypot(v[0], v[1], v[2]), held, top: rec.mesh.position.y + rec.halfH, halfH: rec.halfH, pinned: rec.pinned };
+  }
+
+  setToyPinned(id: string, pinned: boolean): void {
+    const rec = this.byToy(id);
+    if (rec && rec.pinned !== pinned) this.setPinned(rec, pinned);
+  }
+
+  setToyLocked(id: string, locked: boolean): void {
+    const rec = this.byToy(id);
+    if (rec) rec.locked = locked;
+  }
+
+  /** Put a piece somewhere at once (respawn / reset): a fresh body, still. */
+  placeToy(id: string, pos: number[], quat: number[], pinned: boolean): void {
+    const rec = this.byToy(id);
+    if (!rec) return;
+    if (rec.side || this.pointerHeld === rec) this.release(rec);
+    if (this.pointerHeld === rec) this.pointerHeld = null;
+    const specs = rec.parts.map((x) => this.specOf(x));
+    const n = this.spawnBody(specs, pos, quat, { mode: 'free', kind: 'toy', pinned, velocity: pinned ? undefined : [0, -0.01, 0] });
+    n.toyId = rec.toyId;
+    n.locked = rec.locked;
+    this.dispose(rec);
+  }
+
+  private tipLast: Record<Handedness, Vector3 | null> = { left: null, right: null };
+  private tipVel = new Vector3();
+  private flickAt = new Map<string, number>();
+
+  /** XR: a fast fingertip that hits a loose Play Kit piece flicks it. */
+  private flick(dt: number, now: number): void {
+    for (const side of ['left', 'right'] as const) {
+      const h = input.hands[side];
+      if (!h.tracked || input.claims[side] || dt <= 0) {
+        this.tipLast[side] = null;
+        continue;
+      }
+      const fresh = this.tipLast[side] === null;
+      const last = this.tipLast[side] ?? (this.tipLast[side] = new Vector3());
+      this.tipVel.set(h.indexTip[0] - last.x, h.indexTip[1] - last.y, h.indexTip[2] - last.z).divideScalar(dt);
+      last.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]);
+      if (fresh) continue;
+      const speed = this.tipVel.length();
+      if (speed < FLICK_MIN) continue;
+      for (const r of this.live) {
+        if (!r.toyId || r.pinned || r.locked || r.side || now - (this.flickAt.get(r.toyId) ?? 0) < FLICK_COOLDOWN_MS) continue;
+        if (r.mesh.position.distanceTo(last) > r.radius + 0.01) continue;
+        this.tipVel.multiplyScalar(Math.min(1, FLICK_MAX / speed));
+        this.tipVel.y = Math.max(0, this.tipVel.y * 0.3); // a flick slides it, it does not launch it
+        if (!r.entity.hasComponent(PhysicsManipulation))
+          r.entity.addComponent(PhysicsManipulation, { linearVelocity: [this.tipVel.x, this.tipVel.y, this.tipVel.z] });
+        this.flickAt.set(r.toyId, now);
+        r.lastInteract = now;
+        bus.emit('toy:shot', { toyId: r.toyId });
+        uiSounds.tick();
+      }
+    }
+  }
+
   /** Make a live creation the one the player is working on (as if just touched). */
   focusOn(id: string): void {
     const rec = this.byCreation(id);
@@ -785,6 +894,8 @@ export class ObjectSystem extends createSystem({}) {
     // worker / impact tracking then confuse the two bodies (seen as a body that
     // sleeps mid-air, sinks through the table and reports no impacts).
     const n = this.spawnBody(specs, pos, quat, { creation: c, mode, velocity: pinned ? undefined : o.velocity, pinned, kind: rec.kind });
+    n.toyId = rec.toyId;
+    n.locked = rec.locked;
     this.dispose(rec);
     n.anchor.copy(anchor);
     n.offset.copy(offset);
@@ -966,7 +1077,7 @@ export class ObjectSystem extends createSystem({}) {
     const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
     if (!hit || hit.distance > 3) return;
     let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hit.object));
-    if (!rec) return;
+    if (!rec || rec.locked) return;
     if (rec.pinned) rec = this.setPinned(rec, false);
     rec.focusPart = Math.max(0, rec.parts.findIndex((lp) => lp.view === hit.object));
     rec.rayDist = hit.distance;
@@ -1130,6 +1241,8 @@ export class ObjectSystem extends createSystem({}) {
       }
     }
 
+    if (xr) this.flick(dt, now);
+
     if (this.contacts.length) {
       this.byHandle.clear();
       for (const r of this.live) this.byHandle.set(r.entity.getValue(PhysicsBody, '_engineBody') as number, r);
@@ -1250,7 +1363,11 @@ export class ObjectSystem extends createSystem({}) {
         if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
         n.normalize();
         const denom = this.ray.ray.direction.dot(n);
-        const tHit = Math.abs(denom) > 1e-4 ? this.v3.copy(this.pointerPlane).sub(this.ray.ray.origin).dot(n) / denom : this.pointerDepth;
+        let tHit = Math.abs(denom) > 1e-4 ? this.v3.copy(this.pointerPlane).sub(this.ray.ray.origin).dot(n) / denom : this.pointerDepth;
+        // Play Kit pieces slide over the table instead (a flat plane at grab height):
+        // moving the mouse up sends them away, so a quick drag throws them across the table
+        const dy = this.ray.ray.direction.y;
+        if (rec.toyId && dy < -0.05) tHit = (this.pointerPlane.y - this.ray.ray.origin.y) / dy;
         this.v.copy(this.ray.ray.direction).multiplyScalar(Math.max(0.1, Math.min(1.5, tHit))).add(this.ray.ray.origin).add(rec.offset);
         this.v.y = Math.min(this.v.y + this.pointerLift, 1.6);
         // never below the surface

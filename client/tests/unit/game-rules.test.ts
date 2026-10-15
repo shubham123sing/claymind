@@ -67,10 +67,12 @@ describe('rule engine', () => {
   });
 
   it('Flick-and-pocket: a coin entering a pocket scores and is respawned; players alternate', () => {
-    const e = new RuleEngine(templateById('flick-and-pocket')!);
+    const g = templateById('flick-and-pocket')!;
+    const e = new RuleEngine(g);
+    const pocket = g.zones[1].center, start = g.layout.find((l) => l.role === 'coin')!.at;
     const coin = (x: number, z: number, held = false) => [piece('coin:0', [x, 0.015, z], { held }), piece('striker:0', [0, 0.015, 0], {})];
-    e.tick(0.1, obs(coin(0, -0.12)));
-    const cmds = e.tick(0.1, obs(coin(0.14, -0.26), { shots: ['striker:0'] }));
+    e.tick(0.1, obs(coin(start[0], start[2])));
+    const cmds = e.tick(0.1, obs(coin(pocket[0], pocket[2]), { shots: ['striker:0'] }));
     expect(e.state.scores[0]).toBe(1);
     expect(cmds).toContainEqual({ type: 'respawn', key: 'coin:0' });
     for (let i = 0; i < 8; i++) e.tick(0.1, obs(coin(0.25, -0.18)));

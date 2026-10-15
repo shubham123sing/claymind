@@ -37,7 +37,7 @@ describe('Play Kit items', () => {
     huge.role = 'piece';
     const kd = suggestRoleMap(templateById('knock-down')!, [ball, board, huge]);
     expect(kd.ball).toBe('kit_ball');
-    expect(kd.block).toBe('kit_ball'); // a piece fits "block" too (3rd tag), the size is right
+    expect(kd.block).toBeNull(); // a ball is a "piece" but cannot stack like a block: built-in blocks
     const fp = suggestRoleMap(templateById('flick-and-pocket')!, [ball, board, huge]);
     expect(fp.board).toBe('kit_board');
     const mr = suggestRoleMap(templateById('marble-run')!, [huge]);

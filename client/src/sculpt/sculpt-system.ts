@@ -149,7 +149,8 @@ export class SculptSystem extends createSystem({}) {
       { id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) },
       { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
       { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
-      { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:spawn', {}) },
+      { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
+      { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
       { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
       { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
@@ -179,6 +180,15 @@ export class SculptSystem extends createSystem({}) {
         },
       },
     ];
+  }
+
+  /** While a Play Kit Set or game is on the table: the clay is hidden and does not react. */
+  suspended = false;
+
+  setSuspended(on: boolean): void {
+    this.suspended = on;
+    this.view.root.visible = !on;
+    this.view.ground.visible = !on;
   }
 
   /** Undo: a just-deleted creation first (5 s offer), else the last sculpt action. */
@@ -317,13 +327,13 @@ export class SculptSystem extends createSystem({}) {
       const h = this.hands[side];
       if (h.pinchStarted && !input.claims[side]) this.pinchOnClay[side] = this.ctx.nearClay(h.pinchPoint, 0.015);
     }
-    const transforming = xr && this.updateTwoHand();
+    const transforming = xr && !this.suspended && this.updateTwoHand();
 
     this.strokesThisFrame = 0;
     let speed = 0;
     for (const side of SIDES) {
       const h = this.hands[side];
-      const usable = h.tracked && h.stableFrames > 3 && !input.claims[side] && !transforming && !this.baking;
+      const usable = h.tracked && h.stableFrames > 3 && !input.claims[side] && !transforming && !this.baking && !this.suspended;
       if (!usable) {
         this.toolState[side].mode = 'idle';
         this.view.setCursor(side === 'left' ? 0 : 1, false);
@@ -568,7 +578,7 @@ export class SculptSystem extends createSystem({}) {
     if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
     if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
     if (kb.getKeyDown('KeyP')) bus.emit(devKgView ? 'mastery:toggle' : 'object:pin', {});
-    if (kb.getKeyDown('KeyO')) bus.emit('playkit:spawn', {});
+    if (kb.getKeyDown('KeyO')) bus.emit('playkit:toggle', {});
     if (kb.getKeyDown('KeyL')) bus.emit('library:toggle', {});
     if (kb.getKeyDown('KeyS') && !ctrl) bus.emit('settings:toggle', {});
     if (kb.getKeyDown('KeyH')) {

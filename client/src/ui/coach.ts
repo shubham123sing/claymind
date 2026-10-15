@@ -139,8 +139,19 @@ export class CoachSystem extends createSystem({}) {
 
   private drawnForXr = false;
 
+  /** Hidden while a Play Kit game or Set is on the table (the clay is away); back after. */
+  private awayForPlay = false;
+
   update(): void {
     const m = this.panel.mesh;
+    const away = this.world.getSystem(SculptSystem)!.suspended;
+    if (away && m.visible) {
+      m.visible = false;
+      this.awayForPlay = true;
+    } else if (!away && this.awayForPlay) {
+      m.visible = true;
+      this.awayForPlay = false;
+    }
     if (!m.visible) return;
     // above the clay, facing the viewer
     const eye = this.world.camera.getWorldPosition(this.v);

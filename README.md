@@ -33,6 +33,13 @@ Open the public link in **Quest Browser**, press **Start in mixed reality**, and
 - Pinned creations still come back to their spot after a reload (kept separately from the Library).
 - Stored in this browser only (IndexedDB); no account, no upload.
 
+## Play Kit (your own toys, Sets and table games; fully offline)
+- **Add to Play Kit** (menu, or "+ Add current" in the Play Kit panel) puts the current creation in your toy box with a role guessed from its shape (board, piece, launcher, target, obstacle, container, other) and its measured size and mass. One creation can be in the Library and the Play Kit.
+- **Play Kit** (menu or `O`) has three tabs. **Kit**: Place a toy on the table, Rename, change Role, Duplicate, Remove (Undo), Download kit / Import. **Sets**: "Save table as a Set" (positions relative to the table, which pieces are fixed, the game), Open, Rename, Delete (Undo). **Games**: Knock-down, Flick-and-pocket, Target throw, Tower balance, Marble run. Pick one, tap a part to choose which of your toys plays it (built-in shapes fill the rest), Play.
+- While a Set or game is on the table the clay steps aside. The game panel shows the score and has **Edit / Play** (Edit pins every piece where you put it; Play lets physics run, boards, ramps and cups stay fixed), **Pause**, **Reset** (back exactly to the start), **Rules**, **Save Set** and **End** (the clay comes back).
+- Hands: pinch to pick up and throw, flick a piece with a fast fingertip, push, stack. Mouse: drag a piece over the table and let go to throw it.
+- Games are **Game Specs** (versioned JSON: roles, layout, zones, turns and rules made only of fixed triggers and actions) run by a deterministic rule engine; no code is ever run from a spec. Kit files are `.claymind.json` (format `claymind-kit`, up to 50 MB) and import through the same Import button.
+
 ## Download format (for game developers)
 **Download** asks the licence, *Keep my rights* or *Anyone may use this (CC0)*, which is written into the GLB's `asset.copyright`, then the file:
 - **`<name>.glb`**: binary glTF 2.0 for Unity, Unreal, Godot, Blender and three.js.

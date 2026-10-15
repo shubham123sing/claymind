@@ -10,6 +10,8 @@ import { LIBRARY_SCHEMA, SavedCreation } from '../storage/library.js';
 export const PROJECT_FORMAT = 'claymind-project';
 export const PROJECT_VERSION = 1;
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+/** A Play Kit file holds many toys (each with its breakage pieces): a larger limit. */
+export const MAX_KIT_BYTES = 50 * 1024 * 1024;
 
 type Typed = Float32Array | Uint8Array | Uint16Array | Uint32Array | Int32Array;
 const TYPES: Record<string, new (b: ArrayBuffer) => Typed> = { Float32Array, Uint8Array, Uint16Array, Uint32Array, Int32Array };
@@ -47,8 +49,8 @@ const isNum = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
 const isVec = (x: unknown, n: number) => Array.isArray(x) && x.length === n && x.every(isNum);
 
 /** Parse a ClayMind file (size limit, typed arrays back); throws ImportError. */
-export function decodeJson(text: string): unknown {
-  if (text.length > MAX_IMPORT_BYTES) throw new ImportError('File too large (over 10 MB)');
+export function decodeJson(text: string, maxBytes = MAX_IMPORT_BYTES): unknown {
+  if (text.length > maxBytes) throw new ImportError(`File too large (over ${Math.round(maxBytes / 1048576)} MB)`);
   try {
     return JSON.parse(text, (_k, v) => {
       if (v && typeof v === 'object' && typeof v.$typed === 'string' && typeof v.b64 === 'string') {

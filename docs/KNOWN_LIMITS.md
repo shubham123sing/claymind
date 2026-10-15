@@ -216,3 +216,12 @@ Other findings:
 - Not present: a physics on/off switch (Update 2 Step 1 adds Edit / Play).
 - Frame time in the emulator (desktop browser pane, 19 objects incl. Play Kit, 91k triangles, 178 draw calls): about 54 fps, median 16.7 ms (60 Hz display), p95 43 ms. Not a Quest number.
 
+## Update 2, Step 1: Play Kit (2026-10-15)
+- Verified offline in the browser and the XR emulator: Add to Play Kit (3 creations, roles guessed: piece, piece, obstacle), Place, Save Set, End, reopen the Set, Edit / Play, Pause (pieces hang until Resume), Reset (all pieces back within 0.3 mm; a missing piece is rebuilt), kit download and import (3 toys and 1 Set back as new copies), all five games set up with every piece resting on the table, Knock-down won with mouse throws (6/6) and played with emulated hand throws (2 blocks down), Flick-and-pocket with fingertip flicks (turns alternate) and a pocketed coin scoring and going to the tray. No request left localhost.
+- Fixed on the way: balls thrown hard fell through the 3-4 cm table colliders (no continuous collision detection): table colliders are now 25 cm deep under the top; the play area is centred on the table's usable depth and every layout fits a 50 cm deep table; mouse drags of Play Kit pieces slide over the table so they can be thrown; toys much bigger than a role's slot, or the wrong shape (a ball as a stacking block), are not suggested for it.
+- Emulated hands move slowly in the browser pane (about 30 fps): throws and flicks there are weaker than real ones. Throw strength, flick feel and reach must be checked on a Quest.
+- A held object trails the hand slightly, so a throw leaves at a little less than hand speed.
+- Pause stops all physics (also any creation on the table); holding a piece during a pause moves it without physics until Resume.
+- Kit files carry each toy's breakage pieces: about 2 MB per toy (limit 50 MB).
+- Rename in the headset is not available (no keyboard): names default to "Toy N" / "Set N"; rename in a browser.
+

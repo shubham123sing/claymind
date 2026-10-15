@@ -74,6 +74,13 @@ export type AppEvents = {
   'scene:clear': Record<string, never>;
   /** Menu: delete the current creation (asks to confirm first). */
   'creation:delete': Record<string, never>;
+  /** Play Kit pieces: thrown or flicked, let go of by a hand, two pieces touched. */
+  'toy:shot': { toyId: string };
+  'toy:released': { toyId: string };
+  'toy:contact': { a: string; b: string };
+  /** Open / close the Play Kit panel, or add the current creation to the kit. */
+  'playkit:toggle': Record<string, never>;
+  'playkit:add': Record<string, never>;
   /** Browser tool menu shown or hidden with its round button. */
   'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;

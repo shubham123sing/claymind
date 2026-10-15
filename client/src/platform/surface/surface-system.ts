@@ -26,6 +26,12 @@ export interface WorkSurface {
 }
 
 export const VIRTUAL_TABLE = { centerX: 0, centerZ: -0.42, width: 0.8, depth: 0.5, thickness: 0.03, topY: 0.72 };
+/**
+ * Table colliders reach this far below the top (m). A thrown ball moves up to
+ * ~8 cm per physics step and there is no continuous collision detection, so a
+ * thin top could be skipped; nothing ever rests under a table.
+ */
+const TABLE_COLLIDER_DEPTH = 0.25;
 
 export const surface: WorkSurface = {
   topY: VIRTUAL_TABLE.topY,
@@ -100,13 +106,18 @@ export class SurfaceSystem extends createSystem({
     tableMesh.position.set(t.centerX, t.topY - t.thickness / 2, t.centerZ);
     tableMesh.receiveShadow = true;
     this.virtualTable = this.world.createTransformEntity(tableMesh);
-    this.virtualTable.addComponent(PhysicsShape, {
+    // the collider is a separate, deeper slab (see TABLE_COLLIDER_DEPTH) under the same top
+    const slab = new Mesh(new BoxGeometry(t.width, TABLE_COLLIDER_DEPTH, t.depth), new MeshStandardMaterial({ visible: false }));
+    slab.position.set(t.centerX, t.topY - TABLE_COLLIDER_DEPTH / 2, t.centerZ);
+    this.virtualTableCollider = this.world.createTransformEntity(slab);
+    this.virtualTableCollider.addComponent(PhysicsShape, {
       // hull, not Box: IWSDK Box colliders round their edges by ~1.4 cm (objects slid off early);
       // friction combines by MIN and restitution by MAX in Havok, so the object's own material decides
       shape: PhysicsShapeType.ConvexHull, friction: 1, restitution: 0,
     });
-    this.virtualTable.addComponent(PhysicsBody, { state: PhysicsState.Static });
+    this.virtualTableCollider.addComponent(PhysicsBody, { state: PhysicsState.Static });
   }
+  private virtualTableCollider: Entity | null = null;
 
   init(): void {
     this.createVirtualTable();
@@ -166,6 +177,8 @@ export class SurfaceSystem extends createSystem({
       Object.assign(surface, best, { real: true });
       this.virtualTable?.dispose();
       this.virtualTable = null;
+      this.virtualTableCollider?.dispose();
+      this.virtualTableCollider = null;
     } else {
       const t = VIRTUAL_TABLE;
       Object.assign(surface, {
@@ -198,7 +211,7 @@ export class SurfaceSystem extends createSystem({
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
     }
-    const w = maxX - minX, d = maxZ - minZ, th = 0.04;
+    const w = maxX - minX, d = maxZ - minZ, th = isTable ? TABLE_COLLIDER_DEPTH : 0.1;
     const mesh = new Mesh(new BoxGeometry(w, th, d), new MeshStandardMaterial({ visible: false }));
     const local = new Vector3((minX + maxX) / 2, -th / 2, (minZ + maxZ) / 2).applyQuaternion(this.tmpQuat);
     mesh.position.copy(this.tmpPos).add(local);

@@ -1,5 +1,7 @@
 /**
- * The five built-in games (Game Specs). Each works with built-in shapes alone,
+ * The five built-in games (Game Specs). Layouts stay within ±22 cm front to back
+ * and ±30 cm side to side, so they fit a small (50 cm deep) table.
+ * Each works with built-in shapes alone,
  * and any role can be played by the player's own kit items instead.
  * Frame: metres, origin at the play area's centre on the table, +z toward the
  * player, +x to their right; `at` is where a piece's bottom centre goes.
@@ -10,7 +12,7 @@ const row = (role: string, n: number, z: number, gap: number, y = 0): Placement[
   Array.from({ length: n }, (_, i) => ({ role, at: [(i - (n - 1) / 2) * gap, y, z] as Vec3 }));
 
 function knockDown(): GameSpec {
-  const z = -0.28, w = 0.045;
+  const z = -0.18, w = 0.045;
   const tower: Placement[] = [...row('block', 3, z, w), ...row('block', 2, z, w, 0.04), ...row('block', 1, z, w, 0.08)];
   return {
     specVersion: SPEC_VERSION, id: 'knock-down', name: 'Knock-down',
@@ -20,7 +22,7 @@ function knockDown(): GameSpec {
       { id: 'block', label: 'Blocks', count: 6, tags: ['obstacle', 'target', 'piece'], fallback: 'block', material: 'wood' },
       { id: 'ball', label: 'Balls', count: 3, tags: ['piece', 'launcher'], fallback: 'ball', material: 'steel' },
     ],
-    layout: [...tower, ...row('ball', 3, 0.04, 0.06)],
+    layout: [...tower, ...row('ball', 3, 0.14, 0.06)],
     zones: [],
     players: 1, shotsPerTurn: 3, maxTurns: 1, timerSec: 0, allowedActions: ['throw', 'flick'],
     rules: [
@@ -32,7 +34,7 @@ function knockDown(): GameSpec {
 }
 
 function flickAndPocket(): GameSpec {
-  const bz = -0.12, inner = 0.14;
+  const bz = -0.04, inner = 0.14;
   const pockets = ([[-1, -1], [1, -1], [-1, 1], [1, 1]] as const).map(([sx, sz], i) => ({
     id: `pocket${i + 1}`, shape: 'cylinder' as const, center: [sx * inner, 0.02, bz + sz * inner] as Vec3, size: [0.028, 0.05, 0] as Vec3,
   }));
@@ -64,7 +66,7 @@ function flickAndPocket(): GameSpec {
 }
 
 function targetThrow(): GameSpec {
-  const cups: [number, number, number][] = [[-0.13, -0.2, 1], [0, -0.32, 3], [0.13, -0.2, 1]];
+  const cups: [number, number, number][] = [[-0.13, -0.08, 1], [0, -0.19, 3], [0.13, -0.08, 1]];
   return {
     specVersion: SPEC_VERSION, id: 'target-throw', name: 'Target throw',
     summary: 'Throw balls into the cups. The far cup is worth more.',
@@ -73,7 +75,7 @@ function targetThrow(): GameSpec {
       { id: 'cup', label: 'Cups', count: 3, tags: ['container', 'target'], fallback: 'cup', material: 'plastic', pinned: true },
       { id: 'ball', label: 'Balls', count: 5, tags: ['piece'], fallback: 'ball', material: 'rubber' },
     ],
-    layout: [...cups.map(([x, z]) => ({ role: 'cup', at: [x, 0, z] as Vec3 })), ...row('ball', 5, 0.05, 0.05)],
+    layout: [...cups.map(([x, z]) => ({ role: 'cup', at: [x, 0, z] as Vec3 })), ...row('ball', 5, 0.14, 0.05)],
     zones: cups.map(([x, z], i) => ({ id: `cup${i + 1}`, shape: 'cylinder' as const, center: [x, 0.03, z] as Vec3, size: [0.03, 0.06, 0] as Vec3 })),
     players: 1, shotsPerTurn: 5, maxTurns: 1, timerSec: 0, allowedActions: ['throw', 'drop'],
     rules: cups.map(([, , pts], i) => ({ when: { type: 'enters_zone', zone: `cup${i + 1}`, role: 'ball' }, do: [{ type: 'add_score', points: pts, counter: 'in' }] }) as Rule),
@@ -87,8 +89,8 @@ function towerBalance(): GameSpec {
     summary: 'Stack blocks on the square as high as you can without a fall.',
     howToPlay: ['Pinch a block and place it on the square.', 'Stack them up: 4 blocks high wins.', 'If a block falls off the square, the tower is lost.'],
     roles: [{ id: 'block', label: 'Blocks', count: 8, tags: ['piece', 'obstacle'], fallback: 'block', material: 'wood' }],
-    layout: row('block', 8, 0.08, 0.045),
-    zones: [{ id: 'tower', shape: 'box', center: [0, 0.15, -0.16], size: [0.14, 0.3, 0.14] }],
+    layout: row('block', 8, 0.14, 0.045),
+    zones: [{ id: 'tower', shape: 'box', center: [0, 0.15, -0.1], size: [0.14, 0.3, 0.14] }],
     players: 1, shotsPerTurn: 0, maxTurns: 0, timerSec: 0, allowedActions: ['place', 'drop'],
     rules: [
       { when: { type: 'enters_zone', zone: 'tower', role: 'block' }, do: [{ type: 'add_score', points: 1, counter: 'stacked' }] },
@@ -108,8 +110,8 @@ function marbleRun(): GameSpec {
       { id: 'ramp', label: 'Ramp', count: 1, tags: ['launcher', 'obstacle', 'board'], fallback: 'ramp', material: 'wood', pinned: true },
       { id: 'marble', label: 'Marbles', count: 3, tags: ['piece'], fallback: 'marble', material: 'steel' },
     ],
-    layout: [{ role: 'ramp', at: [0, 0, -0.14] }, ...row('marble', 3, 0.06, 0.04).map((p) => ({ ...p, at: [p.at[0] + 0.2, 0, p.at[2]] as Vec3 }))],
-    zones: [{ id: 'finish', shape: 'box', center: [0, 0.025, 0.07], size: [0.14, 0.05, 0.08] }],
+    layout: [{ role: 'ramp', at: [0, 0, -0.08] }, ...row('marble', 3, 0.14, 0.04).map((p) => ({ ...p, at: [p.at[0] + 0.2, 0, p.at[2]] as Vec3 }))],
+    zones: [{ id: 'finish', shape: 'box', center: [0, 0.025, 0.12], size: [0.16, 0.05, 0.08] }],
     players: 1, shotsPerTurn: 0, maxTurns: 0, timerSec: 0, allowedActions: ['drop', 'place'],
     rules: [
       { when: { type: 'enters_zone', zone: 'finish', role: 'marble' }, do: [{ type: 'add_score', points: 1, counter: 'home' }, { type: 'show_message', text: 'Finish!' }] },
