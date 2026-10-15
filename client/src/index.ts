@@ -3,7 +3,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import { bus } from './core/event-bus.js';
 import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
-import { InputHubSystem } from './platform/input/input-system.js';
+import { input, InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
 import { AgentSystem } from './agent/agent-system.js';
 import { ExperimentSystem } from './agent/experiment-system.js';
@@ -30,7 +30,7 @@ import { PinchProbeSystem } from './spikes/pinch-probe-system.js';
 import { spike } from './spikes/spike-state.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
   if (new URLSearchParams(location.search).has('spikes')) {

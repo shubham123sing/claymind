@@ -18,6 +18,7 @@
  * spawns pebbles, dominoes and a glass target; creations are packed for the
  * Library (serialize / restore).
  */
+import { throwVelocity } from './throw.js';
 import {
   Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PerspectiveCamera, PhysicsBody, PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion,
@@ -415,7 +416,7 @@ export class ObjectSystem extends createSystem({}) {
     if (body && this.physics) this.physics.setBodyTransform(rec.entity, { position: [p.x, p.y, p.z], quaternion: this.qa as [number, number, number, number] });
     else rec.mesh.position.copy(p);
     rec.hist.push({ x: p.x, y: p.y, z: p.z, t: performance.now() });
-    if (rec.hist.length > 6) rec.hist.shift();
+    if (rec.hist.length > 16) rec.hist.shift();
   }
   private qa: number[] = [0, 0, 0, 1];
 
@@ -440,15 +441,9 @@ export class ObjectSystem extends createSystem({}) {
     rec.entity.setValue(PhysicsBody, 'gravityFactor', 1);
     rec.entity.setValue(PhysObject, 'held', 0);
     rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 120);
-    // throw velocity from the last ~80 ms of held motion
-    const h = rec.hist;
     this.v.set(0, 0, 0);
-    if (h.length >= 2) {
-      const a = h[0], b = h[h.length - 1];
-      const dt = Math.max(0.016, (b.t - a.t) / 1000);
-      this.v.set((b.x - a.x) / dt, (b.y - a.y) / dt, (b.z - a.z) / dt);
-      if (this.v.length() > MAX_THROW) this.v.setLength(MAX_THROW);
-    }
+    throwVelocity(rec.hist, this.v);
+    if (this.v.length() > MAX_THROW) this.v.setLength(MAX_THROW);
     // Always set a velocity: a held body was teleported with zero velocity, so
     // Havok has put it to sleep and re-enabling gravity alone does not wake it.
     if (rec.toyId) {

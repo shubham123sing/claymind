@@ -57,7 +57,7 @@ class GovernedGroq(Groq):
             if not gov.try_acquire(p["id"], est):
                 continue
             # a fresh client per attempt: no shared mutable model id between concurrent calls
-            model = Groq(id=p["model"], api_key=s.key(p["keyEnv"]), timeout=int(s.timeout_s), max_retries=0)
+            model = Groq(id=p["model"], api_key=s.key(p["keyEnv"]), timeout=int(s.timeout_s), max_retries=0, max_tokens=p.get("maxTokens"))
             try:
                 resp = await asyncio.wait_for(
                     model.ainvoke(messages, assistant_message, response_format=response_format, tools=tools, tool_choice=tool_choice, run_response=run_response, compress_tool_results=compress_tool_results),
@@ -65,7 +65,9 @@ class GovernedGroq(Groq):
                 )
             except ModelProviderError as e:
                 last = e
-                if e.status_code in RETRY_STATUS or e.status_code is None:
+                # a model that could not produce valid JSON this time: the next one may
+                bad_json = e.status_code == 400 and "json_validate_failed" in str(e)
+                if e.status_code in RETRY_STATUS or e.status_code is None or bad_json:
                     gov.fail(p["id"])
                     trace.add(agent=label, model=p["model"], ms=round((time.monotonic() - t0) * 1000), cached=False, ok=False, error=f"{e.status_code}")
                     continue
@@ -80,6 +82,8 @@ class GovernedGroq(Groq):
             gov.settle(p["id"], est, tin + tout)
             trace.add(agent=label, model=p["model"], tokensIn=tin, tokensOut=tout, ms=round((time.monotonic() - t0) * 1000), cached=False, ok=True)
             return resp
+        if last is None:
+            trace.add(agent=label, model="governor", ms=0, cached=False, ok=False, error="busy: no free-tier budget left this minute")
         raise ModelProviderError(message=f"All free models are busy right now ({last or 'no budget left'})", status_code=503, model_name=self.name, model_id=self.id)
 
     def invoke(self, *args, **kwargs) -> ModelResponse:  # sync path: same chain

@@ -710,6 +710,7 @@ export class PlayKitSystem extends createSystem({}) {
     const same = r.replayIdentical ? 'Replayed with the same seed: the same result.' : 'The replay came out a little different.';
     if (r.current && r.best.value === r.current.value) {
       this.hud.note = [`Yours (${r.current.label}) is already the best: ${runText(r.current.run)}.`, same];
+      bus.emit('mascot:say', { text: `Yours (${r.current.label}) is already the best.` });
       this.syncHud();
       return;
     }
@@ -1096,7 +1097,8 @@ export class PlayKitSystem extends createSystem({}) {
     if (this.hud.mesh.visible) {
       const m = this.hud.mesh;
       m.scale.setScalar(xr ? XR_TEXT_SCALE : 0.6);
-      this.toWorld(xr ? 0.24 : 0.12, xr ? 0.24 : 0.17, xr ? -0.08 : -0.05, m.position);
+      // headset: beside the play area and within easy seated reach (about 0.4 m from the shoulder)
+      this.toWorld(xr ? 0.24 : 0.12, xr ? 0.22 : 0.17, xr ? 0.04 : -0.05, m.position);
       m.lookAt(eye);
     }
   }

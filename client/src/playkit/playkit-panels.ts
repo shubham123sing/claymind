@@ -215,11 +215,11 @@ export class GameHud extends CanvasPanel {
   extra: [string, string, boolean, string?][] = [];
 
   constructor() {
-    super([900, 440], [0.27, 0.132]);
+    super([900, 500], [0.27, 0.15]);
   }
 
   protected paint(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {
-    const W2 = 900, H2 = 440;
+    const W2 = 900, H2 = 500;
     ui.panel(ctx, W2, H2);
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f4f1ec';
@@ -242,11 +242,12 @@ export class GameHud extends CanvasPanel {
       const n = this.extra.length, w2 = (W2 - 40 - (n - 1) * 8) / n;
       this.extra.forEach(([label, id, enabled, accent], i) => {
         const x = 20 + i * (w2 + 8);
-        if (enabled) add(x, H2 - 140, w2, 56, id);
-        ui.button(ctx, x, H2 - 140, w2, 56, label, { hover: this.hover === id, enabled, accent: enabled ? accent : undefined });
+        // 76 px rows: about 2.8 cm tall in the headset (fingertip targets, Step 5)
+        if (enabled) add(x, H2 - 172, w2, 76, id);
+        ui.button(ctx, x, H2 - 172, w2, 76, label, { hover: this.hover === id, enabled, accent: enabled ? accent : undefined });
       });
     }
-    const by = H2 - 76, bw = (W2 - 40 - 5 * 8) / 6;
+    const by = H2 - 88, bw = (W2 - 40 - 5 * 8) / 6;
     const items: [string, string, boolean, string?][] = [
       [this.mode === 'play' ? 'Edit' : 'Play', 'hud:mode', true, this.mode === 'edit' ? '#5fbf72' : undefined],
       [this.paused ? 'Resume' : 'Pause', 'hud:pause', this.mode === 'play'],
@@ -257,8 +258,8 @@ export class GameHud extends CanvasPanel {
     ];
     items.forEach(([label, id, enabled, accent], i) => {
       const x = 20 + i * (bw + 8);
-      if (enabled) add(x, by, bw, 56, id);
-      ui.button(ctx, x, by, bw, 56, label, { hover: this.hover === id, enabled, accent: enabled ? accent : undefined });
+      if (enabled) add(x, by, bw, 76, id);
+      ui.button(ctx, x, by, bw, 76, label, { hover: this.hover === id, enabled, accent: enabled ? accent : undefined });
     });
   }
 }

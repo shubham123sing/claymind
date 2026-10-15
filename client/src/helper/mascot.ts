@@ -219,8 +219,8 @@ export class MascotSystem extends createSystem({}) {
     const eye = this.world.camera.getWorldPosition(this.eye);
     nearestSurfacePoint(eye.x, eye.z, 0.24, this.xz);
     const fx = eye.x - this.xz[0], fz = eye.z - this.xz[1], fl = Math.hypot(fx, fz) || 1;
-    // to the player's right (left for left-handed players: their free side is the other one)
-    const side = settings.leftHanded ? -1 : 1;
+    // to the player's left, away from the game HUD and the throwing hand (right for left-handed players)
+    const side = settings.leftHanded ? 1 : -1;
     // a narrow browser window: further back and nearer the middle so it stays in view
     this.narrow = !input.xr && (this.world.camera as PerspectiveCamera).aspect < 1.4;
     const SIDE = this.narrow ? 0.24 : SIDE_XR, BACK = this.narrow ? 0.2 : 0.1;

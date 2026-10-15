@@ -101,3 +101,14 @@ describe('XrHandsProvider', () => {
     expect(hands.right.pinching).toBe(false);
   });
 });
+
+describe('hand smoothing keeps fast moves (Step 5)', () => {
+  it('a 2.7 m/s hand is followed closely after a few frames', async () => {
+    const { OneEuroFilter3 } = await import('../../src/platform/input/one-euro');
+    const { HAND_BETA } = await import('../../src/platform/input/xr-hands-provider');
+    const f = new OneEuroFilter3(1.2, HAND_BETA), out = new Float32Array(3), dt = 1 / 72;
+    let z = 0;
+    for (let i = 0; i < 12; i++) f.filter(0, 1, (z -= 2.7 * dt), dt, out);
+    expect(Math.abs(out[2] - z)).toBeLessThan(0.05); // under 5 cm behind
+  });
+});

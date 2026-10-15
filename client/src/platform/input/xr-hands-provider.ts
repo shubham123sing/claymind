@@ -12,6 +12,7 @@ import { PinchDetector } from './pinch-detector.js';
 const TIPS = ['index-finger-tip', 'middle-finger-tip', 'ring-finger-tip', 'pinky-finger-tip'] as const;
 /** A teleport larger than this between frames is treated as a tracking glitch. */
 const MAX_JUMP = 0.12;
+export const HAND_BETA = 4;
 
 interface HandFilters {
   pinch: PinchDetector;
@@ -24,8 +25,10 @@ interface HandFilters {
 function filters(): HandFilters {
   return {
     pinch: new PinchDetector(),
-    pinchF: new OneEuroFilter3(1.2, 0.03),
-    tipF: new OneEuroFilter3(1.2, 0.03),
+    // beta is per m/s: 4 keeps a still hand smooth (1.2 Hz) but lets a 2-3 m/s throw or
+    // flick through (~10 Hz); 0.03 held a throwing hand back by half (Step 5)
+    pinchF: new OneEuroFilter3(1.2, HAND_BETA),
+    tipF: new OneEuroFilter3(1.2, HAND_BETA),
     out: new Float32Array(3),
     lastTip: [0, 0, 0],
   };

@@ -31,12 +31,35 @@ BLOCKED = re.compile(r"\b(kill|murder|gun|weapon|bomb|suicide|sex|nude|porn|drug
 MAX_REPAIRS = 2
 
 
+def fit_to_schema(schema: type[BaseModel], data: Any) -> Any:
+    """Trim over-long text and lists to the schema's limits (a model that wrote too much
+    still gave a usable answer); nested models are trimmed too. Anything else is unchanged."""
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    for name, f in schema.model_fields.items():
+        if name not in out:
+            continue
+        v = out[name]
+        limit = next((m.max_length for m in f.metadata if hasattr(m, "max_length")), None)
+        inner = getattr(f.annotation, "__args__", (None,))[0] if isinstance(v, list) else f.annotation
+        if isinstance(v, list) and isinstance(inner, type) and issubclass(inner, BaseModel):
+            v = [fit_to_schema(inner, x) for x in v]
+        elif isinstance(v, dict) and isinstance(inner, type) and issubclass(inner, BaseModel):
+            v = fit_to_schema(inner, v)
+        if limit is not None and isinstance(v, (str, list)) and len(v) > limit:
+            v = (v[: limit - 1].rstrip() + "…") if isinstance(v, str) else v[:limit]
+        out[name] = v
+    return out
+
+
 class AgentDown(Exception):
     """The model chain or an agent failed: callers degrade to a built-in answer."""
 
 
 class Orchestrator:
     def __init__(self, settings, team: dict, cache: Cache, trace: Trace, passages: PassageIndex, memory: Memory):
+        self.research_busy = False
         self.s, self.team, self.cache, self.trace, self.passages, self.memory = settings, team, cache, trace, passages, memory
         self.http = httpx.AsyncClient()
 
@@ -54,8 +77,13 @@ class Orchestrator:
         finally:
             current_agent.reset(token)
         try:
-            out = schema.model_validate(raw if isinstance(raw, dict) else json.loads(raw))
+            data = raw if isinstance(raw, dict) else json.loads(raw)
+            try:
+                out = schema.model_validate(data)
+            except ValidationError:
+                out = schema.model_validate(fit_to_schema(schema, data))
         except (ValidationError, ValueError, TypeError) as e:
+            self.trace.add(agent=agent_id, model="schema", ms=0, cached=False, ok=False, error=f"wrong shape: {str(e)[:160]}")
             raise AgentDown(f"{agent_id} answered in the wrong shape") from e
         if use_cache:
             self.cache.put(key, agent_id, out.model_dump())
@@ -134,10 +162,12 @@ class Orchestrator:
                 card, path, note = RuleCard.model_validate(cached[0]), "cached", "Using rules looked up before"
             elif self.s.web and name:
                 path, note = "web", "Looking up the rules"
+                self.research_busy = False
                 card = await self.research(name, user_rules)
             if card is None and not user_rules:
                 fb = closest_template(name)
-                ans = self._template_answer(fb, "fallback", f"I couldn't find the rules for {name}: the closest built-in game is {fb['name']}")
+                why = "The free AI models are busy right now (try again in a minute)" if self.research_busy else f"I couldn't find the rules for {name}"
+                ans = self._template_answer(fb, "fallback", f"{why}: the closest built-in game is {fb['name']}")
                 return ans
         if card:
             sources = [s.model_dump() for s in card.sources]
@@ -200,7 +230,7 @@ class Orchestrator:
     async def research(self, game: str, partial_rules: str | None) -> RuleCard | None:
         t0 = time.monotonic()
         try:
-            pages = await search_pages(f"{game} rules table game", self.http)
+            pages = await search_pages(f"{game} game rules", self.http, exact=game)
         except httpx.HTTPError:
             self.trace.add(agent="researcher", model="wikipedia", ms=round((time.monotonic() - t0) * 1000), cached=False, ok=False, error="search failed")
             return None
@@ -216,7 +246,8 @@ class Orchestrator:
             return None
         try:
             card: RuleCard = await self.call("researcher", {"game": game, "player_partial_rules": partial_rules, "pages": safe}, RuleCard)  # type: ignore[assignment]
-        except AgentDown:
+        except AgentDown as e:
+            self.research_busy = "busy" in str(e)
             return None
         # sources: only pages that were really read
         urls = {p["url"]: p["title"] for p in safe}

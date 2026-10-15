@@ -24,17 +24,31 @@ def clean(text: str) -> str:
     return text.strip()[:MAX_CHARS]
 
 
-async def search_pages(query: str, client: httpx.AsyncClient, limit: int = 2) -> list[dict]:
-    """[{title, url, text}] from Wikipedia: search, then plain-text extracts."""
-    r = await client.get(WIKI, params={"action": "query", "list": "search", "srsearch": query, "srlimit": limit, "format": "json"}, headers=UA, timeout=10)
+GAMEY = re.compile(r"\b(game|games|sport|played|players?|throw|toss|board)\b", re.I)
+
+
+async def search_pages(query: str, client: httpx.AsyncClient, limit: int = 2, exact: str | None = None) -> list[dict]:
+    """[{title, url, text}] from Wikipedia: the page with that exact name first (when it is
+    about a game), then search hits, as plain-text extracts."""
+    titles: list[str] = []
+    if exact:
+        titles.append(exact)
+    r = await client.get(WIKI, params={"action": "query", "list": "search", "srsearch": query, "srlimit": limit + 1, "format": "json"}, headers=UA, timeout=10)
     r.raise_for_status()
-    titles = [h["title"] for h in r.json().get("query", {}).get("search", [])][:limit]
-    pages = []
+    titles += [h["title"] for h in r.json().get("query", {}).get("search", []) if h["title"].lower() != (exact or "").lower()]
+    pages: list[dict] = []
+    seen: set[str] = set()
     for t in titles:
+        if len(pages) >= limit:
+            break
         r2 = await client.get(WIKI, params={"action": "query", "prop": "extracts", "explaintext": 1, "exlimit": 1, "titles": t, "format": "json", "redirects": 1}, headers=UA, timeout=10)
         r2.raise_for_status()
         for p in r2.json().get("query", {}).get("pages", {}).values():
-            if p.get("extract"):
+            text = p.get("extract") or ""
+            if not text or p["title"] in seen or "may refer to" in text[:300] or (t == exact and not GAMEY.search(text[:1500])):
+                continue
+            seen.add(p["title"])
+            if text:
                 pages.append({"title": p["title"], "url": f"https://en.wikipedia.org/wiki/{p['title'].replace(' ', '_')}", "text": clean(p["extract"])})
     return pages
 
