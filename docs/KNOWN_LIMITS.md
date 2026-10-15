@@ -207,3 +207,12 @@ Other findings:
 - Vertex colours: engines that ignore `COLOR_0` by default (e.g. Unity's standard shader) show painted pieces white; unpainted pieces carry their colour in the material and look right everywhere.
 - The Library no longer adds sample items on first run. Items saved automatically by older versions stay in the Library until deleted. Pinned creations from older versions are not put back automatically (pin them again).
 - Phone AR: untouched in this update (its diagnosis and touch fix came with pull request #1, above).
+
+## Update 2, Step 0: XR environment and emulated hands (2026-10-15, branch update-2-playkit)
+- Nothing XR-related had been removed from git history: the IWSDK emulator (IWER), its `living_room` room and the scene's `IBLGradient` were only ever injected by the dev server. The live site therefore had no emulator.
+- Now `iwsdk.config.json` sets `dev.emulator.injectOnBuild: true` and `activation: "always"`: the deployed build carries the emulator (about 1.1 MB, room mesh bundled, no CDN request). It is skipped when the browser reports `OculusBrowser|Quest|Pico|Wolvic|Android|iPhone|iPad|Mobile`, so headsets and phones keep their real WebXR. A desktop PC with a real PC-VR headset in desktop Chrome would still get the emulator.
+- Hands tested in the emulator (programmatic IWER hands, seated head at 1.15 m): pinch-pull, Add, Carve, Smooth, Paint, palm-up menu pokes (8/8 in a row), Undo/Redo, Material ring, colour picker, Bring to life, pinch-grab and drop, distance grab, Pin, Add to Library, Library Use/Download, Remove from scene + Undo, Delete + Undo, one-handed menu Hide/Tools, two-hand scale. **Emulated hands are not a real Quest**: pinch reliability, reach, fatigue and tracking loss need the headset.
+- Fixed: two-hand scale/turn never started when objects stood on the table (each pinch became a distance grab); the wrist menu grew to 8 rows (35 cm, down past the table), now 5 x 5 (22 x 18 cm); floating cards covered menu buttons; the tutorial card kept the desktop wording in XR.
+- Not present: a physics on/off switch (Update 2 Step 1 adds Edit / Play).
+- Frame time in the emulator (desktop browser pane, 19 objects incl. Play Kit, 91k triangles, 178 draw calls): about 54 fps, median 16.7 ms (60 Hz display), p95 43 ms. Not a Quest number.
+

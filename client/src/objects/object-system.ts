@@ -127,6 +127,8 @@ interface Live {
 
 /** The physics carrier is never drawn (its "geometry" is the compound description). */
 const HIDDEN = new MeshBasicMaterial({ visible: false });
+/** A distance grab this new (ms) still yields to a two-hand pinch. */
+const TWO_HAND_GRACE_MS = 400;
 /** Join: pieces of two objects must be at most this far apart (m). */
 const JOIN_GAP = 0.012;
 /** Below this speed change a contact makes no sound (m/s). */
@@ -957,6 +959,8 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   /** XR: a ray from the shoulder through the pinch grabs a far object (it keeps its distance along the ray). */
+  private rayGrabAt: Record<Handedness, number> = { left: -Infinity, right: -Infinity };
+
   private rayGrab(side: Handedness, h: typeof input.hands.left): void {
     this.handRay(side, h);
     const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
@@ -1107,12 +1111,21 @@ export class ObjectSystem extends createSystem({}) {
         if (!h.tracked) continue;
         if (h.pinchStarted && !input.claims[side]) {
           let rec = this.nearest(h.pinchPoint);
+          const other = side === 'left' ? 'right' : 'left';
           if (rec) {
             if (rec.pinned) rec = this.setPinned(rec, false);
             rec.focusPart = this.nearestPart(rec, h.pinchPoint);
             rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
             this.hold(rec, 'pinch', side);
-          } else this.rayGrab(side, h);
+          } else if (input.hands[other].pinching) {
+            // both hands pinching in the air = turn / resize the clay, not a distance grab;
+            // a distance grab the other hand started a moment ago gives way to it
+            const held = this.live.find((r) => r.side === other && r.mode === 'ray');
+            if (held && now - this.rayGrabAt[other] < TWO_HAND_GRACE_MS) this.release(held);
+          } else {
+            this.rayGrab(side, h);
+            if (input.claims[side] === 'object') this.rayGrabAt[side] = now;
+          }
         }
       }
     }

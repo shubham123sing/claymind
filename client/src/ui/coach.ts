@@ -137,12 +137,19 @@ export class CoachSystem extends createSystem({}) {
     } else if (id === 'close') this.panel.mesh.visible = false;
   }
 
+  private drawnForXr = false;
+
   update(): void {
     const m = this.panel.mesh;
     if (!m.visible) return;
     // above the clay, facing the viewer
     const eye = this.world.camera.getWorldPosition(this.v);
     const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.at);
+    if (input.xr !== this.drawnForXr) {
+      // headset and browser have different wording: redraw when XR starts or ends
+      this.drawnForXr = input.xr;
+      this.panel.invalidate();
+    }
     m.scale.setScalar(input.xr ? XR_TEXT_SCALE : 0.6);
     m.position.copy(at);
     m.position.y += input.xr ? 0.2 : 0.15; // above the clay's size label

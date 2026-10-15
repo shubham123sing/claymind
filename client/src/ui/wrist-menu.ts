@@ -29,7 +29,9 @@ export interface MenuItem {
 
 const BTN = 0.036; // 3.6 cm buttons (>= 3 cm hit targets)
 const GAP = 0.008;
-const COLS = 3;
+/** Drawn after the floating cards and pickers (21-22): the menu under your fingertip is never covered. */
+const MENU_ORDER = 25;
+const COLS = 5; // 5 x 5 for the ~25 tools: about 22 cm square, fits above the palm when seated
 const OPEN_DELAY = 0.2;
 
 interface Button {
@@ -67,7 +69,7 @@ export class WristMenu {
       const mesh = new Mesh(new PlaneGeometry(BTN, BTN), new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
       const col = i % COLS, row = Math.floor(i / COLS);
       mesh.position.set((col - (COLS - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 - row) * (BTN + GAP), 0);
-      mesh.renderOrder = 20;
+      mesh.renderOrder = MENU_ORDER;
       this.panel.add(mesh);
       this.buttons.push({ item, mesh, canvas, tex, state: '', wasFront: false });
     });
@@ -86,7 +88,7 @@ export class WristMenu {
     tex.colorSpace = SRGBColorSpace;
     const mesh = new Mesh(new PlaneGeometry(BTN, BTN), new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
     mesh.position.set(-(COLS - 1) / 2 * (BTN + GAP), ((rows - 1) / 2 + 1) * (BTN + GAP) + GAP, 0); // above the top-left button
-    mesh.renderOrder = 20;
+    mesh.renderOrder = MENU_ORDER;
     mesh.visible = false;
     this.panel.add(mesh);
     this.toggle = { item: toggleItem, mesh, canvas, tex, state: '', wasFront: false };
