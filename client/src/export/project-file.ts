@@ -26,8 +26,9 @@ function fromB64(b64: string): ArrayBuffer {
   return out.buffer;
 }
 
-export function projectToJson(item: SavedCreation): string {
-  return JSON.stringify({ format: PROJECT_FORMAT, version: PROJECT_VERSION, item }, (_k, v) => {
+/** JSON with typed arrays as base64 (ClayMind files). */
+export function encodeJson(data: unknown): string {
+  return JSON.stringify(data, (_k, v) => {
     if (ArrayBuffer.isView(v) && !(v instanceof DataView)) {
       const t = v as Typed;
       return { $typed: t.constructor.name, b64: toB64(new Uint8Array(t.buffer, t.byteOffset, t.byteLength)) };
@@ -36,17 +37,20 @@ export function projectToJson(item: SavedCreation): string {
   });
 }
 
+export function projectToJson(item: SavedCreation): string {
+  return encodeJson({ format: PROJECT_FORMAT, version: PROJECT_VERSION, item });
+}
+
 export class ImportError extends Error {}
 
 const isNum = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
 const isVec = (x: unknown, n: number) => Array.isArray(x) && x.length === n && x.every(isNum);
 
-/** Parse and check a project file; throws ImportError with a player-readable reason. */
-export function projectFromJson(text: string): SavedCreation {
+/** Parse a ClayMind file (size limit, typed arrays back); throws ImportError. */
+export function decodeJson(text: string): unknown {
   if (text.length > MAX_IMPORT_BYTES) throw new ImportError('File too large (over 10 MB)');
-  let data: unknown;
   try {
-    data = JSON.parse(text, (_k, v) => {
+    return JSON.parse(text, (_k, v) => {
       if (v && typeof v === 'object' && typeof v.$typed === 'string' && typeof v.b64 === 'string') {
         const T = TYPES[v.$typed];
         if (!T) throw new ImportError('Unknown data in the file');
@@ -57,10 +61,19 @@ export function projectFromJson(text: string): SavedCreation {
   } catch (e) {
     throw e instanceof ImportError ? e : new ImportError('Not a ClayMind project file');
   }
-  const d = data as { format?: unknown; version?: unknown; item?: SavedCreation };
+}
+
+/** Parse and check a project file; throws ImportError with a player-readable reason. */
+export function projectFromJson(text: string): SavedCreation {
+  const d = decodeJson(text) as { format?: unknown; version?: unknown; item?: SavedCreation };
   if (d?.format !== PROJECT_FORMAT) throw new ImportError('Not a ClayMind project file');
   if (d.version !== PROJECT_VERSION) throw new ImportError('Made by a newer ClayMind');
-  const s = d.item;
+  return checkSaved(d.item);
+}
+
+/** Check one saved creation from a file (shape, sizes, numbers); returns it cleaned. */
+export function checkSaved(item: unknown): SavedCreation {
+  const s = item as SavedCreation;
   if (!s || s.schemaVersion !== LIBRARY_SCHEMA || typeof s.id !== 'string') throw new ImportError('Damaged project file');
   if (!s.creation || typeof s.creation.name !== 'string' || !Array.isArray(s.creation.parts)) throw new ImportError('Damaged project file');
   if (!Array.isArray(s.parts) || s.parts.length < 1 || s.parts.length > 8) throw new ImportError('Damaged project file');
