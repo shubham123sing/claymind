@@ -225,3 +225,12 @@ Other findings:
 - Kit files carry each toy's breakage pieces: about 2 MB per toy (limit 50 MB).
 - Rename in the headset is not available (no keyboard): names default to "Toy N" / "Set N"; rename in a browser.
 
+## Update 2, Step 2: agent backend (2026-10-15)
+- Verified live with Groq: "carrom" with unknown rules went Wikipedia (2 pages) -> Researcher -> Designer -> Referee in 12.7 s and became Flick-and-pocket with an honest list of what cannot be done and what the kit lacks; three sets of player rules (bowling, cups, marble run) were applied in 2-4 s each; the Coach wrote a 9-step mug guide. A real 429 (tokens per minute) fell through to the next model without an error.
+- **Free models cannot write a whole Game Spec reliably** (two live attempts broke basic fields). The Designer therefore adapts a built-in template (players, turns, pieces, win target, time) by default; full specs are the exception and must pass the Referee, else the closest built-in game is used and the player is told.
+- Free-tier budgets are small (about 8000 tokens per minute per model): a web lookup plus a design uses most of a minute's budget; busy minutes fall through to slower or smaller models.
+- The Referee checks rules and reachability on the server; the physics dry run of a new game is not done yet (it needs the client's physics: Step 3b).
+- Web: Wikipedia only (no other search source was needed or verified); pages flagged by the prompt-guard model are dropped. Some games have no Wikipedia page: the Helper then offers the closest built-in game.
+- First start downloads the 65 MB embedding model; without it the passage index falls back to keyword search.
+- The backend is not deployed publicly yet; the public game does not call it. The Groq key pasted in chat on 2026-10-15 should be rotated after the competition.
+

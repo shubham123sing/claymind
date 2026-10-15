@@ -40,6 +40,23 @@ Open the public link in **Quest Browser**, press **Start in mixed reality**, and
 - Hands: pinch to pick up and throw, flick a piece with a fast fingertip, push, stack. Mouse: drag a piece over the table and let go to throw it.
 - Games are **Game Specs** (versioned JSON: roles, layout, zones, turns and rules made only of fixed triggers and actions) run by a deterministic rule engine; no code is ever run from a spec. Kit files are `.claymind.json` (format `claymind-kit`, up to 50 MB) and import through the same Import button.
 
+## Agents (optional, Update 2): architecture and how to run
+Everything above works with no AI and no network. The agent backend is an extra layer; when it is off the app says so in one line and the built-in games keep working.
+
+- **Client** (`client/`): sculpting, Library, Play Kit, the five built-in games (Game Specs run by the deterministic rule engine).
+- **Backend** (`server/agents/`, Python): FastAPI + Agno AgentOS in one process.
+  - **Helper** (home agent) understands what the player asks (teach me to build X, what can I do with my kit, make a game, I'm stuck) and routes it.
+  - **Researcher** reads Wikipedia only when the player does not know the rules or names an unknown game, and writes a Rule Card in its own words with sources.
+  - **Game Designer** turns the player's rules or a Rule Card into a game: a built-in template plus changes (players, turns, pieces, win target, time), or a full Game Spec when no template fits.
+  - **Coach** writes step-by-step build guides; "check my work" is code.
+  - **Kit Analyst** and **Referee** are code: shape reports from geometry; spec validation (a port of the client's) plus "can it be won" checks, a repair loop (at most 2), else the closest built-in game.
+  - The Helper reaches the other agents through **A2A** on the same server (`A2A_MODE=local`, shared token) or directly (`A2A_MODE=inproc`).
+  - **Knowledge:** a per-player Kit knowledge graph (items, roles, games, rules, sources, sets) for GraphRAG-style local and global queries, a passage index (local `bge-small` embeddings plus keyword search), and per-player memory with **Delete my data** (`DELETE /v1/memory`).
+  - **Models:** free Groq models through a quota governor (per-minute and per-day budgets, circuit breaker, fall-through to the next model), strict JSON checked with Pydantic, answers cached by input hash, 12 s timeouts. Prompt-injection screening of web text with Groq's prompt-guard model.
+  - **Security:** keys only in `server/.env` (git-ignored), CORS locked to the game's origins, per-IP rate limit, AgentOS and A2A routes need the internal token, Agno telemetry off.
+- **Run the backend:** `cd server`, `python -m venv .venv`, `.venv/Scripts/python -m pip install -r requirements-agents.txt`, put `GROQ_API_KEY=...` in `server/.env`, then `.venv/Scripts/python -m agents.run` (http://127.0.0.1:8790; HTTPS with `CLAYMIND_TLS_CERT` / `CLAYMIND_TLS_KEY`). Tests: `.venv/Scripts/python -m pytest tests/agents` (no network, fake model).
+- **Run without it:** just the client; nothing changes.
+
 ## Download format (for game developers)
 **Download** asks the licence, *Keep my rights* or *Anyone may use this (CC0)*, which is written into the GLB's `asset.copyright`, then the file:
 - **`<name>.glb`**: binary glTF 2.0 for Unity, Unreal, Godot, Blender and three.js.

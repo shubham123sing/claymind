@@ -1,0 +1,151 @@
+"""ClayMind agent backend: FastAPI + Agno AgentOS in one process.
+
+Public (the game): /v1/* only, CORS locked to the app origins, rate-limited per IP.
+Internal: AgentOS routes and the A2A routes (/a2a/agents/{id}/v1/message:send) need the
+shared token (header X-A2A-Token); the Helper uses them to reach the other agents.
+
+Run (dev):  cd server && .venv/Scripts/python -m agents.run
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections import defaultdict, deque
+
+from agno.os import AgentOS
+from fastapi import FastAPI, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from .analyst import analyse
+from .config import Settings, load_settings
+from .flows import Orchestrator
+from .governed_model import install
+from .governor import Governor
+from .knowledge import Memory, PassageIndex
+from .schemas import CheckIn, KitDescriptor
+from .store import Cache, Trace
+from .team import build_team
+
+
+class HelperIn(BaseModel):
+    message: str = Field(min_length=1, max_length=600)
+    context: dict = Field(default_factory=dict)
+    kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
+
+
+class GameIn(BaseModel):
+    name: str | None = Field(default=None, max_length=60)
+    rules: str | None = Field(default=None, max_length=600)
+    rulesUnknown: bool = False
+    surprise: bool = False
+    kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
+
+
+class KitIn(BaseModel):
+    kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
+    sets: list[dict] = Field(default_factory=list, max_length=50)
+
+
+class GoalIn(BaseModel):
+    goal: str = Field(min_length=1, max_length=80)
+
+
+class _QuietAgno(logging.Filter):
+    # parse_response=False (raw JSON for A2A) makes Agno log a misleading warning on every run
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "Run response content is not a string" not in record.getMessage()
+
+
+logging.getLogger("agno").addFilter(_QuietAgno())
+
+
+def player(x_player_id: str | None) -> str:
+    """A random id the client keeps in localStorage (no account, nothing personal)."""
+    return (x_player_id or "local")[:40]
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    s = settings or load_settings()
+    governor, trace = Governor(s.chain), Trace()
+    install(governor, trace, s)
+    cache = Cache(s.data_dir / "cache.sqlite")
+    passages = PassageIndex(s.data_dir / "passages.sqlite", s.data_dir.parent / "models", use_model=not s.fake_llm)
+    memory = Memory(s.data_dir / "memory")
+    team = build_team()
+    orch = Orchestrator(s, team, cache, trace, passages, memory)
+
+    base = FastAPI(title="ClayMind agents", version="1")
+    hits: dict[str, deque] = defaultdict(deque)
+
+    @base.middleware("http")
+    async def guard(request: Request, call_next):
+        path = request.url.path
+        if path.startswith("/v1/"):
+            # rate limit per IP (sliding minute)
+            ip = request.client.host if request.client else "?"
+            now, q = time.monotonic(), hits[ip]
+            while q and now - q[0] > 60:
+                q.popleft()
+            if len(q) >= s.rate_per_min:
+                return JSONResponse({"error": "Too many requests, wait a moment"}, status_code=429)
+            q.append(now)
+            return await call_next(request)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        # everything else (AgentOS, A2A) is internal
+        if request.headers.get("x-a2a-token") != s.a2a_token:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return await call_next(request)
+
+    @base.get("/v1/health")
+    async def health():
+        return {"ok": True, "a2aMode": s.a2a_mode, "web": s.web, "models": orch.models(), "fake": s.fake_llm}
+
+    @base.post("/v1/helper")
+    async def helper(body: HelperIn, x_player_id: str | None = Header(default=None)):
+        return await orch.helper(body.message, body.context, body.kit, player(x_player_id))
+
+    @base.post("/v1/game")
+    async def game(body: GameIn, x_player_id: str | None = Header(default=None)):
+        out = await orch.make_game(body.name, body.rules, body.rulesUnknown, body.surprise, body.kit, player(x_player_id))
+        if body.rules:
+            memory.update(player(x_player_id), rulesChanged=[{"game": body.name, "rules": body.rules[:200]}])
+        return out
+
+    @base.post("/v1/kit/analyse")
+    async def kit_analyse(body: KitIn):
+        return {"items": [analyse(k).model_dump() for k in body.kit]}
+
+    @base.post("/v1/kit/memory")
+    async def kit_memory(body: KitIn, x_player_id: str | None = Header(default=None)):
+        memory.update(player(x_player_id), kit=[k.model_dump() for k in body.kit], sets=body.sets)
+        return {"ok": True}
+
+    @base.post("/v1/coach/guide")
+    async def coach_guide(body: GoalIn):
+        return await orch.coach_guide(body.goal)
+
+    @base.post("/v1/coach/check")
+    async def coach_check(body: CheckIn):
+        return orch.coach_check(body).model_dump()
+
+    @base.get("/v1/trace")
+    async def get_trace():
+        return {"calls": trace.list()}
+
+    @base.delete("/v1/memory")
+    async def delete_memory(x_player_id: str | None = Header(default=None)):
+        return {"deleted": memory.delete(player(x_player_id))}
+
+    agent_os = AgentOS(
+        id="claymind", name="ClayMind agents", agents=list(team.values()), a2a_interface=True,
+        base_app=base, telemetry=False, on_route_conflict="preserve_base_app",
+    )
+    app = agent_os.get_app()
+    # CORS last = outermost: only the game's own pages may call /v1
+    app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type", "X-Player-ID"])
+    app.state.settings, app.state.orch, app.state.trace = s, orch, trace
+    return app

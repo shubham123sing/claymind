@@ -1,0 +1,1091 @@
+{
+ "specVersion": 1,
+ "vocabulary": {
+  "roleTags": [
+   "board",
+   "piece",
+   "launcher",
+   "target",
+   "obstacle",
+   "container",
+   "other"
+  ],
+  "triggers": [
+   "enters_zone",
+   "leaves_zone",
+   "falls_below_height",
+   "comes_to_rest",
+   "hit_by",
+   "stack_height_reached",
+   "timer",
+   "count_reached"
+  ],
+  "actions": [
+   "add_score",
+   "end_turn",
+   "respawn",
+   "reset_piece",
+   "show_message",
+   "win",
+   "lose"
+  ],
+  "handActions": [
+   "flick",
+   "throw",
+   "push",
+   "drop",
+   "place"
+  ],
+  "fallbackShapes": [
+   "block",
+   "ball",
+   "marble",
+   "disc",
+   "coin",
+   "board",
+   "cup",
+   "ramp"
+  ],
+  "fallbackSizeM": {
+   "block": 0.04,
+   "ball": 0.036,
+   "marble": 0.02,
+   "disc": 0.036,
+   "coin": 0.028,
+   "board": 0.36,
+   "cup": 0.07,
+   "ramp": 0.32
+  }
+ },
+ "templates": [
+  {
+   "specVersion": 1,
+   "id": "knock-down",
+   "name": "Knock-down",
+   "summary": "Throw balls at the block tower. Every block that falls scores.",
+   "howToPlay": [
+    "Pinch a ball and throw it at the tower.",
+    "Each block that falls scores 1.",
+    "You have 3 balls.",
+    "Knock all 6 down to win."
+   ],
+   "roles": [
+    {
+     "id": "block",
+     "label": "Blocks",
+     "count": 6,
+     "tags": [
+      "obstacle",
+      "target",
+      "piece"
+     ],
+     "fallback": "block",
+     "material": "wood"
+    },
+    {
+     "id": "ball",
+     "label": "Balls",
+     "count": 3,
+     "tags": [
+      "piece",
+      "launcher"
+     ],
+     "fallback": "ball",
+     "material": "steel"
+    }
+   ],
+   "layout": [
+    {
+     "role": "block",
+     "at": [
+      -0.045,
+      0,
+      -0.18
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0,
+      0,
+      -0.18
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.045,
+      0,
+      -0.18
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      -0.0225,
+      0.04,
+      -0.18
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.0225,
+      0.04,
+      -0.18
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0,
+      0.08,
+      -0.18
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      -0.06,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      0,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      0.06,
+      0,
+      0.14
+     ]
+    }
+   ],
+   "zones": [],
+   "players": 1,
+   "shotsPerTurn": 3,
+   "maxTurns": 1,
+   "timerSec": 0,
+   "allowedActions": [
+    "throw",
+    "flick"
+   ],
+   "rules": [
+    {
+     "when": {
+      "type": "falls_below_height",
+      "role": "block",
+      "height": 0.02,
+      "relative": true
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "down"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "count_reached",
+      "counter": "down",
+      "value": 6
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "All down!"
+      },
+      {
+       "type": "win"
+      }
+     ]
+    }
+   ],
+   "counter": {
+    "id": "down",
+    "label": "Blocks down",
+    "target": 6
+   }
+  },
+  {
+   "specVersion": 1,
+   "id": "flick-and-pocket",
+   "name": "Flick-and-pocket",
+   "summary": "Flick the striker to push coins into the corner pockets.",
+   "howToPlay": [
+    "Flick the striker with your fingertip.",
+    "A coin in a corner pocket: +1.",
+    "The striker in a pocket: -1.",
+    "Two players, one flick each turn."
+   ],
+   "roles": [
+    {
+     "id": "board",
+     "label": "Board",
+     "count": 1,
+     "tags": [
+      "board"
+     ],
+     "fallback": "board",
+     "material": "plastic",
+     "pinned": true
+    },
+    {
+     "id": "coin",
+     "label": "Coins",
+     "count": 6,
+     "tags": [
+      "piece"
+     ],
+     "fallback": "coin",
+     "material": "plastic",
+     "respawnAt": [
+      0.25,
+      0,
+      -0.1
+     ]
+    },
+    {
+     "id": "striker",
+     "label": "Striker",
+     "count": 1,
+     "tags": [
+      "launcher",
+      "piece"
+     ],
+     "fallback": "disc",
+     "material": "plastic"
+    }
+   ],
+   "layout": [
+    {
+     "role": "board",
+     "at": [
+      0,
+      0,
+      -0.04
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      0.04,
+      0.012,
+      -0.04
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      0.020000000000000004,
+      0.012,
+      -0.005358983848622455
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      -0.01999999999999999,
+      0.012,
+      -0.005358983848622455
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      -0.04,
+      0.012,
+      -0.039999999999999994
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      -0.020000000000000018,
+      0.012,
+      -0.07464101615137754
+     ]
+    },
+    {
+     "role": "coin",
+     "at": [
+      0.020000000000000004,
+      0.012,
+      -0.07464101615137755
+     ]
+    },
+    {
+     "role": "striker",
+     "at": [
+      0,
+      0.012,
+      0.07999999999999999
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "id": "pocket1",
+     "shape": "cylinder",
+     "center": [
+      -0.14,
+      0.02,
+      -0.18000000000000002
+     ],
+     "size": [
+      0.028,
+      0.05,
+      0
+     ]
+    },
+    {
+     "id": "pocket2",
+     "shape": "cylinder",
+     "center": [
+      0.14,
+      0.02,
+      -0.18000000000000002
+     ],
+     "size": [
+      0.028,
+      0.05,
+      0
+     ]
+    },
+    {
+     "id": "pocket3",
+     "shape": "cylinder",
+     "center": [
+      -0.14,
+      0.02,
+      0.1
+     ],
+     "size": [
+      0.028,
+      0.05,
+      0
+     ]
+    },
+    {
+     "id": "pocket4",
+     "shape": "cylinder",
+     "center": [
+      0.14,
+      0.02,
+      0.1
+     ],
+     "size": [
+      0.028,
+      0.05,
+      0
+     ]
+    }
+   ],
+   "players": 2,
+   "shotsPerTurn": 1,
+   "maxTurns": 8,
+   "timerSec": 0,
+   "allowedActions": [
+    "flick",
+    "push"
+   ],
+   "rules": [
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket1",
+      "role": "coin"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "pocketed"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket1",
+      "role": "striker"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": -1
+      },
+      {
+       "type": "show_message",
+       "text": "Striker in: -1"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket2",
+      "role": "coin"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "pocketed"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket2",
+      "role": "striker"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": -1
+      },
+      {
+       "type": "show_message",
+       "text": "Striker in: -1"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket3",
+      "role": "coin"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "pocketed"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket3",
+      "role": "striker"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": -1
+      },
+      {
+       "type": "show_message",
+       "text": "Striker in: -1"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket4",
+      "role": "coin"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "pocketed"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "pocket4",
+      "role": "striker"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": -1
+      },
+      {
+       "type": "show_message",
+       "text": "Striker in: -1"
+      },
+      {
+       "type": "respawn"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "count_reached",
+      "counter": "pocketed",
+      "value": 6
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "Every coin is in!"
+      },
+      {
+       "type": "win"
+      }
+     ]
+    }
+   ],
+   "counter": {
+    "id": "pocketed",
+    "label": "Coins in",
+    "target": 6
+   }
+  },
+  {
+   "specVersion": 1,
+   "id": "target-throw",
+   "name": "Target throw",
+   "summary": "Throw balls into the cups. The far cup is worth more.",
+   "howToPlay": [
+    "Pinch a ball and toss it into a cup.",
+    "Near cups: 1 point. Far cup: 3 points.",
+    "You have 5 balls."
+   ],
+   "roles": [
+    {
+     "id": "cup",
+     "label": "Cups",
+     "count": 3,
+     "tags": [
+      "container",
+      "target"
+     ],
+     "fallback": "cup",
+     "material": "plastic",
+     "pinned": true
+    },
+    {
+     "id": "ball",
+     "label": "Balls",
+     "count": 5,
+     "tags": [
+      "piece"
+     ],
+     "fallback": "ball",
+     "material": "rubber"
+    }
+   ],
+   "layout": [
+    {
+     "role": "cup",
+     "at": [
+      -0.13,
+      0,
+      -0.08
+     ]
+    },
+    {
+     "role": "cup",
+     "at": [
+      0,
+      0,
+      -0.19
+     ]
+    },
+    {
+     "role": "cup",
+     "at": [
+      0.13,
+      0,
+      -0.08
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      -0.1,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      -0.05,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      0,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      0.05,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "ball",
+     "at": [
+      0.1,
+      0,
+      0.14
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "id": "cup1",
+     "shape": "cylinder",
+     "center": [
+      -0.13,
+      0.03,
+      -0.08
+     ],
+     "size": [
+      0.03,
+      0.06,
+      0
+     ]
+    },
+    {
+     "id": "cup2",
+     "shape": "cylinder",
+     "center": [
+      0,
+      0.03,
+      -0.19
+     ],
+     "size": [
+      0.03,
+      0.06,
+      0
+     ]
+    },
+    {
+     "id": "cup3",
+     "shape": "cylinder",
+     "center": [
+      0.13,
+      0.03,
+      -0.08
+     ],
+     "size": [
+      0.03,
+      0.06,
+      0
+     ]
+    }
+   ],
+   "players": 1,
+   "shotsPerTurn": 5,
+   "maxTurns": 1,
+   "timerSec": 0,
+   "allowedActions": [
+    "throw",
+    "drop"
+   ],
+   "rules": [
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "cup1",
+      "role": "ball"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "in"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "cup2",
+      "role": "ball"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 3,
+       "counter": "in"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "cup3",
+      "role": "ball"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "in"
+      }
+     ]
+    }
+   ],
+   "counter": {
+    "id": "in",
+    "label": "Balls in"
+   }
+  },
+  {
+   "specVersion": 1,
+   "id": "tower-balance",
+   "name": "Tower balance",
+   "summary": "Stack blocks on the square as high as you can without a fall.",
+   "howToPlay": [
+    "Pinch a block and place it on the square.",
+    "Stack them up: 4 blocks high wins.",
+    "If a block falls off the square, the tower is lost."
+   ],
+   "roles": [
+    {
+     "id": "block",
+     "label": "Blocks",
+     "count": 8,
+     "tags": [
+      "piece",
+      "obstacle"
+     ],
+     "fallback": "block",
+     "material": "wood"
+    }
+   ],
+   "layout": [
+    {
+     "role": "block",
+     "at": [
+      -0.1575,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      -0.11249999999999999,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      -0.0675,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      -0.0225,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.0225,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.0675,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.11249999999999999,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "block",
+     "at": [
+      0.1575,
+      0,
+      0.14
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "id": "tower",
+     "shape": "box",
+     "center": [
+      0,
+      0.15,
+      -0.1
+     ],
+     "size": [
+      0.14,
+      0.3,
+      0.14
+     ]
+    }
+   ],
+   "players": 1,
+   "shotsPerTurn": 0,
+   "maxTurns": 0,
+   "timerSec": 0,
+   "allowedActions": [
+    "place",
+    "drop"
+   ],
+   "rules": [
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "tower",
+      "role": "block"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "stacked"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "stack_height_reached",
+      "role": "block",
+      "height": 0.155
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "Four high: you win!"
+      },
+      {
+       "type": "win"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "leaves_zone",
+      "zone": "tower",
+      "role": "block"
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "A block fell: tower lost"
+      },
+      {
+       "type": "lose"
+      }
+     ]
+    }
+   ],
+   "counter": {
+    "id": "stacked",
+    "label": "Blocks placed"
+   }
+  },
+  {
+   "specVersion": 1,
+   "id": "marble-run",
+   "name": "Marble run",
+   "summary": "Drop marbles at the top of the ramp; get all 3 to the finish in time.",
+   "howToPlay": [
+    "Pinch a marble and drop it at the top of the ramp.",
+    "It must roll into the finish zone.",
+    "Get all 3 home within 60 seconds."
+   ],
+   "roles": [
+    {
+     "id": "ramp",
+     "label": "Ramp",
+     "count": 1,
+     "tags": [
+      "launcher",
+      "obstacle",
+      "board"
+     ],
+     "fallback": "ramp",
+     "material": "wood",
+     "pinned": true
+    },
+    {
+     "id": "marble",
+     "label": "Marbles",
+     "count": 3,
+     "tags": [
+      "piece"
+     ],
+     "fallback": "marble",
+     "material": "steel"
+    }
+   ],
+   "layout": [
+    {
+     "role": "ramp",
+     "at": [
+      0,
+      0,
+      -0.08
+     ]
+    },
+    {
+     "role": "marble",
+     "at": [
+      0.16,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "marble",
+     "at": [
+      0.2,
+      0,
+      0.14
+     ]
+    },
+    {
+     "role": "marble",
+     "at": [
+      0.24000000000000002,
+      0,
+      0.14
+     ]
+    }
+   ],
+   "zones": [
+    {
+     "id": "finish",
+     "shape": "box",
+     "center": [
+      0,
+      0.025,
+      0.12
+     ],
+     "size": [
+      0.16,
+      0.05,
+      0.08
+     ]
+    }
+   ],
+   "players": 1,
+   "shotsPerTurn": 0,
+   "maxTurns": 0,
+   "timerSec": 0,
+   "allowedActions": [
+    "drop",
+    "place"
+   ],
+   "rules": [
+    {
+     "when": {
+      "type": "enters_zone",
+      "zone": "finish",
+      "role": "marble"
+     },
+     "do": [
+      {
+       "type": "add_score",
+       "points": 1,
+       "counter": "home"
+      },
+      {
+       "type": "show_message",
+       "text": "Finish!"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "count_reached",
+      "counter": "home",
+      "value": 3
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "All three home!"
+      },
+      {
+       "type": "win"
+      }
+     ]
+    },
+    {
+     "when": {
+      "type": "timer",
+      "seconds": 60
+     },
+     "do": [
+      {
+       "type": "show_message",
+       "text": "Out of time"
+      },
+      {
+       "type": "lose"
+      }
+     ]
+    }
+   ],
+   "counter": {
+    "id": "home",
+    "label": "Marbles home",
+    "target": 3
+   }
+  }
+ ]
+}
