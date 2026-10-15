@@ -241,3 +241,27 @@ Other findings:
 - The status line says "Choosing a game..." for typed names until the answer arrives; the preview then says which path really ran.
 - The public game (GitHub Pages) has no backend: Ask AI shows offline there until the backend is hosted and `?agents=` points to it.
 
+## Update 2, Step 3b: Simulate it for me (2026-10-15)
+- Verified in the browser: a full Knock-down demo (3 throws, 4 down, live scoreboard); Flick-and-pocket (10 flicks, turns alternate; in the headset run a whole game ended inside 20 s); Will it work? passes a straight tower and fails a leaning one, the proposed fix ("Line the pieces up") passes the re-test and Undo restores the lean; What-if with light foam balls offered steel (4 down instead of 0), Apply worked, every replay was identical. All with no network.
+- The visible demo stops at 20 s by design: a long game (e.g. 8 turns of Flick-and-pocket with slow coins) can be cut short there; the headless runs play to the end (60 s cap).
+- The demo player is simple code, not an expert: it aims at the easiest pocket or the middle of what still stands, with a little seeded randomness; it never tries trick shots.
+- What-if varies one thing (material = mass, or the built-in ramp's angle) in steps; it does not change sizes of the player's own toys.
+- Will it work? judges "stays where it is for 3 s" (moved more than 1.5 cm or tipped more than 15 degrees fails). The suggested fixes are lining a stack up or a heavier bottom piece, each proven in simulation; other problems get "no simple fix found".
+- Slow motion slows the whole physics clock (also anything else on the table) while the demo runs.
+
+## Update 2, Step 4: the helper character (2026-10-15)
+- Built from the clay mesher at start-up (about 5k triangles); no external 3D assets. If it cannot be built the bubble works alone.
+- Voice output uses the browser's built-in speech synthesis (voices differ by device; off by default). No voice input by design.
+- It sits on the table's left (right for left-handed players), clear of the play area; on a very small real table it is clamped onto the table's edge.
+
+## Update 2, Step 5: XR emulator run (2026-10-15)
+- Full results and the awkward-hands list: `docs/STEP5_XR_TEST.md`. Fixed from it: throws lost half their speed (hand smoothing beta, release velocity), HUD buttons too small and too far for seated play, and four Researcher problems (wrong pages, over-long answers thrown away, Qwen's output limit, the "busy" message).
+- The new hand smoothing (beta 4) must be checked on a Quest for jitter on a still hand while sculpting.
+
+## Update 2 in short: what to expect
+- **Free LLMs are not fully reliable.** Free-tier budgets are small (about 8000 tokens per minute per model, Qwen 1000 output tokens per minute); a busy minute makes requests slower or ends in the closest built-in game, and the player is told which. Full Game Specs written by a model often fail the Referee, so most games are a built-in template plus changes.
+- **Web search** is Wikipedia only: the game's own page first (when it is about a game), then search hits. Games without a page get the closest built-in game. Text from the web is screened for prompt injection and summarised, never followed.
+- **Cold starts:** the backend's first start downloads a 65 MB embedding model; the first web lookup for a game takes 10-17 s, later ones come from the cache in under a second.
+- **Emulator vs real Quest:** every hand result in this update comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate on a Quest are still to be measured (list in `docs/STEP5_XR_TEST.md`).
+- **No voice input**, by design: typing is the browser text box or the pinch keypad; the helper's voice output is optional.
+

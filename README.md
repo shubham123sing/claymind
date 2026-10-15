@@ -40,10 +40,16 @@ Open the public link in **Quest Browser**, press **Start in mixed reality**, and
 - Hands: pinch to pick up and throw, flick a piece with a fast fingertip, push, stack. Mouse: drag a piece over the table and let go to throw it.
 - Games are **Game Specs** (versioned JSON: roles, layout, zones, turns and rules made only of fixed triggers and actions) run by a deterministic rule engine; no code is ever run from a spec. Kit files are `.claymind.json` (format `claymind-kit`, up to 50 MB) and import through the same Import button.
 
+### Simulate it for me (no AI, offline)
+The game HUD's second row: **Show me how** (a translucent ghost hand labelled "Demo" plays a few turns on the real table with the real physics and the live score, using only the game's hand actions at human speeds; **Pause**, **Slow**, **Replay** with the same seed, **My turn** to take over from exactly that state, **Stop**; at most 20 s), **Will it work?** (a headless physics test of what is on the table, a 3-second visible run, one to three sentences and a fix proven in simulation, applied with Undo) and **What if…** (the same game with 5-6 versions of one thing: a piece's material, so its mass, or the ramp's angle; the best is offered only if it really does better, and the replay with the same seed is checked identical). Headless runs use the game's own Havok runtime and bodies in a Web Worker (`client/src/sim/`), at most 60 s, with a Stop button.
+
+### The helper character
+A small clay blob made at start-up with ClayMind's own clay (the sculpting grid and mesher; no external 3D assets) sits at the side of the table. Tweens only: it breathes, nods when it talks, points at the clay or the table, hops when a step is done or a game is won, and wobbles while the AI or a simulation works. It speaks in a large bubble; reading aloud is optional (**Settings -> Helper voice**, off by default) and **Settings -> Helper character** hides it. There is no voice input anywhere.
+
 ## Agents (optional, Update 2): architecture and how to run
 Everything above works with no AI and no network. The agent backend is an extra layer; when it is off the app says so in one line and the built-in games keep working.
 
-- **Client** (`client/`): sculpting, Library, Play Kit, the five built-in games (Game Specs run by the deterministic rule engine).
+- **Client** (`client/`): sculpting, Library, Play Kit, the five built-in games (Game Specs run by the deterministic rule engine), the demo player and headless simulation (`src/sim/`), the helper character and the Ask AI panels (`src/helper/`).
 - **Backend** (`server/agents/`, Python): FastAPI + Agno AgentOS in one process.
   - **Helper** (home agent) understands what the player asks (teach me to build X, what can I do with my kit, make a game, I'm stuck) and routes it.
   - **Researcher** reads Wikipedia only when the player does not know the rules or names an unknown game, and writes a Rule Card in its own words with sources.
