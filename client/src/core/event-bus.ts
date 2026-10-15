@@ -78,6 +78,8 @@ export type AppEvents = {
   'toy:shot': { toyId: string };
   'toy:released': { toyId: string };
   'toy:contact': { a: string; b: string };
+  /** Open / close the Ask AI panel (optional agent backend). */
+  'helper:toggle': Record<string, never>;
   /** Open / close the Play Kit panel, or add the current creation to the kit. */
   'playkit:toggle': Record<string, never>;
   'playkit:add': Record<string, never>;

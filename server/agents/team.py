@@ -23,6 +23,9 @@ HELPER = [
     "Copy the player's own rules word for word into user_rules when they gave any. Set rules_unknown when they say they do not "
     "know how to play or ask you to teach them the rules. Set surprise when they ask to be surprised.",
     "reply: 1-3 short, plain sentences. Never claim something happened that did not.",
+    "For stuck, look at the context (selected thing, last action, mode) and, when one of these would help, set fix: undo "
+    "(take back the last sculpt step), bring_to_life, open_material, open_color, reset_game (put the table game back), "
+    "end_game; otherwise none.",
     UNTRUSTED,
 ]
 

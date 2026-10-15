@@ -234,3 +234,10 @@ Other findings:
 - First start downloads the 65 MB embedding model; without it the passage index falls back to keyword search.
 - The backend is not deployed publicly yet; the public game does not call it. The Groq key pasted in chat on 2026-10-15 should be rotated after the competition.
 
+## Update 2, Step 3: agent features in the game (2026-10-16)
+- Verified in the browser with the live backend: Make a game -> Carrom (web: Wikipedia, 17 s) gave "Mini Carrom" with how to play, uses, missing / not possible and sources; Adjust lowered the win target 10 -> 5 and the game started with the HUD showing 0 / 5; the same request again came from the cache in 0.5 s. Teach me to build a cup: 8 steps in 6 s; Check my work on the 11 cm clay said "the step wants about 8.0 cm, take off about 3.0 cm". Help during a finished Knock-down offered "Reset the game", which reset the table. Offline: "AI helper is offline, built-in games still work." and a built-in game still started.
+- Pinch keypad: the XR flow (keypad opens, typed "Jenga", Done sends it, the backend answered Tower balance) was checked by calling the keypad's buttons; poking them with emulated fingertips could not run because the browser pane was hidden (no frames). Re-test the keypad by hand in the emulator and on a Quest.
+- A web lookup can read an unhelpful second page (for Carrom: "List of sports"); it is listed as a source because it was read.
+- The status line says "Choosing a game..." for typed names until the answer arrives; the preview then says which path really ran.
+- The public game (GitHub Pages) has no backend: Ask AI shows offline there until the backend is hosted and `?agents=` points to it.
+

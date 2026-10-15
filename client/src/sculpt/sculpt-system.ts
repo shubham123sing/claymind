@@ -151,6 +151,7 @@ export class SculptSystem extends createSystem({}) {
       { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
       { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
       { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
+      { id: 'ask', label: 'Ask AI', icon: '?', color: 0xb48cf2, onPress: () => bus.emit('helper:toggle', {}) },
       { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
       { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
@@ -192,6 +193,18 @@ export class SculptSystem extends createSystem({}) {
   }
 
   /** Undo: a just-deleted creation first (5 s offer), else the last sculpt action. */
+  /** The clay's size now (cm: width, height, depth), or null before the first mesh. */
+  claySizeCm(): [number, number, number] | null {
+    if (!this.aabb) return null;
+    const s = this.view.root.scale.x, a = this.aabb;
+    return [(a[3] - a[0]) * s * 100, (a[4] - a[1]) * s * 100, (a[5] - a[2]) * s * 100];
+  }
+
+  /** Undo for the AI helper's "fix" button (same as the menu's Undo). */
+  undoStep(): void {
+    this.undo();
+  }
+
   private undo(): void {
     if (!takeUndo()) this.client.undo();
   }

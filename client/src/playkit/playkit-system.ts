@@ -27,7 +27,7 @@ import { copySaved, fromSurfaceFrame, toSurfaceFrame, type SavedPart } from '../
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { offerUndo } from '../ui/undo-toast.js';
 import { bottomOf, fallbackParts } from './fallback-shapes.js';
-import { ROLE_TAGS, type FallbackShape, type GameSpec, type RoleSpec } from './game-spec.js';
+import { ROLE_TAGS, validateSpec, type FallbackShape, type GameSpec, type RoleSpec } from './game-spec.js';
 import {
   deleteKitItem, deleteSet, fitScore, kitToJson, loadKit, loadSets, makeKitItem, saveKitItem, saveSet, suggestRoleMap,
   KIT_SCHEMA, type KitItem, type PlaySet, type SetPiece,
@@ -285,7 +285,7 @@ export class PlayKitSystem extends createSystem({}) {
     this.syncHud();
   }
 
-  private reset(): void {
+  reset(): void {
     if (this.paused) this.setPaused(false);
     for (const p of this.pieces) {
       const pinned = this.mode === 'edit' || p.fixed;
@@ -303,7 +303,7 @@ export class PlayKitSystem extends createSystem({}) {
     this.syncHud();
   }
 
-  private end(): void {
+  end(): void {
     if (this.paused) this.setPaused(false);
     this.clearTable();
     this.mode = 'off';
@@ -321,6 +321,36 @@ export class PlayKitSystem extends createSystem({}) {
     if (role.fallback === 'disc') return '#e2733b';
     if (role.fallback === 'ball' || role.fallback === 'marble') return ['#e2733b', '#5aa9e6', '#5fbf72', '#f0b429', '#b48cf2'][i % 5];
     return null;
+  }
+
+  /** The toy box (read-only for other systems, e.g. the AI helper's kit summary). */
+  kitItems(): readonly KitItem[] {
+    return this.kit;
+  }
+
+  get playMode(): 'off' | 'edit' | 'play' {
+    return this.mode;
+  }
+
+  get gameName(): string | null {
+    return this.spec?.name ?? null;
+  }
+
+  /** Play a game from outside (the AI helper): checked first, the player's toys fill the roles they fit. */
+  playSpec(spec: GameSpec): string[] {
+    const problems = validateSpec(spec);
+    if (problems.length) return problems;
+    this.startGame(spec, suggestRoleMap(spec, this.kit));
+    return [];
+  }
+
+  /** Which toy plays each role of a game (names), for a preview. */
+  usesFor(spec: GameSpec): string[] {
+    const map = suggestRoleMap(spec, this.kit);
+    return spec.roles.map((r) => {
+      const k = map[r.id] ? this.kit.find((x) => x.id === map[r.id]) : null;
+      return `${r.label}: ${k ? `your ${k.name}` : `built-in ${r.fallback}`}`;
+    });
   }
 
   private startGame(spec: GameSpec, roleMap: Record<string, string | null>): void {

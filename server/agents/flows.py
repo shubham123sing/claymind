@@ -103,7 +103,7 @@ class Orchestrator:
             h: HelperOut = await self.call("helper", {"message": message[:600], "context": context}, HelperOut, use_cache=False)  # type: ignore[assignment]
         except AgentDown:
             return {"intent": "offline", "reply": "AI helper is offline, built-in games still work."}
-        out: dict = {"intent": h.intent, "reply": h.reply}
+        out: dict = {"intent": h.intent, "reply": h.reply, "fix": h.fix if h.intent == "stuck" else "none"}
         if h.intent == "teach" and h.object_name:
             out["guide"] = await self.coach_guide(h.object_name)
         elif h.intent == "kit_ideas":

@@ -54,6 +54,8 @@ class HelperOut(BaseModel):
     user_rules: Optional[str] = Field(default=None, description="rules the player wrote in their own words, copied", max_length=600)
     rules_unknown: bool = Field(default=False, description="the player said they do not know the rules")
     surprise: bool = Field(default=False, description="the player asked to be surprised")
+    fix: Literal["none", "undo", "bring_to_life", "open_material", "open_color", "reset_game", "end_game"] = Field(
+        default="none", description="for stuck: one safe, undoable action that would help, else none")
 
 
 # ---------- Researcher ----------
