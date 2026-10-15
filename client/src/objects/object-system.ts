@@ -44,9 +44,11 @@ import { fromSurfaceFrame, LIBRARY_SCHEMA, toSurfaceFrame } from '../storage/lib
 import { renderThumbnail } from './thumbnail.js';
 import { envFor, initEnvMap } from './env-map.js';
 import { PhysObject } from './object-components.js';
-import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
+import { blobTexture, geometryFrom, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
+import { BODY_DAMPING, compoundChild, hullOf, toBody } from '../physics/body-build.js';
 
-type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free';
+/** demo: moved by the Play Kit's demo player (ghost hand), never by the player's hands. */
+type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free' | 'demo';
 /** creation = made by the player; shard = a breakage piece (fades); prop = a Play Kit item. */
 /** toy: a Play Kit piece (no label, its own limit, driven by the Play Kit). */
 type Kind = 'creation' | 'shard' | 'prop' | 'toy';
@@ -319,7 +321,7 @@ export class ObjectSystem extends createSystem({}) {
     const q = quaternion as [number, number, number, number];
     const inputs: PartInput[] = parts.map((lp, i) => ({ id: i, materialId: lp.mat.id, positions: lp.bodyPositions }));
     const props = computePhysicalProperties(inputs, q);
-    const children = parts.map((lp, i) => compoundChild(lp, props.parts[i].volume));
+    const children = parts.map((lp, i) => compoundChild({ materialId: lp.mat.id, mesh: lp.mesh, collider: lp.collider, frame: lp.frame }, props.parts[i].volume));
     // the physics body: its "geometry" carries the compound description (never drawn)
     const carrier = new Mesh(compoundGeometry(encodeCompound(children)), HIDDEN);
     carrier.frustumCulled = false;
@@ -332,7 +334,7 @@ export class ObjectSystem extends createSystem({}) {
     // a pinned object is static: it rests where it was put
     entity.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, density: 1000, friction: parts[contact].mat.friction, restitution: parts[contact].mat.restitution });
     entity.addComponent(PhysicsBody, {
-      state: pinned ? PhysicsState.Static : PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: props.com,
+      state: pinned ? PhysicsState.Static : PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: BODY_DAMPING.angular, linearDamping: BODY_DAMPING.linear, centerOfMass: props.com,
     });
     entity.addComponent(PhysObject, {
       materialId: parts[contact].mat.id, massKg: props.mass, piece: o.piece ? 1 : 0, held: held ? 1 : 0, ignoreImpactsUntil: performance.now() + 250,
@@ -723,6 +725,50 @@ export class ObjectSystem extends createSystem({}) {
   setToyLocked(id: string, locked: boolean): void {
     const rec = this.byToy(id);
     if (rec) rec.locked = locked;
+  }
+
+  // ---------------- demo player (ghost hand) ----------------
+
+  /** The ghost hand takes a piece: it floats where demoMove puts it. */
+  demoHold(id: string): boolean {
+    const rec = this.byToy(id);
+    if (!rec || rec.side || this.pointerHeld === rec) return false;
+    if (rec.pinned) return false;
+    this.hold(rec, 'demo', null);
+    return true;
+  }
+
+  demoMove(id: string, at: Vector3): void {
+    const rec = this.byToy(id);
+    if (rec?.mode === 'demo') this.teleport(rec, at);
+  }
+
+  /** Let go with exactly this velocity (the planned throw), counted as a shot when it moves. */
+  demoRelease(id: string, v: [number, number, number]): void {
+    const rec = this.byToy(id);
+    if (!rec || rec.mode !== 'demo') return;
+    rec.mode = 'free';
+    rec.lastInteract = performance.now();
+    rec.entity.setValue(PhysicsBody, 'gravityFactor', 1);
+    rec.entity.setValue(PhysObject, 'held', 0);
+    rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 120);
+    rec.hist.length = 0;
+    const vel: [number, number, number] = Math.hypot(...v) < 0.01 ? [0, -0.01, 0] : v;
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: vel });
+    if (Math.hypot(...v) > 0.3) bus.emit('toy:shot', { toyId: id });
+    bus.emit('toy:released', { toyId: id });
+  }
+
+  /** A fingertip flick by the ghost hand: the piece slides off with velocity `v`. */
+  flickToy(id: string, v: [number, number, number]): void {
+    const rec = this.byToy(id);
+    if (!rec || rec.pinned || rec.side) return;
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: v });
+    rec.lastInteract = performance.now();
+    bus.emit('toy:shot', { toyId: id });
+    uiSounds.tick();
   }
 
   /** Put a piece somewhere at once (respawn / reset): a fresh body, still. */
@@ -1527,37 +1573,8 @@ function recolor(view: Mesh, mesh: BakedMesh, base: string): void {
   attr.needsUpdate = true;
 }
 
-/** A piece's mesh in object-local coordinates. */
-function toBody(positions: Float32Array, f: Frame): Float32Array {
-  if (f.p.every((v) => v === 0) && f.q[3] === 1) return positions;
-  const q = new Quaternion().fromArray(f.q), v = new Vector3(), out = new Float32Array(positions.length);
-  for (let i = 0; i < positions.length; i += 3) {
-    v.set(positions[i], positions[i + 1], positions[i + 2]).applyQuaternion(q);
-    out[i] = v.x + f.p[0]; out[i + 1] = v.y + f.p[1]; out[i + 2] = v.z + f.p[2];
-  }
-  return out;
-}
 
-/** One compound child per piece: its collider and material, density scaled so the body's mass is the true mass. */
-function compoundChild(lp: LivePart, trueVolume: number): CompoundChild {
-  const c = lp.collider ?? hullOf(lp.mesh.positions);
-  const data = c.kind === 'hull' ? c.points : c.boxes;
-  const volume = c.kind === 'hull' ? hullVolume(c.points) : c.volume;
-  return {
-    kind: c.kind,
-    density: (lp.mat.density * trueVolume) / Math.max(volume, trueVolume * 0.2, 1e-9),
-    friction: lp.mat.friction * matchup(lp.mat.id, SURFACE_MATERIAL.table).friction,
-    restitution: lp.mat.restitution,
-    data,
-    frame: lp.frame,
-  };
-}
 
-function hullOf(positions: Float32Array): PartCollider {
-  const n = positions.length / 3, stride = Math.max(1, Math.floor(n / 256)), pts: number[] = [];
-  for (let i = 0; i < n; i += stride) pts.push(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-  return { kind: 'hull', points: new Float32Array(pts), volume: 0 };
-}
 
 /** The physics carrier's geometry: the compound description in a position attribute (never drawn). */
 function compoundGeometry(encoded: Float32Array): BufferGeometry {

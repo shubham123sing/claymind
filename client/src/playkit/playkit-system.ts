@@ -33,6 +33,11 @@ import {
   KIT_SCHEMA, type KitItem, type PlaySet, type SetPiece,
 } from './kit-store.js';
 import { GameHud, PlayKitPanel } from './playkit-panels.js';
+import { DemoPlayer } from './demo-player.js';
+import type { Q4, SimPiece, V3 } from '../sim/headless-sim.js';
+import type { PieceView } from '../sim/planner.js';
+import { variantScene, whatIfOptions, type GameRun, type SimScene, type WhatIfOption } from '../sim/runs.js';
+import { simulate, stopSimulation } from '../sim/sim-client.js';
 import { RuleEngine, type Observation } from './rule-engine.js';
 import { TEMPLATES, templateById } from './templates.js';
 
@@ -55,6 +60,18 @@ const IDLE_CLOSE_MS = 45000;
 const MESSAGE_MS = 3000;
 /** Play-area centre: this far in from the table's near edge (m). */
 const PLAY_DEPTH = 0.24;
+/** "Simulate it for me": one seed, so every run and replay is the same. */
+const SIM_SEED = 7;
+/** "Will it work?": the visible part of the test (s). */
+const CHECK_SHOW_S = 3;
+const SLOW = 0.35;
+
+type Pose = { p: number[]; q: number[] };
+
+function runText(r: GameRun): string {
+  const what = r.message || { win: 'won', lose: 'lost', done: 'finished', unfinished: 'not finished' }[r.result];
+  return `${what} (score ${r.scores.join(' / ')}, ${r.seconds.toFixed(0)} s)`;
+}
 
 export class PlayKitSystem extends createSystem({}) {
   private panel = new PlayKitPanel();
@@ -83,6 +100,14 @@ export class PlayKitSystem extends createSystem({}) {
   private tip = new Vector3();
   private ray = new Raycaster();
   private ndc = new Vector2();
+  // "Simulate it for me" (Step 3b)
+  private demo: DemoPlayer | null = null;
+  private timeScale = 1;
+  private simJob = 0;
+  private simBusy = false;
+  private checkShow: { until: number; poses: Map<string, Pose>; mode: 'edit' | 'play' } | null = null;
+  private whatIfChoices: WhatIfOption[] = [];
+  private pendingApply: (() => void) | null = null;
 
   init(): void {
     this.panel.games = TEMPLATES;
@@ -91,6 +116,12 @@ export class PlayKitSystem extends createSystem({}) {
       m.renderOrder = order;
       (m.material as { depthTest: boolean }).depthTest = false;
       this.world.createTransformEntity(m);
+    }
+    // slow motion for the demo: the physics clock runs at timeScale
+    const physics = this.world.getSystem(PhysicsSystem);
+    if (physics) {
+      const step = physics.update.bind(physics);
+      physics.update = (delta: number) => step(delta * this.timeScale);
     }
     this.cleanupFuncs.push(
       bus.on('playkit:toggle', () => (this.panel.mesh.visible ? this.closePanel() : this.openPanel())),
@@ -286,6 +317,8 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   reset(): void {
+    this.stopDemo(false);
+    this.endCheckShow(false);
     if (this.paused) this.setPaused(false);
     for (const p of this.pieces) {
       const pinned = this.mode === 'edit' || p.fixed;
@@ -304,6 +337,10 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   end(): void {
+    this.stopDemo(false);
+    this.endCheckShow(false);
+    this.cancelSim();
+    this.closeSimNote();
     if (this.paused) this.setPaused(false);
     this.clearTable();
     this.mode = 'off';
@@ -385,7 +422,7 @@ export class PlayKitSystem extends createSystem({}) {
 
   private tickGame(dt: number): void {
     const e = this.engine;
-    if (!e || this.mode !== 'play' || this.paused || e.state.over) return;
+    if (!e || this.mode !== 'play' || this.paused || e.state.over || this.checkShow) return;
     const byToy = new Map(this.pieces.filter((p) => p.key).map((p) => [p.toyId, p]));
     const obs: Observation = { pieces: [], contacts: [], shots: [] };
     for (const p of byToy.values()) {
@@ -437,7 +474,311 @@ export class PlayKitSystem extends createSystem({}) {
     const lines = this.engine ? this.engine.scoreboard() : this.spec ? [] : [`${this.pieces.length} piece(s) on the table`];
     if (!this.spec) lines.push(this.mode === 'edit' ? 'Move pieces by hand; Play lets physics run.' : 'Throw, flick, push, stack: Reset puts it back.');
     if (lines.join() !== h.lines.join()) h.lines = lines;
+    h.extra = this.simButtons();
     h.invalidate();
+  }
+
+  // ---------- "Simulate it for me" (no AI: the real physics and rules, one seed) ----------
+
+  private simButtons(): [string, string, boolean, string?][] {
+    if (this.mode === 'off') return [];
+    if (this.simBusy) return [['Stop the test', 'sim:stop', true, '#d9534f']];
+    if (this.demo?.running) {
+      const d = this.demo;
+      return [
+        [d.paused ? 'Resume' : 'Pause', 'sim:dpause', true],
+        [this.timeScale < 1 ? 'Normal speed' : 'Slow', 'sim:slow', true],
+        ['Replay', 'sim:replay', true],
+        ['My turn', 'sim:myturn', true, '#5fbf72'],
+        ['Stop', 'sim:dstop', true, '#d9534f'],
+      ];
+    }
+    if (this.checkShow) return [['Watching the test…', 'sim:none', false]];
+    if (this.whatIfChoices.length) {
+      return [...this.whatIfChoices.map((o, i): [string, string, boolean] => [o.label, `sim:opt:${i}`, true]), ['Cancel', 'sim:close', true]];
+    }
+    if (this.pendingApply) return [['Apply', 'sim:apply', true, '#5fbf72'], ['Close', 'sim:close', true]];
+    if (this.hud.note.length) return [['Close', 'sim:close', true]];
+    return [
+      ['Show me how', 'sim:demo', !!this.spec, '#9fd0f5'],
+      ['Will it work?', 'sim:check', this.pieces.length > 0],
+      ['What if…', 'sim:whatif', !!this.spec && this.simOptions().length > 0],
+    ];
+  }
+
+  private simPress(id: string): void {
+    if (id === 'sim:demo' || id === 'sim:replay') this.startDemo();
+    else if (id === 'sim:dpause' && this.demo) {
+      this.demo.paused = !this.demo.paused;
+      this.setPaused(this.demo.paused);
+    } else if (id === 'sim:slow') {
+      this.timeScale = this.timeScale < 1 ? 1 : SLOW;
+      if (this.demo) this.demo.speed = this.timeScale;
+    } else if (id === 'sim:myturn') this.stopDemo(true);
+    else if (id === 'sim:dstop') {
+      this.stopDemo(true);
+      this.reset();
+    } else if (id === 'sim:check') void this.willItWork();
+    else if (id === 'sim:whatif') {
+      this.whatIfChoices = this.simOptions();
+      this.hud.note = ['What if… pick what to try.', 'Each version plays the same game with the same throws.'];
+    } else if (id.startsWith('sim:opt:')) void this.runWhatIf(this.whatIfChoices[Number(id.slice(8))]);
+    else if (id === 'sim:apply') {
+      const a = this.pendingApply;
+      this.closeSimNote();
+      a?.();
+    } else if (id === 'sim:close') this.closeSimNote();
+    else if (id === 'sim:stop') {
+      this.cancelSim();
+      this.hud.note = ['Test stopped.'];
+    }
+    this.syncHud();
+  }
+
+  private closeSimNote(): void {
+    this.hud.note = [];
+    this.whatIfChoices = [];
+    this.pendingApply = null;
+  }
+
+  private cancelSim(): void {
+    if (!this.simBusy) return;
+    this.simJob++;
+    this.simBusy = false;
+    stopSimulation();
+  }
+
+  /** The table as the simulator sees it, in the play-area frame. */
+  private simScene(fromStart: boolean): SimScene {
+    const pieces: SimPiece[] = [];
+    const unYaw = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -this.yaw);
+    for (const p of this.pieces) {
+      if (fromStart) {
+        this.st.p.fromArray(p.start.p);
+        this.st.q.fromArray(p.start.q);
+      } else if (!this.objects.toyState(p.toyId, this.st)) continue;
+      const q = unYaw.clone().multiply(this.st.q);
+      pieces.push({
+        key: p.key ?? p.toyId, role: p.role,
+        parts: p.parts.map((x) => ({ materialId: x.materialId, mesh: { positions: x.mesh.positions }, collider: x.collider, frame: x.frame })),
+        p: this.toLocal(this.st.p), q: q.toArray() as Q4, fixed: p.fixed,
+      });
+    }
+    const c = this.toLocal(new Vector3(surface.centerX, surface.topY, surface.centerZ));
+    return { table: { cx: c[0], cz: c[2], halfW: surface.halfW, halfD: surface.halfD, yaw: surface.yaw - this.yaw, floorY: -this.origin.y }, pieces };
+  }
+
+  private async job<T>(note: string, work: () => Promise<T>): Promise<T | null> {
+    const my = ++this.simJob;
+    this.simBusy = true;
+    this.closeSimNote();
+    this.hud.note = [note];
+    this.syncHud();
+    try {
+      const r = await work();
+      return my === this.simJob ? r : null;
+    } catch (e) {
+      if (my === this.simJob) this.hud.note = [`The test did not finish: ${(e as Error).message}`];
+      return null;
+    } finally {
+      if (my === this.simJob) this.simBusy = false;
+      this.syncHud();
+    }
+  }
+
+  private poses(): Map<string, Pose> {
+    const m = new Map<string, Pose>();
+    for (const p of this.pieces) if (this.objects.toyState(p.toyId, this.st)) m.set(p.toyId, { p: this.st.p.toArray(), q: this.st.q.toArray() });
+    return m;
+  }
+
+  private restorePoses(poses: Map<string, Pose>, pinnedAll: boolean): void {
+    for (const p of this.pieces) {
+      const at = poses.get(p.toyId);
+      if (!at) continue;
+      if (this.objects.toyState(p.toyId, this.st)) this.objects.placeToy(p.toyId, at.p, at.q, pinnedAll || p.fixed);
+      else this.objects.spawnToy(p.toyId, p.parts, at.p, at.q, pinnedAll || p.fixed);
+      this.objects.setToyLocked(p.toyId, !pinnedAll && p.fixed);
+    }
+  }
+
+  /** "Will it work?": a headless test, a short visible run of the same thing, then a proven fix if needed. */
+  private async willItWork(): Promise<void> {
+    if (this.simBusy || this.demo?.running) return;
+    const scene = this.simScene(false), spec = this.spec;
+    const res = await this.job('Testing it in a simulation…', async () => {
+      const st = await simulate.stability(scene);
+      // a game test only means something when the build holds (does the ball reach, the marble finish)
+      const run = spec && st.ok ? await simulate.game(scene, spec, SIM_SEED) : null;
+      const fix = st.ok ? null : await simulate.fix(scene);
+      return { st, run, fix };
+    });
+    if (!res) return;
+    const { st, run, fix } = res;
+    const note = [...st.sentences];
+    if (run) note.push(`A test game by the demo player: ${runText(run)}.`);
+    if (fix) note.push(`Suggested fix: ${fix.label}.`);
+    else if (!st.ok) note.push('No simple fix found: try a wider base or fewer pieces.');
+    this.hud.note = note.slice(0, 3);
+    if (fix) {
+      this.pendingApply = () => this.applyChange(fix.label, () => {
+        for (const p of this.pieces) {
+          const k = p.key ?? p.toyId, pose = fix.poses[k], mat = fix.materials[k];
+          if (mat) this.respawnPiece(p, p.parts.map((x) => ({ ...x, materialId: mat })));
+          if (pose) {
+            const w = this.toWorld(pose.p[0], pose.p[1], pose.p[2]).toArray();
+            const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), this.yaw).multiply(new Quaternion(...pose.q)).toArray();
+            this.objects.placeToy(p.toyId, w, q, this.mode === 'edit' || p.fixed);
+            p.start = { p: w, q };
+          }
+        }
+      });
+    }
+    // the visible part: let physics run for a moment, then put everything back
+    if (!st.ok) {
+      this.checkShow = { until: performance.now() + CHECK_SHOW_S * 1000, poses: this.poses(), mode: this.mode === 'play' ? 'play' : 'edit' };
+      if (this.paused) this.setPaused(false);
+      for (const p of this.pieces) {
+        this.objects.setToyPinned(p.toyId, p.fixed);
+        this.objects.setToyLocked(p.toyId, p.fixed);
+      }
+    }
+    this.syncHud();
+  }
+
+  private endCheckShow(restore: boolean): void {
+    const c = this.checkShow;
+    if (!c) return;
+    this.checkShow = null;
+    if (restore) this.restorePoses(c.poses, c.mode === 'edit');
+    this.contacts.length = 0;
+    this.shots.length = 0;
+    this.syncHud();
+  }
+
+  /** Swap a piece's parts (material, ramp angle) keeping where it is. */
+  private respawnPiece(p: Piece, parts: SavedPart[], lift = 0): void {
+    const here = this.objects.toyState(p.toyId, this.st);
+    const at = here ? this.st.p.toArray() : [...p.start.p];
+    const q = here ? this.st.q.toArray() : [...p.start.q];
+    at[1] += lift;
+    this.objects.removeToy(p.toyId);
+    this.objects.spawnToy(p.toyId, parts, at, q, this.mode === 'edit' || p.fixed);
+    this.objects.setToyLocked(p.toyId, this.mode === 'play' && p.fixed);
+    p.parts = parts;
+    p.start = { p: [p.start.p[0], p.start.p[1] + lift, p.start.p[2]], q: p.start.q };
+  }
+
+  /** Apply a suggested change, undoable. */
+  private applyChange(label: string, change: () => void): void {
+    const before = this.pieces.map((p) => ({ p, parts: p.parts, start: { p: [...p.start.p], q: [...p.start.q] } }));
+    const poses = this.poses();
+    change();
+    offerUndo(`Applied: ${label}`, () => {
+      for (const b of before) {
+        if (b.p.parts !== b.parts) {
+          this.objects.removeToy(b.p.toyId);
+          b.p.parts = b.parts;
+        }
+        b.p.start = b.start;
+      }
+      this.restorePoses(poses, this.mode === 'edit');
+      this.syncHud();
+    }, input.xr);
+    this.syncHud();
+  }
+
+  private simOptions(): WhatIfOption[] {
+    if (!this.spec) return [];
+    // a ramp's angle can only change on the built-in one
+    return whatIfOptions(this.spec).filter((o) => o.kind !== 'tilt' || this.pieces.every((p) => p.role !== o.role || !p.kitId));
+  }
+
+  /** What-if: the same game with 5-6 versions of one thing; the best is offered. */
+  private async runWhatIf(opt: WhatIfOption | undefined): Promise<void> {
+    const spec = this.spec;
+    if (!opt || !spec || this.simBusy) return;
+    const scene = this.simScene(true);
+    const r = await this.job(`Trying ${opt.values.length} versions: ${opt.label.toLowerCase()}…`, () => simulate.whatIf(scene, spec, opt, SIM_SEED));
+    if (!r) return;
+    const same = r.replayIdentical ? 'Replayed with the same seed: the same result.' : 'The replay came out a little different.';
+    if (r.current && r.best.value === r.current.value) {
+      this.hud.note = [`Yours (${r.current.label}) is already the best: ${runText(r.current.run)}.`, same];
+      this.syncHud();
+      return;
+    }
+    this.hud.note = [`Best: ${r.best.label}: ${runText(r.best.run)}.`, ...(r.current ? [`Now (${r.current.label}): ${runText(r.current.run)}.`] : []), same];
+    const best = r.best;
+    this.pendingApply = () => this.applyChange(`${opt.kind === 'tilt' ? 'ramp' : opt.role} → ${best.label}`, () => {
+      const changed = variantScene(this.simScene(true), opt, best.value);
+      for (const p of this.pieces) {
+        if (p.role !== opt.role) continue;
+        const sp = changed.pieces.find((x) => x.key === p.key);
+        if (!sp) continue;
+        const parts = opt.kind === 'material'
+          ? p.parts.map((x) => ({ ...x, materialId: String(best.value) }))
+          : fallbackParts('ramp', p.parts[0].materialId, p.parts[0].color, Number(best.value));
+        const lift = sp.p[1] - this.toLocal(new Vector3().fromArray(p.start.p))[1];
+        this.respawnPiece(p, parts, lift);
+      }
+      this.reset();
+    });
+    this.syncHud();
+  }
+
+  // ---------- the demo player (ghost hand) ----------
+
+  private startDemo(): void {
+    if (!this.spec || this.simBusy) return;
+    this.closeSimNote();
+    this.stopDemo(false);
+    this.reset();
+    if (this.mode !== 'play') this.setMode('play');
+    if (!this.demo) {
+      const self = this;
+      this.demo = new DemoPlayer({
+        views(): PieceView[] {
+          const out: PieceView[] = [];
+          for (const p of self.pieces) {
+            if (!p.key) continue;
+            const s = self.objects.toyState(p.toyId, self.st);
+            if (!s) continue;
+            out.push({ key: p.key, role: p.role!, p: self.toLocal(self.st.p), halfH: s.halfH, speed: s.speed, fixed: p.fixed, start: self.toLocal(new Vector3().fromArray(p.start.p)) });
+          }
+          return out;
+        },
+        toyIdOf: (key) => self.pieces.find((p) => p.key === key)?.toyId,
+        toWorld: (p, out) => self.toWorld(p[0], p[1], p[2], out),
+        dirToWorld: (v: V3): V3 => {
+          const c = Math.cos(self.yaw), s = Math.sin(self.yaw);
+          return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+        },
+        hold: (id) => self.objects.demoHold(id),
+        move: (id, at) => self.objects.demoMove(id, at),
+        release: (id, v) => self.objects.demoRelease(id, v),
+        flick: (id, v) => self.objects.flickToy(id, v),
+        gameOver: () => !!self.engine?.state.over,
+      }, this.spec);
+      this.world.createTransformEntity(this.demo.ghost);
+    }
+    this.demo.setSpec(this.spec);
+    this.demo.speed = this.timeScale;
+    this.demo.start(SIM_SEED);
+    this.hud.showRules = false;
+    this.syncHud();
+  }
+
+  /** "My turn": the ghost leaves; the game goes on from exactly here. */
+  private stopDemo(sync: boolean): void {
+    if (!this.demo?.running) return;
+    this.demo.stop();
+    this.demoEnded(sync);
+  }
+
+  private demoEnded(sync = true): void {
+    this.timeScale = 1;
+    if (this.paused) this.setPaused(false);
+    if (sync) this.syncHud();
   }
 
   // ---------- kit ----------
@@ -702,12 +1043,14 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   private hudPress(id: string): void {
+    if (this.demo?.running && (id === 'hud:mode' || id === 'hud:pause' || id === 'hud:save')) this.stopDemo(false);
     if (id === 'hud:mode') this.setMode(this.mode === 'play' ? 'edit' : 'play');
     else if (id === 'hud:pause') this.setPaused(!this.paused);
     else if (id === 'hud:reset') this.reset();
     else if (id === 'hud:rules') this.hud.showRules = !this.hud.showRules;
     else if (id === 'hud:save') this.saveTable();
     else if (id === 'hud:end') this.end();
+    else if (id.startsWith('sim:')) this.simPress(id);
     uiSounds.tick();
     this.syncHud();
   }
@@ -752,7 +1095,12 @@ export class PlayKitSystem extends createSystem({}) {
 
   update(delta: number): void {
     const dt = Math.min(delta, 0.1);
-    this.tickGame(dt);
+    this.tickGame(dt * this.timeScale);
+    if (this.demo?.running) {
+      this.demo.update(dt, this.world.camera.getWorldPosition(this.v2));
+      if (!this.demo.running) this.demoEnded();
+    }
+    if (this.checkShow && performance.now() > this.checkShow.until) this.endCheckShow(true);
     if (this.hud.message && !this.hud.over && performance.now() - this.messageAt > MESSAGE_MS) {
       this.hud.message = '';
       this.hud.invalidate();

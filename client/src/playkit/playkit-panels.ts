@@ -209,13 +209,17 @@ export class GameHud extends CanvasPanel {
   paused = false;
   hasGame = false;
   over = false;
+  /** "Simulate it for me" results (shown instead of the score while set) */
+  note: string[] = [];
+  /** second row: Show me how / Will it work? / What if…, or the demo controls */
+  extra: [string, string, boolean, string?][] = [];
 
   constructor() {
-    super([900, 360], [0.27, 0.108]);
+    super([900, 440], [0.27, 0.132]);
   }
 
   protected paint(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {
-    const W2 = 900, H2 = 360;
+    const W2 = 900, H2 = 440;
     ui.panel(ctx, W2, H2);
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f4f1ec';
@@ -226,12 +230,21 @@ export class GameHud extends CanvasPanel {
     ctx.fillText(this.paused ? 'PAUSED' : this.mode === 'play' ? 'PLAY' : 'EDIT: arrange the pieces', 520, 38, 360);
     ctx.fillStyle = '#f4f1ec';
     ctx.font = '500 25px system-ui, sans-serif';
-    const body = this.showRules ? this.rules : this.lines;
+    const body = this.note.length ? this.note : this.showRules ? this.rules : this.lines;
+    if (this.note.length) ctx.fillStyle = '#9fd0f5';
     body.slice(0, 4).forEach((l, i) => ctx.fillText(l, 28, 86 + i * 34, W2 - 56));
-    if (this.message) {
+    if (this.message && !this.note.length) {
       ctx.fillStyle = this.over ? '#f0b429' : '#9fd0f5';
       ctx.font = '700 28px system-ui, sans-serif';
       ctx.fillText(this.message, 28, 230, W2 - 56);
+    }
+    if (this.extra.length) {
+      const n = this.extra.length, w2 = (W2 - 40 - (n - 1) * 8) / n;
+      this.extra.forEach(([label, id, enabled, accent], i) => {
+        const x = 20 + i * (w2 + 8);
+        if (enabled) add(x, H2 - 140, w2, 56, id);
+        ui.button(ctx, x, H2 - 140, w2, 56, label, { hover: this.hover === id, enabled, accent: enabled ? accent : undefined });
+      });
     }
     const by = H2 - 76, bw = (W2 - 40 - 5 * 8) / 6;
     const items: [string, string, boolean, string?][] = [

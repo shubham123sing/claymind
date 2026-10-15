@@ -5,7 +5,8 @@
  * a bottom plus wall segments, a ramp a tilted plank plus two rails.
  * Sizes match FALLBACK_SIZE in kit-store.ts.
  */
-import { BoxGeometry, BufferGeometry, CylinderGeometry, Quaternion, SphereGeometry, Vector3 } from '@iwsdk/core';
+// plain three.js maths (no renderer): the headless simulator builds these shapes in a worker
+import { BoxGeometry, BufferGeometry, CylinderGeometry, Quaternion, SphereGeometry, Vector3 } from 'three';
 import type { SavedPart } from '../storage/library.js';
 import type { FallbackShape } from './game-spec.js';
 
@@ -26,18 +27,20 @@ const part = (label: number, g: BufferGeometry, materialId: string, color: strin
 
 const cache = new Map<string, SavedPart[]>();
 
-/** Parts of a built-in shape (shared and read-only: callers must not change them). */
-export function fallbackParts(shape: FallbackShape, materialId: string, color: string | null = null): SavedPart[] {
-  const key = `${shape}|${materialId}|${color}`;
+/** Parts of a built-in shape (shared and read-only: callers must not change them). `tiltDeg`: ramp angle (What-if). */
+export function fallbackParts(shape: FallbackShape, materialId: string, color: string | null = null, tiltDeg = RAMP_TILT_DEG): SavedPart[] {
+  const key = `${shape}|${materialId}|${color}|${tiltDeg}`;
   let parts = cache.get(key);
   if (!parts) {
-    parts = build(shape, materialId, color);
+    parts = build(shape, materialId, color, tiltDeg);
     cache.set(key, parts);
   }
   return parts;
 }
 
-function build(shape: FallbackShape, m: string, c: string | null): SavedPart[] {
+export const RAMP_TILT_DEG = 16;
+
+function build(shape: FallbackShape, m: string, c: string | null, tiltDeg: number): SavedPart[] {
   switch (shape) {
     case 'block':
       return [part(0, new BoxGeometry(0.04, 0.04, 0.04), m, c)];
@@ -74,7 +77,7 @@ function build(shape: FallbackShape, m: string, c: string | null): SavedPart[] {
     }
     case 'ramp': {
       // a 32 cm plank (8 cm wide, 1.4 cm thick) tilted 16° down toward the player, with 1 cm rails
-      const len = 0.32, w = 0.08, t = 0.014, rail = 0.012, tilt = (16 * Math.PI) / 180;
+      const len = 0.32, w = 0.08, t = 0.014, rail = 0.012, tilt = (tiltDeg * Math.PI) / 180;
       const q = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), tilt).toArray() as Frame['q'];
       const lift = Math.sin(tilt) * (len / 2);
       const up = (dy: number, dx: number): Frame['p'] => [dx, lift + dy * Math.cos(tilt), dy * Math.sin(tilt)];
@@ -88,7 +91,7 @@ function build(shape: FallbackShape, m: string, c: string | null): SavedPart[] {
 }
 
 /** Lowest point of a shape in its own frame (to stand it on the table). */
-export function bottomOf(parts: SavedPart[]): number {
+export function bottomOf(parts: { mesh: { positions: Float32Array }; frame: { p: number[]; q: number[] } }[]): number {
   let min = Infinity;
   const v = new Vector3(), q = new Quaternion();
   for (const p of parts) {

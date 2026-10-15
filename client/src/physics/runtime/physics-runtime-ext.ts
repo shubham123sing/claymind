@@ -44,6 +44,12 @@ export class PhysicsRuntime extends IwsdkPhysicsRuntime {
   private channel: BroadcastChannel | null = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CONTACT_CHANNEL);
   /** Tests: receive contacts directly instead of (or as well as) the channel. */
   onContacts: ((c: ContactMessage[]) => void) | null = null;
+
+  /** Headless simulations: keep their contacts to themselves (never on the game's channel). */
+  silence(): void {
+    this.channel?.close();
+    this.channel = null;
+  }
   private reported = false;
   private stats = { steps: 0, raw: 0, posted: 0, masked: 0 };
 

@@ -7,7 +7,6 @@ import {
   BufferAttribute, BufferGeometry, CanvasTexture, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   SRGBColorSpace, Sprite, SpriteMaterial, Vector3,
 } from '@iwsdk/core';
-import { ConvexHull } from 'three/examples/jsm/math/ConvexHull.js';
 import type { Material } from '../materials/materials.js';
 import type { BakedMesh } from './bake.js';
 import { envFor } from './env-map.js';
@@ -47,28 +46,8 @@ export function geometryFrom(b: BakedMesh): BufferGeometry {
   return g;
 }
 
-/** Volume of the convex hull of (a subsample of) the vertices, m^3. */
-export function hullVolume(positions: Float32Array): number {
-  const n = positions.length / 3;
-  const stride = Math.max(1, Math.floor(n / 1500));
-  const pts: Vector3[] = [];
-  for (let i = 0; i < n; i += stride) pts.push(new Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]));
-  if (pts.length < 4) return 0;
-  const hull = new ConvexHull().setFromPoints(pts);
-  let v = 0;
-  for (const face of hull.faces) {
-    // fan-triangulate the face loop and sum signed tetrahedra against the origin
-    const e0 = face.edge;
-    const a = e0.head().point;
-    let e = e0.next;
-    while (e.next !== e0) {
-      const b = e.head().point, c = e.next.head().point;
-      v += a.dot(b.clone().cross(c)) / 6;
-      e = e.next;
-    }
-  }
-  return Math.abs(v);
-}
+/** Volume of the convex hull (moved to physics/body-build.ts, shared with the headless sim). */
+export { hullVolume } from '../physics/body-build.js';
 
 export function makeShadow(tex: CanvasTexture): Mesh {
   const m = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, depthWrite: false, opacity: 0.5 }));
