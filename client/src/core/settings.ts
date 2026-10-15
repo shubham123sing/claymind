@@ -14,12 +14,16 @@ export interface Settings {
   /** The menu floats beside the clay (no palm-up gesture), poke it with either hand. */
   oneHanded: boolean;
   sound: boolean;
+  /** The helper character beside the table (its speech bubble too). */
+  helper: boolean;
+  /** The helper reads its bubble aloud (voice output only; there is no voice input). */
+  helperVoice: boolean;
   tutorialDone: boolean;
   samplesAdded: boolean;
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false, samplesAdded: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, helper: true, helperVoice: false, tutorialDone: false, samplesAdded: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();

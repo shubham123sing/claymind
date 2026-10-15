@@ -101,6 +101,7 @@ export class HelperSystem extends createSystem({}) {
 
   private say(message: string): void {
     this.panel.message = message;
+    bus.emit('mascot:say', { text: message });
     this.go('message');
   }
 
@@ -110,6 +111,7 @@ export class HelperSystem extends createSystem({}) {
     this.busy = true;
     this.panel.status = status;
     this.go('thinking');
+    bus.emit('mascot:think', { on: true, text: status });
     try {
       return await job();
     } catch (e) {
@@ -118,6 +120,7 @@ export class HelperSystem extends createSystem({}) {
       this.say(e instanceof Error ? e.message : OFFLINE);
       return null;
     } finally {
+      bus.emit('mascot:think', { on: false });
       this.busy = false;
       this.panel.invalidate();
     }
@@ -170,6 +173,7 @@ export class HelperSystem extends createSystem({}) {
     if (!spec) return this.say("I couldn't make that game. The built-in games are in Play Kit -> Games.");
     this.panel.answer = a;
     this.panel.uses = this.kit.usesFor(spec);
+    bus.emit('mascot:say', { text: `Here is ${a.preview.name}. Play it, adjust the rules, or cancel.` });
     this.panel.view = 'preview';
     this.panel.invalidate();
   }
@@ -202,6 +206,15 @@ export class HelperSystem extends createSystem({}) {
     this.panel.checkMessage = '';
     this.panel.view = 'guide';
     this.panel.invalidate();
+    this.sayStep();
+  }
+
+  /** The helper character reads the current step and points at what is being built. */
+  private sayStep(): void {
+    const p = this.panel, s = p.steps[p.stepIndex];
+    if (!s) return;
+    const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.v2).toArray();
+    bus.emit('mascot:say', { text: `Step ${p.stepIndex + 1}: ${s.text}`, point: at });
   }
 
   /** The creation being worked on: the object touched last, else the clay. */
@@ -225,6 +238,8 @@ export class HelperSystem extends createSystem({}) {
     try {
       const r = await helperApi.check(step, st.sizeCm, st.materials);
       this.panel.checkMessage = r.ok ? r.message : `${r.message}${r.fix ? ` Fix: ${r.fix}.` : ''}`;
+      if (r.ok) bus.emit('mascot:hop', {});
+      bus.emit('mascot:say', { text: this.panel.checkMessage });
     } catch (e) {
       this.panel.checkMessage = e instanceof Error ? e.message : OFFLINE;
     }
@@ -251,6 +266,7 @@ export class HelperSystem extends createSystem({}) {
     const a = await this.run('Looking at what you are doing…', () => helperApi.ask("I'm stuck, what should I do?", this.context(), [...this.kit.kitItems()]));
     if (!a) return;
     this.panel.helpReply = a.reply;
+    bus.emit('mascot:say', { text: a.reply });
     this.panel.fix = a.fix ?? 'none';
     this.panel.view = 'help';
     this.panel.invalidate();
@@ -318,8 +334,11 @@ export class HelperSystem extends createSystem({}) {
     } else if (id.startsWith('build:') && id !== 'build:type') void this.teach(id.slice(6));
     else if (id === 'build:type') this.type('What do you want to build?', (goal) => void this.teach(goal));
     else if (id === 'step:prev' || id === 'step:next') {
+      const before = p.stepIndex;
       p.stepIndex = Math.max(0, Math.min(p.steps.length - 1, p.stepIndex + (id === 'step:next' ? 1 : -1)));
       p.checkMessage = '';
+      if (p.stepIndex > before) bus.emit('mascot:hop', {});
+      if (p.stepIndex !== before) this.sayStep();
     } else if (id === 'step:check') void this.check();
     else if (id === 'help:fix') this.doFix();
     p.invalidate();

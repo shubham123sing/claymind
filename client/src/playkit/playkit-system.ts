@@ -460,6 +460,8 @@ export class PlayKitSystem extends createSystem({}) {
     if (e.state.over && !this.hud.over) {
       this.hud.over = true;
       this.hud.message = e.state.message;
+      if (e.state.result === 'win') bus.emit('mascot:hop', {});
+      bus.emit('mascot:say', { text: e.state.message });
       uiSounds.chime();
     }
     this.syncHud();
@@ -574,6 +576,7 @@ export class PlayKitSystem extends createSystem({}) {
     this.closeSimNote();
     this.hud.note = [note];
     this.syncHud();
+    bus.emit('mascot:think', { on: true, text: note });
     try {
       const r = await work();
       return my === this.simJob ? r : null;
@@ -581,6 +584,7 @@ export class PlayKitSystem extends createSystem({}) {
       if (my === this.simJob) this.hud.note = [`The test did not finish: ${(e as Error).message}`];
       return null;
     } finally {
+      bus.emit('mascot:think', { on: false });
       if (my === this.simJob) this.simBusy = false;
       this.syncHud();
     }
@@ -620,6 +624,8 @@ export class PlayKitSystem extends createSystem({}) {
     if (fix) note.push(`Suggested fix: ${fix.label}.`);
     else if (!st.ok) note.push('No simple fix found: try a wider base or fewer pieces.');
     this.hud.note = note.slice(0, 3);
+    if (st.ok) bus.emit('mascot:hop', {});
+    bus.emit('mascot:say', { text: [st.sentences[0], fix ? `Try: ${fix.label}.` : ''].join(' ').trim(), point: this.origin.toArray() });
     if (fix) {
       this.pendingApply = () => this.applyChange(fix.label, () => {
         for (const p of this.pieces) {
@@ -708,6 +714,7 @@ export class PlayKitSystem extends createSystem({}) {
       return;
     }
     this.hud.note = [`Best: ${r.best.label}: ${runText(r.best.run)}.`, ...(r.current ? [`Now (${r.current.label}): ${runText(r.current.run)}.`] : []), same];
+    bus.emit('mascot:say', { text: `${r.best.label} works better. Press Apply to try it.` });
     const best = r.best;
     this.pendingApply = () => this.applyChange(`${opt.kind === 'tilt' ? 'ramp' : opt.role} → ${best.label}`, () => {
       const changed = variantScene(this.simScene(true), opt, best.value);
@@ -765,6 +772,7 @@ export class PlayKitSystem extends createSystem({}) {
     this.demo.speed = this.timeScale;
     this.demo.start(SIM_SEED);
     this.hud.showRules = false;
+    bus.emit('mascot:say', { text: 'Watch the demo hand play. Press "My turn" to take over from here.', point: this.origin.toArray() });
     this.syncHud();
   }
 

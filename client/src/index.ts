@@ -19,6 +19,7 @@ import { SceneActionsSystem } from './ui/scene-actions.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
+import { MascotSystem } from './helper/mascot.js';
 import { HelperSystem } from './helper/helper-system.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { CoachSystem } from './ui/coach.js';
@@ -50,6 +51,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
     world.registerSystem(HelperSystem); // optional AI helper (Update 2): panels before objects too
     world.registerSystem(SettingsSystem);
+    world.registerSystem(MascotSystem);
     world.registerSystem(CoachSystem);
     world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
     world.registerSystem(ObjectSystem);
