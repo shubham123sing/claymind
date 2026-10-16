@@ -5,11 +5,6 @@ import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
-import { AgentSystem } from './agent/agent-system.js';
-import { ExperimentSystem } from './agent/experiment-system.js';
-import { devAi, devKgView } from './core/flags.js';
-import { AiSystem } from './ai/ai-system.js';
-import { KGSystem } from './kgview/kg-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
@@ -51,17 +46,12 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
     world.registerSystem(SettingsSystem);
     world.registerSystem(CoachSystem);
-    world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
     world.registerSystem(DeleteSystem);
     world.registerSystem(DownloadSystem);
     world.registerSystem(SceneActionsSystem);
-    if (devAi) world.registerSystem(AiSystem); // plan v4: no AI and no network unless ?devAi
-    world.registerSystem(ExperimentSystem);
-    // Debug-the-Brain agent + Mastery: development only in plan v3 (experiments stay, for Predict then Test)
-    if (devKgView) world.registerSystem(AgentSystem);
     // ?debug: systems by stable names (class names are minified in release builds)
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {

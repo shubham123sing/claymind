@@ -7,15 +7,13 @@
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
-import { devAi, devKgView } from '../core/flags.js';
 import { settings } from '../core/settings.js';
 import { Hud } from '../devtools/hud.js';
-import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
+import { getMaterial } from '../materials/materials.js';
 import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
 import { getTemplate } from '../objects/templates.js';
 import type { HandState, Vec3 } from '../platform/input/hand-state.js';
 import { input } from '../platform/input/input-system.js';
-import { aiEnabled } from '../ai/ai-state.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
 import { hasUndo, takeUndo } from '../ui/undo-toast.js';
@@ -159,14 +157,6 @@ export class SculptSystem extends createSystem({}) {
       { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
       { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
       { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
-      ...(devKgView
-        ? [
-            { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
-            { id: 'check', label: 'Check beliefs', icon: '⚗', color: 0xf0a040, onPress: () => bus.emit('agent:check', {}) },
-            { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
-          ]
-        : []),
-      ...(devAi ? [{ id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) }] : []),
       {
         id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
         selected: () => performance.now() - this.resetArmed < 2500,
@@ -379,12 +369,12 @@ export class SculptSystem extends createSystem({}) {
     if (this.baking) return;
     this.baking = true;
     const t0 = performance.now();
-    this.view.setStatus(devAi ? 'Looking at your sculpt…' : 'Bringing it to life…');
+    this.view.setStatus('Bringing it to life…');
     this.statusUntil = Infinity;
     this.audio.tickSound(1.2);
     const root = this.view.root;
-    // plan v4: the player's own shape, never swapped for a template (threshold above any similarity)
-    const threshold = devAi ? TEMPLATE_THRESHOLD : Infinity;
+    // the player's own shape, never swapped for a template (threshold above any similarity)
+    const threshold = Infinity;
     const res = await this.client.bake({ scale: root.scale.x, threshold, pieces: 6, seed: Math.floor(Math.random() * 1e9) });
     if (!res.ok || !res.baked || !res.descriptor) {
       this.showStatus('Shape some clay first, then bring it to life', 3000, '#d9534f');
@@ -395,11 +385,8 @@ export class SculptSystem extends createSystem({}) {
     const top = res.ranking[0];
     const tmpl = res.templateId ? getTemplate(res.templateId) : undefined;
     const best = top ? getTemplate(top.id) : undefined;
-    const sources = tmpl
-      ? [{ priors: tmpl.materialPriors, weight: 1 }, { priors: shapePriors(d), weight: 0.3 }]
-      : [{ priors: shapePriors(d), weight: 1 }, ...(best && top.similarity > 0.3 ? [{ priors: best.materialPriors, weight: top.similarity }] : [])];
-    // plan v4: every piece starts as clay; the player picks materials (no guessing)
-    const guesses = devAi ? estimateMaterial(sources) : [{ id: 'clay', prob: 1 }];
+    // every piece starts as clay; the player picks materials (no guessing)
+    const guesses = [{ id: 'clay', prob: 1 }];
     const mat = getMaterial(guesses[0].id);
     const b = res.baked;
     const creation: Creation = {
@@ -407,12 +394,12 @@ export class SculptSystem extends createSystem({}) {
       id: newCreationId(),
       createdAt: Date.now(),
       descriptor: d,
-      name: tmpl ? tmpl.name : devAi ? 'Sculpt' : 'Creation',
+      name: tmpl ? tmpl.name : 'Creation',
       category: tmpl?.category ?? 'sculpt',
       source: tmpl ? 'template' : 'sculpt-only',
       templateId: tmpl?.id ?? null,
       matchScore: top?.similarity ?? 0,
-      bestGuess: devAi && best && top.similarity > 0.25 ? { id: best.id, name: best.name, similarity: top.similarity } : null,
+      bestGuess: null,
       materialId: mat.id,
       materialConfidence: guesses[0].prob,
       materialGuesses: guesses.slice(0, 4),
@@ -582,9 +569,7 @@ export class SculptSystem extends createSystem({}) {
     if (kb.getKeyDown('KeyK')) bus.emit('object:separate', {});
     if (kb.getKeyDown('KeyT')) bus.emit('material:toggle', {});
     if (kb.getKeyDown('Enter')) void this.bringToLife();
-    if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
-    if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
-    if (kb.getKeyDown('KeyP')) bus.emit(devKgView ? 'mastery:toggle' : 'object:pin', {});
+    if (kb.getKeyDown('KeyP')) bus.emit('object:pin', {});
     if (kb.getKeyDown('KeyO')) bus.emit('playkit:toggle', {});
     if (kb.getKeyDown('KeyL')) bus.emit('library:toggle', {});
     if (kb.getKeyDown('KeyS') && !ctrl) bus.emit('settings:toggle', {});

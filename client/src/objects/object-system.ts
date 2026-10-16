@@ -220,18 +220,6 @@ export class ObjectSystem extends createSystem({}) {
           }
         }
       }),
-      bus.on('creation:ai-status', (e) => {
-        const rec = this.byCreation(e.creationId);
-        if (rec?.creation) {
-          rec.creation.aiStatus = e.text;
-          rec.lastInteract = performance.now();
-        }
-      }),
-      bus.on('creation:model', (e) => {
-        // a generated model has no pieces: only single-part objects take it
-        const rec = this.byCreation(e.creationId);
-        if (rec && rec.parts.length === 1) this.rebuild(rec, { parts: [{ ...this.specOf(rec.parts[0]), mesh: e.mesh, collider: undefined }], flash: 0.8 });
-      }),
     );
     const onDown = (e: PointerEvent) => this.onPointerDown(e);
     const onMove = (e: PointerEvent) => this.setNdc(e);

@@ -38,12 +38,6 @@ export type AppEvents = {
     /** Local template ranking (best first). */
     ranking: { id: string; similarity: number }[];
   };
-  /** Toggle AI on / off. */
-  'ai:toggle': Record<string, never>;
-  /** Ask the agent to test its beliefs (Debug the Brain). */
-  'agent:check': Record<string, never>;
-  /** Show / hide the Mastery screen. */
-  'mastery:toggle': Record<string, never>;
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
   /** Open / close the material picker for the piece last touched. */
@@ -101,16 +95,8 @@ export type AppEvents = {
    * With `part`: that part only. Without: every part the player has not set themselves.
    */
   'creation:set-material': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number };
-  /** The vision model described a creation (validated suggestion). */
-  'creation:described': { creationId: string; result: import('../ai/types.js').DescribeResult };
-  /** A cleaner model arrived for a creation (object-local metres, centred). */
-  'creation:model': { creationId: string; mesh: import('../objects/bake.js').BakedMesh; source: 'ai' | 'cache' };
-  /** One-line AI status for a creation's label ('' clears it). */
-  'creation:ai-status': { creationId: string; text: string };
   /** The user picked up / interacted with a creation. */
   'object:focus': { creationId: string };
-  /** Show / hide the brain. */
-  'kg:toggle': Record<string, never>;
   'object:broke': { creationId: string; materialId: string; x: number; y: number; z: number };
   'hand:pinch-start': { hand: Handedness; x: number; y: number; z: number };
   'hand:pinch-end': { hand: Handedness; x: number; y: number; z: number };
