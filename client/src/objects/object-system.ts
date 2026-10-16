@@ -436,7 +436,7 @@ export class ObjectSystem extends createSystem({}) {
     // Havok has put it to sleep and re-enabling gravity alone does not wake it.
     if (rec.toyId) {
       if (this.v.length() > 0.3) bus.emit('toy:shot', { toyId: rec.toyId });
-      bus.emit('toy:released', { toyId: rec.toyId });
+      bus.emit('toy:released', { toyId: rec.toyId, v: [this.v.x, this.v.y, this.v.z] });
     }
     if (this.v.lengthSq() < 1e-4) this.v.set(0, -0.01, 0);
     if (!rec.entity.hasComponent(PhysicsManipulation))
@@ -724,6 +724,20 @@ export class ObjectSystem extends createSystem({}) {
   demoMove(id: string, at: Vector3): void {
     const rec = this.byToy(id);
     if (rec?.mode === 'demo') this.teleport(rec, at);
+  }
+
+  /** Position and turn a piece the demo hand (or a room's host) holds. */
+  demoPose(id: string, at: Vector3, q: Quaternion): void {
+    const rec = this.byToy(id);
+    if (rec?.mode !== 'demo') return;
+    rec.mesh.quaternion.copy(q);
+    this.teleport(rec, at);
+  }
+
+  /** Held by a hand here (pinch, pointer, ray) right now. */
+  isHeld(id: string): boolean {
+    const rec = this.byToy(id);
+    return !!rec && (rec.side !== null || this.pointerHeld === rec);
   }
 
   /** Let go with exactly this velocity (the planned throw), counted as a shot when it moves. */

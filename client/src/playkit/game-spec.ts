@@ -104,6 +104,8 @@ export interface GameSpec {
   maxTurns: number;
   /** Game length limit in seconds; 0 = none. */
   timerSec: number;
+  /** Every piece back to its start (and the turn's counters cleared) when a turn ends: each player plays the same set-up (Knock-down for 2-4). */
+  resetEachTurn?: boolean;
   allowedActions: HandAction[];
   rules: Rule[];
   /** Counter shown on the scoreboard next to the scores (optional). */
@@ -130,6 +132,7 @@ export function validateSpec(s: unknown): string[] {
   if (!Number.isInteger(g.shotsPerTurn) || g.shotsPerTurn < 0 || g.shotsPerTurn > 20) e.push('shotsPerTurn must be 0-20');
   if (!Number.isInteger(g.maxTurns) || g.maxTurns < 0 || g.maxTurns > 30) e.push('maxTurns must be 0-30');
   if (!isNum(g.timerSec) || g.timerSec < 0 || g.timerSec > 600) e.push('timerSec must be 0-600');
+  if (g.resetEachTurn !== undefined && typeof g.resetEachTurn !== 'boolean') e.push('resetEachTurn must be true or false');
   if (!Array.isArray(g.allowedActions) || !g.allowedActions.every((a) => (HAND_ACTIONS as readonly string[]).includes(a))) e.push('unknown hand action');
 
   const roles = new Map<string, RoleSpec>();

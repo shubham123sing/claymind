@@ -121,3 +121,30 @@ describe('rule engine', () => {
     expect(run()).toBe(run());
   });
 });
+
+describe('room games (Update 3, Step C)', () => {
+  it('Knock-down for two: named turns, the tower is reset for the second player, scores per player', () => {
+    const g = clone(templateById('knock-down')!);
+    g.players = 2;
+    g.resetEachTurn = true;
+    expect(validateSpec(g)).toEqual([]);
+    const e = new RuleEngine(g);
+    e.names = ['Ana', 'Ben'];
+    const blocks = (fallen: number) => [0, 1, 2, 3, 4, 5].map((i) => piece(`block:${i}`, [i * 0.04, i < fallen ? -0.2 : 0.02, 0]));
+    const balls = [0, 1, 2].map((i) => piece(`ball:${i}`, [i * 0.05, 0.02, 0.15]));
+    e.tick(0.1, obs([...blocks(0), ...balls]));
+    e.tick(0.1, obs([...blocks(0), ...balls], { shots: ['ball:0', 'ball:1', 'ball:2'] }));
+    let out: ReturnType<RuleEngine['tick']> = [];
+    for (let i = 0; i < 40 && !out.some((c) => c.type === 'message'); i++) out = e.tick(0.1, obs([...blocks(2), ...balls]));
+    expect(e.state.scores).toEqual([2, 0]);
+    expect(out.filter((c) => c.type === 'reset_piece').length).toBe(9); // every block and ball back
+    expect(out.find((c) => c.type === 'message')).toEqual({ type: 'message', text: "Ben's turn" });
+    expect(e.scoreboard()[1]).toBe('▶ Ben: 0');
+    // Ben's turn starts from a full tower: the two already down are not counted again
+    e.tick(0.1, obs([...blocks(0), ...balls]));
+    e.tick(0.1, obs([...blocks(0), ...balls], { shots: ['ball:0', 'ball:1', 'ball:2'] }));
+    for (let i = 0; i < 40 && !e.state.over; i++) e.tick(0.1, obs([...blocks(3), ...balls]));
+    expect(e.state.scores).toEqual([2, 3]);
+    expect(e.state.message).toBe('Ben wins with 3');
+  });
+});

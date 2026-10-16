@@ -15,14 +15,16 @@ import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
 import { GameAgentSystem } from './game-agent/game-agent-system.js';
 import { MultiplayerSystem } from './multiplayer/multiplayer-system.js';
+import { room } from './multiplayer/room-client.js';
 import { PresenceSystem } from './multiplayer/presence.js';
 import { SharedClaySystem } from './multiplayer/shared-clay.js';
+import { SharedPlaySystem } from './multiplayer/shared-play.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
   {
@@ -37,6 +39,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(MultiplayerSystem); // room panel before objects too
     world.registerSystem(PresenceSystem); // sets the table frame on joining: before the shared systems
     world.registerSystem(SharedClaySystem);
+    world.registerSystem(SharedPlaySystem);
     world.registerSystem(SettingsSystem);
     world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);

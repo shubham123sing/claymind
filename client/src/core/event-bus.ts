@@ -70,7 +70,8 @@ export type AppEvents = {
   'creation:delete': Record<string, never>;
   /** Play Kit pieces: thrown or flicked, let go of by a hand, two pieces touched. */
   'toy:shot': { toyId: string };
-  'toy:released': { toyId: string };
+  /** `v`: the release velocity (world m/s), when a hand let go of it. */
+  'toy:released': { toyId: string; v?: number[] };
   /** A Play Kit piece left the room (safety volume): Play Kit puts it back. */
   'toy:lost': { toyId: string };
   'toy:contact': { a: string; b: string };
@@ -79,6 +80,8 @@ export type AppEvents = {
   'gameagent:open': Record<string, never>;
   /** Multiplayer (Update 3, Step C): the panel, and the room joined / left. */
   'multiplayer:toggle': Record<string, never>;
+  /** Play Kit: a game started, ended or was reset here (the room's host shares it). */
+  'playkit:game': { kind: 'start' | 'end' | 'reset' };
   'room:joined': { code: string; host: boolean };
   'room:left': { why: string };
   /** Open / close the Play Kit panel, or add the current creation to the kit. */

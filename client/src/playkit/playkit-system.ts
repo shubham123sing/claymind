@@ -52,6 +52,21 @@ interface Piece {
   parts: SavedPart[];
 }
 
+/** A piece of a room's game: what it is and where it starts (play-area frame). */
+export interface RoomPiece {
+  toyId: string;
+  kitId: string | null;
+  builtin?: { shape: FallbackShape; material: string };
+  key?: string;
+  role?: string;
+  fixed: boolean;
+  start: { p: number[]; q: number[] };
+  /** a player's own toy: its parts travel with the game */
+  parts?: SavedPart[];
+}
+
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+
 const CONFIRM_MS = 3000;
 const IDLE_CLOSE_MS = 45000;
 const MESSAGE_MS = 3000;
@@ -203,8 +218,8 @@ export class PlayKitSystem extends createSystem({}) {
     return this.spawnWorld(parts, p, q, pinned, meta);
   }
 
-  private spawnWorld(parts: SavedPart[], p: number[], q: number[], pinned: boolean, meta: Omit<Piece, 'toyId' | 'start' | 'parts'>): Piece | null {
-    const toyId = `toy_${++this.seq}`;
+  private spawnWorld(parts: SavedPart[], p: number[], q: number[], pinned: boolean, meta: Omit<Piece, 'toyId' | 'start' | 'parts'>, id?: string): Piece | null {
+    const toyId = id ?? `toy_${++this.seq}`;
     if (!this.objects.spawnToy(toyId, parts, p, q, pinned)) {
       this.toast('The table is full (40 pieces)');
       return null;
@@ -329,6 +344,9 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   end(): void {
+    if (this.spec && !this.mirror) bus.emit('playkit:game', { kind: 'end' });
+    this.mirror = false;
+    this.mirrorHud = null;
     this.stopDemo(false);
     if (this.paused) this.setPaused(false);
     this.clearTable();
@@ -380,6 +398,9 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   private startGame(spec: GameSpec, roleMap: Record<string, string | null>): void {
+    const no = this.roomCanStart?.();
+    if (no) return this.toast(no);
+    if (this.roomAdapt) spec = this.roomAdapt(spec);
     if (this.mode !== 'off') this.end();
     this.enterTable();
     this.spec = spec;
@@ -407,11 +428,13 @@ export class PlayKitSystem extends createSystem({}) {
     this.closePanel();
     this.hud.mesh.visible = true;
     uiSounds.chime();
+    bus.emit('playkit:game', { kind: 'start' });
   }
 
   private tickGame(dt: number): void {
     const e = this.engine;
     if (!e || this.mode !== 'play' || this.paused || e.state.over) return;
+    if (this.roomNames) e.names = this.roomNames();
     const byToy = new Map(this.pieces.filter((p) => p.key).map((p) => [p.toyId, p]));
     const obs: Observation = { pieces: [], contacts: [], shots: [] };
     for (const p of byToy.values()) {
@@ -460,7 +483,11 @@ export class PlayKitSystem extends createSystem({}) {
     h.mode = this.mode === 'play' ? 'play' : 'edit';
     h.paused = this.paused;
     h.hasGame = !!this.spec;
-    const lines = this.engine ? this.engine.scoreboard() : this.spec ? [] : [`${this.pieces.length} piece(s) on the table`];
+    const lines = this.mirror ? [...(this.mirrorHud?.lines ?? ['Waiting for the host…'])] : this.engine ? this.engine.scoreboard() : this.spec ? [] : [`${this.pieces.length} piece(s) on the table`];
+    if (this.mirror) {
+      h.message = this.mirrorHud?.message ?? '';
+      h.over = this.mirrorHud?.over ?? false;
+    }
     if (!this.spec) lines.push(this.mode === 'edit' ? 'Move pieces by hand; Play lets physics run.' : 'Throw, flick, push, stack: Reset puts it back.');
     if (lines.join() !== h.lines.join()) h.lines = lines;
     h.extra = this.simButtons();
@@ -557,6 +584,127 @@ export class PlayKitSystem extends createSystem({}) {
     this.timeScale = 1;
     if (this.paused) this.setPaused(false);
     if (sync) this.syncHud();
+  }
+
+  // ---------- multiplayer (Update 3, Step C): the host runs the game, the others mirror it ----------
+
+  /** Set by the room: adapt a game to the room's players before it starts (host). */
+  roomAdapt: ((spec: GameSpec) => GameSpec) | null = null;
+  /** Set by the room: why this player may not start a game now (not the host), else null. */
+  roomCanStart: (() => string | null) | null = null;
+  /** Set by the room: names for the scoreboard. */
+  roomNames: (() => string[]) | null = null;
+  /** This table mirrors the host's game: no rules here, poses and scores come from the host. */
+  mirror = false;
+  private mirrorHud: { lines: string[]; message: string; over: boolean } | null = null;
+
+  get hasGame(): boolean {
+    return !!this.spec;
+  }
+
+  /** The current game for the room: pieces in the play area's frame (host). */
+  roomDescribe(): { spec: GameSpec; setName: string; frame: { origin: number[]; yaw: number }; pieces: RoomPiece[] } | null {
+    if (!this.spec) return null;
+    return {
+      spec: this.spec, setName: this.setName,
+      frame: { origin: this.origin.toArray(), yaw: this.yaw },
+      pieces: this.pieces.map((p) => ({
+        toyId: p.toyId, kitId: p.kitId, builtin: p.builtin, key: p.key, role: p.role, fixed: p.fixed,
+        start: this.localPose(p.start.p, p.start.q), parts: p.builtin ? undefined : p.parts,
+      })),
+    };
+  }
+
+  private localPose(p: number[], q: number[]): { p: number[]; q: number[] } {
+    return { p: this.toLocal(this.v.fromArray(p)), q: this.q.setFromAxisAngle(this.v2.set(0, 1, 0), -this.yaw).multiply(new Quaternion().fromArray(q)).toArray() };
+  }
+
+  private worldPose(local: { p: number[]; q: number[] }): { p: number[]; q: number[] } {
+    return { p: this.toWorld(local.p[0], local.p[1], local.p[2]).toArray(), q: new Quaternion().fromArray(this.yawQ(0)).multiply(new Quaternion().fromArray(local.q)).toArray() };
+  }
+
+  /** Mirror the host's game here. `origin` / `yaw`: the host's play area, already in this world. */
+  roomMirror(d: { spec: GameSpec; setName: string; pieces: RoomPiece[] }, origin: Vector3, yaw: number): void {
+    if (this.mode !== 'off') this.end();
+    this.sculpt.setSuspended(true);
+    this.origin.copy(origin);
+    this.yaw = yaw;
+    this.mirror = true;
+    this.spec = d.spec;
+    this.setName = d.setName;
+    for (const rp of d.pieces) {
+      const role = d.spec.roles.find((r) => r.id === rp.role);
+      const i = Number(rp.key?.split(':')[1]) || 0;
+      const parts = rp.builtin ? fallbackParts(rp.builtin.shape, rp.builtin.material, role ? this.colorFor(role, i) : null) : rp.parts;
+      if (!parts) continue;
+      const w = this.worldPose(rp.start);
+      this.spawnWorld(parts, w.p, w.q, rp.fixed, { kitId: rp.kitId, builtin: rp.builtin, key: rp.key, role: rp.role, fixed: rp.fixed }, rp.toyId);
+    }
+    this.engine = null;
+    this.showZones(d.spec);
+    this.mode = 'play';
+    this.hud.rules = d.spec.howToPlay;
+    this.hud.showRules = true;
+    this.hud.message = '';
+    this.hud.over = false;
+    this.applyMode();
+    this.closePanel();
+    this.hud.mesh.visible = true;
+    uiSounds.chime();
+  }
+
+  /** The moving pieces' poses in the play area's frame (host -> room, about 15 times a second). */
+  roomPoses(): [string, number[], number[]][] {
+    const out: [string, number[], number[]][] = [];
+    for (const p of this.pieces) {
+      if (p.fixed || !this.objects.toyState(p.toyId, this.st)) continue;
+      const l = this.localPose(this.st.p.toArray(), this.st.q.toArray());
+      out.push([p.toyId, l.p.map(r4), l.q.map(r4)]);
+    }
+    return out;
+  }
+
+  /** A pose from the room (play-area frame) -> this world. */
+  roomPoseIn(p: number[], q: number[], outP: Vector3, outQ: Quaternion): void {
+    this.toWorld(p[0], p[1], p[2], outP);
+    outQ.setFromAxisAngle(this.v2.set(0, 1, 0), this.yaw).multiply(this.q.fromArray(q));
+  }
+
+  /** A pose here -> the play-area frame (a player's hand on a piece). */
+  roomPoseOut(toyId: string): { p: number[]; q: number[] } | null {
+    if (!this.objects.toyState(toyId, this.st)) return null;
+    return this.localPose(this.st.p.toArray(), this.st.q.toArray());
+  }
+
+  /** A velocity in the play-area frame -> this world (or back with `out`). */
+  roomDir(v: number[], toWorld: boolean): number[] {
+    const a = toWorld ? this.yaw : -this.yaw, c = Math.cos(a), s = Math.sin(a);
+    return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+  }
+
+  /** The scoreboard to show everyone (host). */
+  roomHud(): { lines: string[]; message: string; over: boolean; player: number } | null {
+    if (!this.spec) return null;
+    return { lines: this.hud.lines, message: this.hud.message, over: this.hud.over, player: this.engine?.state.player ?? 0 };
+  }
+
+  /** The host's scoreboard here (mirror). */
+  roomSetHud(h: { lines: string[]; message: string; over: boolean }): void {
+    if (h.message && h.message !== this.mirrorHud?.message) {
+      this.toast(h.message);
+      this.hud.showRules = false;
+    }
+    this.mirrorHud = h;
+    this.syncHud();
+  }
+
+  /** Lock or free the moving pieces for grabbing here (turns, a piece someone else holds). */
+  roomLock(toyId: string | null, locked: boolean): void {
+    for (const p of this.pieces) if (!p.fixed && (toyId === null || p.toyId === toyId)) this.objects.setToyLocked(p.toyId, locked);
+  }
+
+  get roomPieces(): readonly { toyId: string; fixed: boolean }[] {
+    return this.pieces;
   }
 
   // ---------- kit ----------
@@ -829,6 +977,10 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   private hudPress(id: string): void {
+    if (this.mirror && id !== 'hud:rules') {
+      this.toast('The host runs the game');
+      return;
+    }
     if (this.demo?.running && (id === 'hud:mode' || id === 'hud:pause' || id === 'hud:save')) this.stopDemo(false);
     if (id === 'hud:mode') this.setMode(this.mode === 'play' ? 'edit' : 'play');
     else if (id === 'hud:pause') this.setPaused(!this.paused);

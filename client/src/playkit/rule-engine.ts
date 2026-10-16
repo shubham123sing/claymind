@@ -93,6 +93,13 @@ export class RuleEngine {
     this.memo.delete(key);
   }
 
+  /** Player names for the scoreboard and messages (a room's players); else "Player N". */
+  names: string[] = [];
+
+  private nameOf(i: number): string {
+    return this.names[i] || `Player ${i + 1}`;
+  }
+
   tick(dt: number, obs: Observation): Command[] {
     const out: Command[] = [];
     if (this.state.over) return out;
@@ -265,8 +272,14 @@ export class RuleEngine {
     this.settled = 0;
     s.player = (s.player + 1) % this.spec.players;
     if (s.player === 0) s.turn++;
-    if (this.spec.maxTurns > 0 && s.turn > this.spec.maxTurns) this.finish('done', out, 'Last turn played');
-    else if (this.spec.players > 1) out.push({ type: 'message', text: `Player ${s.player + 1}'s turn` });
+    if (this.spec.maxTurns > 0 && s.turn > this.spec.maxTurns) return this.finish('done', out, 'Last turn played');
+    if (this.spec.resetEachTurn) {
+      // the next player gets the same set-up: every piece back, the turn's counters cleared
+      for (const key of this.memo.keys()) out.push({ type: 'reset_piece', key });
+      this.memo.clear();
+      s.counters = {};
+    }
+    if (this.spec.players > 1) out.push({ type: 'message', text: `${this.nameOf(s.player)}'s turn` });
   }
 
   private finish(result: 'win' | 'lose' | 'done', out: Command[], why?: string): void {
@@ -277,7 +290,7 @@ export class RuleEngine {
     const leaders = s.scores.map((v, i) => (v === best ? i : -1)).filter((i) => i >= 0);
     s.winner = this.spec.players > 1 && leaders.length === 1 ? leaders[0] : null;
     const text = this.spec.players > 1
-      ? (s.winner !== null ? `Player ${s.winner + 1} wins with ${best}` : `Draw at ${best}`)
+      ? (s.winner !== null ? `${this.nameOf(s.winner)} wins with ${best}` : `Draw at ${best}`)
       : result === 'win' ? (s.message || 'You win!') : result === 'lose' ? (s.message || 'Game over') : `${why ?? 'Done'}: ${s.scores[0]} points`;
     s.message = text;
     out.push({ type: 'message', text });
@@ -290,7 +303,7 @@ export class RuleEngine {
   /** Scoreboard lines for the HUD. */
   scoreboard(): string[] {
     const s = this.state, g = this.spec;
-    const lines = g.players > 1 ? s.scores.map((v, i) => `${i === s.player && !s.over ? '▶ ' : ''}Player ${i + 1}: ${v}`) : [`Score: ${s.scores[0]}`];
+    const lines = g.players > 1 ? s.scores.map((v, i) => `${i === s.player && !s.over ? '▶ ' : ''}${this.nameOf(i)}: ${v}`) : [`Score: ${s.scores[0]}`];
     if (g.counter) lines.push(`${g.counter.label}: ${s.counters[g.counter.id] ?? 0}${g.counter.target ? ` / ${g.counter.target}` : ''}`);
     if (g.shotsPerTurn > 0 && !s.over) lines.push(`Shots: ${s.shotsThisTurn} / ${g.shotsPerTurn}` + (g.maxTurns > 0 ? ` · Turn ${s.turn} / ${g.maxTurns}` : ''));
     if (g.timerSec > 0 && !s.over) lines.push(`Time: ${Math.max(0, Math.ceil(g.timerSec - s.elapsed))} s`);

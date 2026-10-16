@@ -30,6 +30,11 @@ export class TableFrame {
     this.qi.copy(this.q).invert();
   }
 
+  /** A turn around Y in my world -> the canonical frame. */
+  yawOut(world: number): number {
+    return world - this.yaw + this.seat;
+  }
+
   /** A turn around Y in the canonical frame -> the same turn in my world. */
   yawIn(canonical: number): number {
     return canonical + this.yaw - this.seat;

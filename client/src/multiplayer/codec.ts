@@ -38,3 +38,33 @@ export async function unpackFloats(s: string): Promise<Float32Array> {
 export async function unpackBytes(s: string): Promise<Uint8Array> {
   return gunzip(fromBase64(s));
 }
+
+type Typed = Float32Array | Uint8Array | Uint16Array | Uint32Array | Int32Array;
+const KINDS: [string, new (b: ArrayBuffer) => Typed][] = [['f32', Float32Array], ['u8', Uint8Array], ['u16', Uint16Array], ['u32', Uint32Array], ['i32', Int32Array]];
+
+/** Any JSON-like value with typed arrays inside (a kit toy's parts) -> JSON with packed arrays. */
+export async function packDeep(v: unknown): Promise<unknown> {
+  for (const [tag, C] of KINDS) if (v instanceof C) return { __ta: tag, d: await packArray(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)) };
+  if (Array.isArray(v)) return Promise.all(v.map(packDeep));
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = await packDeep(x);
+    return out;
+  }
+  return v;
+}
+
+export async function unpackDeep(v: unknown): Promise<unknown> {
+  if (Array.isArray(v)) return Promise.all(v.map(unpackDeep));
+  if (v && typeof v === 'object') {
+    const o = v as { __ta?: string; d?: string };
+    if (o.__ta && typeof o.d === 'string') {
+      const bytes = await unpackBytes(o.d), C = KINDS.find(([t]) => t === o.__ta)?.[1] ?? Uint8Array;
+      return new C(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = await unpackDeep(x);
+    return out;
+  }
+  return v;
+}
