@@ -611,6 +611,30 @@ export class PlayKitSystem extends createSystem({}) {
     if (sync) this.syncHud();
   }
 
+  // ---------- Point + Say (V5): the play area's frame and the toys on the table ----------
+
+  /** A world point in the play area's frame (the frame Game Specs use); sets the frame up if no game is on. */
+  toPlayFrame(w: Vector3): [number, number, number] {
+    if (this.mode === 'off') this.computeFrame();
+    return this.toLocal(w);
+  }
+
+  /** A play-area point back to the world. */
+  fromPlayFrame(p: ArrayLike<number>, out = new Vector3()): Vector3 {
+    if (this.mode === 'off') this.computeFrame();
+    return this.toWorld(p[0], p[1], p[2], out);
+  }
+
+  /** The kit item a toy on the table was made from (null: a built-in shape). */
+  kitIdOfToy(toyId: string): string | null {
+    return this.pieces.find((p) => p.toyId === toyId)?.kitId ?? null;
+  }
+
+  /** A kit item's name. */
+  kitName(kitId: string): string {
+    return this.kit.find((k) => k.id === kitId)?.name ?? 'a toy';
+  }
+
   // ---------- the Referee's dry run (V5): the game as it would be set up, for the physics check ----------
 
   /** The pieces this game would place (your toys where they fit, built-in shapes for the rest) on your table, in the play area's frame. */

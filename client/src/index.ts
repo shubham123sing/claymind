@@ -14,6 +14,7 @@ import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
 import { GameAgentSystem } from './game-agent/game-agent-system.js';
+import { PointSaySystem } from './game-agent/point-say.js';
 import { MultiplayerSystem } from './multiplayer/multiplayer-system.js';
 import { room } from './multiplayer/room-client.js';
 import { PresenceSystem } from './multiplayer/presence.js';
@@ -36,6 +37,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(LibrarySystem);
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
     world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
+    world.registerSystem(PointSaySystem); // Point + Say gestures: a marking pinch before objects grab it
     world.registerSystem(MultiplayerSystem); // room panel before objects too
     world.registerSystem(PresenceSystem); // sets the table frame on joining: before the shared systems
     world.registerSystem(SharedClaySystem);

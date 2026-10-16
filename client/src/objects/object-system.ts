@@ -811,6 +811,39 @@ export class ObjectSystem extends createSystem({}) {
     this.teleport(rec, at);
   }
 
+  // ---------------- Point + Say: what the hands show ----------------
+
+  /** The item a ray from `origin` along `dir` hits first (a Play Kit piece or a creation), within `max` m. */
+  pickAlongRay(origin: Vector3, dir: Vector3, max = 2.5): { toyId?: string; creationId?: string } | null {
+    this.ray.set(origin, dir);
+    this.ray.far = max;
+    const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
+    this.ray.far = Infinity;
+    const rec = hit && this.live.find((r) => r.parts.some((lp) => lp.view === hit.object));
+    return rec ? { toyId: rec.toyId ?? undefined, creationId: rec.creation?.id } : null;
+  }
+
+  /** Items held by a hand now, and by which hand. */
+  heldItems(): { toyId?: string; creationId?: string; side: Handedness }[] {
+    return this.live.filter((r) => r.side).map((r) => ({ toyId: r.toyId ?? undefined, creationId: r.creation?.id, side: r.side! }));
+  }
+
+  /** The item whose surface is within `margin` m of a point (a fingertip touching it). */
+  touchedItem(p: ArrayLike<number>, margin = 0.012): { toyId?: string; creationId?: string } | null {
+    let best: Live | null = null, bestD = Infinity;
+    for (const r of this.live) {
+      const d = Math.hypot(p[0] - r.mesh.position.x, p[1] - r.mesh.position.y, p[2] - r.mesh.position.z) - r.radius;
+      if (d < margin && d < bestD) (best = r), (bestD = d);
+    }
+    return best ? { toyId: best.toyId ?? undefined, creationId: best.creation?.id } : null;
+  }
+
+  /** Glow an item for a moment (the confirm card shows which one it means). */
+  highlight(item: { toyId?: string; creationId?: string }): void {
+    const rec = item.toyId ? this.byToy(item.toyId) : this.live.find((r) => r.creation?.id === item.creationId);
+    if (rec) this.glow(rec, 1);
+  }
+
   /** Held by a hand here (pinch, pointer, ray) right now. */
   isHeld(id: string): boolean {
     const rec = this.byToy(id);
