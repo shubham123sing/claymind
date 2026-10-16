@@ -25,10 +25,10 @@ interface Step {
 
 const STEPS: Step[] = [
   { xr: 'Pinch the clay and pull to shape it', desktop: 'Drag the clay to shape it', on: 'clay:touched' },
-  { xr: 'Palm up -> Color: pick a colour, then Paint on the clay', desktop: 'Color (C): pick a colour, then Paint (5) on the clay', on: 'clay:painted' },
-  { xr: 'Palm up -> Bring to life', desktop: 'Bring to life (Enter)', on: 'creation:baked' },
-  { xr: 'Touch it, then Material: what is it made of?', desktop: 'Click it, then Material (T): what is it made of?', on: 'object:material-set', ok: ((e: { by: string }) => e.by === 'user') as never },
-  { xr: 'Put it on the table and press Pin', desktop: 'Drag it onto the table, then Pin (P)', on: 'object:pinned' },
+  { xr: 'Palm up -> Paint -> Color: pick a colour, then Paint on the clay', desktop: 'Paint -> Color (C): pick a colour, then Paint (5) on the clay', on: 'clay:painted' },
+  { xr: 'Palm up -> Physics -> Bring to life', desktop: 'Physics -> Bring to life (Enter)', on: 'creation:baked' },
+  { xr: 'Touch it, then Material & Colour -> Material', desktop: 'Click it, then Material & Colour -> Material (T)', on: 'object:material-set', ok: ((e: { by: string }) => e.by === 'user') as never },
+  { xr: 'Put it on the table: Place & Pin -> Pin', desktop: 'Drag it onto the table, then Place & Pin -> Pin (P)', on: 'object:pinned' },
 ];
 
 class CoachPanel extends CanvasPanel {

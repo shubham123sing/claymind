@@ -128,47 +128,69 @@ export class SculptSystem extends createSystem({}) {
     );
   }
 
+  /**
+   * The menu (Update 3): Make, Material & Colour, Paint, Physics, Place & Pin, Library,
+   * Play Kit, Multiplayer, Settings; each category opens its actions (wrist menu and
+   * toolbar). Hide / show is the menu's own button (one-handed menu, browser toolbar).
+   */
   private menuItems(): MenuItem[] {
-    const tools: MenuItem[] = TOOLS.map((t) => ({
-      id: t.id, label: t.label, icon: t.icon, color: t.color,
-      selected: () => this.tool === t,
-      onPress: () => {
-        this.tool = t;
-      },
-    }));
+    const tool = (id: string): MenuItem => {
+      const t = TOOLS.find((x) => x.id === id)!;
+      return { id: t.id, label: t.label, icon: t.icon, color: t.color, selected: () => this.tool === t, onPress: () => (this.tool = t) };
+    };
+    const undo = (): MenuItem => ({ id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => hasUndo() || !!this.client?.last?.canUndo, onPress: () => this.undo() });
+    const redo = (): MenuItem => ({ id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() });
+    const color = (): MenuItem => ({ id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) });
+    const group = (id: string, label: string, icon: string, c: number, children: MenuItem[]): MenuItem => ({ id, label, icon, color: c, children, onPress: () => {} });
     return [
-      { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
-      ...tools,
-      { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
-      { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => hasUndo() || !!this.client?.last?.canUndo, onPress: () => this.undo() },
-      { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
-      { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
-      { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
-      { id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) },
-      { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
-      { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
-      { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
-      { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
-      { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
-      { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
-      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
-      { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
-      // three different things, worded and coloured apart: take a copy off the table (blue) vs erase (red)
-      { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
-      { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
-      { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
-      {
-        id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
-        selected: () => performance.now() - this.resetArmed < 2500,
-        onPress: () => {
-          // two presses within 2.5 s: avoids losing work to a stray tap (still undoable)
-          if (performance.now() - this.resetArmed < 2500) {
-            this.resetArmed = 0;
-            this.client.beginAction();
-            this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
-          } else this.resetArmed = performance.now();
+      group('make', 'Make', '✋', 0xe2733b, [
+        tool('shape'), tool('add'), tool('carve'), tool('smooth'),
+        { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
+        { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
+        { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
+        { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
+        undo(), redo(),
+        {
+          id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
+          selected: () => performance.now() - this.resetArmed < 2500,
+          onPress: () => {
+            // two presses within 2.5 s: avoids losing work to a stray tap (still undoable)
+            if (performance.now() - this.resetArmed < 2500) {
+              this.resetArmed = 0;
+              this.client.beginAction();
+              this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
+            } else this.resetArmed = performance.now();
+          },
         },
-      },
+        { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
+      ]),
+      group('matcol', 'Material & Colour', '◐', 0x5aa9e6, [
+        { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
+        color(), undo(),
+      ]),
+      group('paintg', 'Paint', '✎', 0xb07aa6, [tool('paint'), tool('erase'), color(), undo()]),
+      group('physics', 'Physics', '✦', 0xf0b429, [
+        { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
+        undo(),
+      ]),
+      group('place', 'Place & Pin', '⌖', 0xf0b429, [
+        { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
+        // worded and coloured apart from Delete: these take copies off the table (blue)
+        { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
+        { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
+      ]),
+      group('lib', 'Library', '▦', 0x7f9cc0, [
+        { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
+        { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
+      ]),
+      group('kit', 'Play Kit', '●', 0x8d8a85, [
+        { id: 'playkit', label: 'Open Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
+        { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
+      ]),
+      group('mp', 'Multiplayer', '⚇', 0x5fbf72, [
+        { id: 'room', label: 'Room', icon: '⚇', color: 0x5fbf72, enabled: () => false, onPress: () => {} },
+      ]),
+      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
     ];
   }
 

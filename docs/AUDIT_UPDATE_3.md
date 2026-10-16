@@ -60,3 +60,32 @@ Shape tools (Shape, Add, Carve, Smooth, Paint, Eraser), Bring to life, Mirror, U
 Material, Color, Join, Separate, Pin / Unpin, Play Kit, Add to Play Kit, **Ask AI**, Library,
 Add to Library, Settings, Remove from scene, Clear scene, Delete this creation, New clay
 (+ Brain, Check beliefs, Mastery with `?devKgView`; AI with `?devAi`).
+
+## Menu after cleanup (Step A.4)
+Two levels in the wrist menu (palm up; 3 x 3 categories, about 13 cm square) and the browser
+toolbar; a category opens its actions with **Back** first. Hide / show: the one-handed menu's
+Hide button, the browser's round button, or lowering the palm.
+
+- **Make**: Shape, Add, Carve, Smooth, Mirror, New piece, Join, Separate, Undo, Redo, New clay, Delete this creation
+- **Material & Colour**: Material, Color, Undo
+- **Paint**: Paint, Eraser, Color, Undo
+- **Physics**: Bring to life, Undo
+- **Place & Pin**: Pin / Unpin, Remove from scene, Clear scene
+- **Library**: Open Library, Add to Library
+- **Play Kit**: Open Play Kit, Add to Play Kit (the game agent is inside: Games -> "Make a game with AI")
+- **Multiplayer**: Room (disabled until Step C)
+- **Settings**
+
+## What was removed (Step A.2-A.3, one commit each)
+| Commit | What |
+|---|---|
+| Remove the clay-blob helper character | `helper/mascot.ts`, its settings and events |
+| Remove "Will it work?" and What-if | `src/sim/*` (runner moved to tests), HUD row; demo play kept as "Show me how" on the game cards |
+| Remove the Helper and the Coach (client) | Teach me to build, Check my work, Help / I'm stuck, the Ask AI menu item; the game agent panel moved to `src/game-agent/` |
+| Server: remove the Helper and Coach agents | `/v1/helper`, `/v1/coach/*`; the unsafe-request filter moved into make-a-game |
+| Archive the brain graph, Debug the Brain, Mastery, old AI layer | `src/kg`, `kgview`, `agent`, `game`, `ai`, `core/flags.ts`, `storage/kg-repo.ts` -> `_archive/` |
+| Archive the Phase 0 spikes; drop MediaPipe, sample GLBs, dead code | `src/spikes`, spike pages, `@mediapipe/tasks-vision`, `public/samples`, `objects/samples.ts`, `objects/glb.ts` |
+| Archive the old Phase 4 AI proxy server | `server/app`, `requirements.txt`, `server/samples`, old tests |
+| Rename the tutorial card | `ui/coach.ts` -> `ui/tutorial.ts` |
+
+Still UNSURE (kept): template matching in the bake worker (`objects/matcher.ts`, `templates.ts`, `templates/`), the `?debug` HUD, the scaffold WebXR banner assets.
