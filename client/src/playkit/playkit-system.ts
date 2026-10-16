@@ -403,16 +403,23 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   /** Play a game from outside (the AI helper): checked first, the player's toys fill the roles they fit. */
-  playSpec(spec: GameSpec): string[] {
+  playSpec(spec: GameSpec, roles: Record<string, string> = {}): string[] {
     const problems = validateSpec(spec);
     if (problems.length) return problems;
-    this.startGame(spec, suggestRoleMap(spec, this.kit));
+    this.startGame(spec, this.roleMapFor(spec, roles));
     return [];
   }
 
-  /** Which toy plays each role of a game (names), for a preview. */
-  usesFor(spec: GameSpec): string[] {
+  /** The toys that fit each role, with the ones the player chose (Point + Say) in their roles. */
+  private roleMapFor(spec: GameSpec, roles: Record<string, string>): Record<string, string | null> {
     const map = suggestRoleMap(spec, this.kit);
+    for (const [role, kitId] of Object.entries(roles)) if (role in map && this.kit.some((k) => k.id === kitId)) map[role] = kitId;
+    return map;
+  }
+
+  /** Which toy plays each role of a game (names), for a preview. */
+  usesFor(spec: GameSpec, roles: Record<string, string> = {}): string[] {
+    const map = this.roleMapFor(spec, roles);
     return spec.roles.map((r) => {
       const k = map[r.id] ? this.kit.find((x) => x.id === map[r.id]) : null;
       return `${r.label}: ${k ? `your ${k.name}` : `built-in ${r.fallback}`}`;
@@ -551,8 +558,8 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   /** Start a game and let the demo hand show how it is played (from a game card). */
-  showMeHow(spec: GameSpec): string[] {
-    const problems = this.playSpec(spec);
+  showMeHow(spec: GameSpec, roles: Record<string, string> = {}): string[] {
+    const problems = this.playSpec(spec, roles);
     if (!problems.length) this.startDemo();
     return problems;
   }
@@ -630,6 +637,35 @@ export class PlayKitSystem extends createSystem({}) {
     return this.pieces.find((p) => p.toyId === toyId)?.kitId ?? null;
   }
 
+  /**
+   * The kit item an item shown by the hands is (Point + Say): a toy's own kit item; a creation
+   * not yet in the Play Kit is added to it (named as it is). null: a built-in shape.
+   */
+  async kitIdOfItem(key: string): Promise<string | null> {
+    const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    if (kind === 'toy') return this.kitIdOfToy(id);
+    const known = this.fromCreation.get(id);
+    if (known && this.kit.some((k) => k.id === known)) return known;
+    const s = this.objects.serialize(id);
+    if (!s) return null;
+    const item = makeKitItem(s, s.creation.name && s.creation.name !== 'Creation' ? s.creation.name : `Toy ${this.kit.length + 1}`);
+    await saveKitItem(item);
+    this.kit.push(item);
+    this.fromCreation.set(id, item.id);
+    this.refreshPanel();
+    return item.id;
+  }
+
+  private fromCreation = new Map<string, string>();
+
+  /** What to call an item shown by the hands ("your Red ball", "a built-in block"). */
+  itemName(key: string): string {
+    const id = key.slice(key.indexOf(':') + 1);
+    if (key.startsWith('c:')) return `your ${this.objects.creationById(id)?.name ?? 'creation'}`;
+    const p = this.pieces.find((x) => x.toyId === id);
+    return p?.kitId ? `your ${this.kitName(p.kitId)}` : `a built-in ${p?.builtin?.shape ?? 'piece'}`;
+  }
+
   /** A kit item's name. */
   kitName(kitId: string): string {
     return this.kit.find((k) => k.id === kitId)?.name ?? 'a toy';
@@ -638,9 +674,9 @@ export class PlayKitSystem extends createSystem({}) {
   // ---------- the Referee's dry run (V5): the game as it would be set up, for the physics check ----------
 
   /** The pieces this game would place (your toys where they fit, built-in shapes for the rest) on your table, in the play area's frame. */
-  dryRunScene(spec: GameSpec): SimScene {
+  dryRunScene(spec: GameSpec, roles: Record<string, string> = {}): SimScene {
     if (this.mode === 'off') this.computeFrame();
-    const roleMap = suggestRoleMap(spec, this.kit);
+    const roleMap = this.roleMapFor(spec, roles);
     const count = new Map<string, number>();
     const pieces: SimPiece[] = [];
     for (const place of spec.layout) {

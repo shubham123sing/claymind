@@ -2,13 +2,16 @@
  * The game agent's panel, opened from Play Kit -> Games -> "Make a game with AI" (canvas,
  * poke in XR, click in the browser). Views: games (pick a game, type one, your own rules,
  * look them up) · rules (your own rules as number cards) · thinking · preview (Play / Show
- * me how / Adjust / Cancel) · adjust (the rules card) · message.
+ * me how / Adjust / Cancel) · adjust (the rules card) · message · describe (Point + Say: show the
+ * pieces with your hands and say what they are, mark the goal or a path on the table) · confirm
+ * (one short question when the hands were not clear).
  * Big targets; everything the agent says is shown with where it came from.
  */
 import { CanvasPanel, ui } from '../ui/canvas-panel.js';
 import type { GameAnswer } from './agent-client.js';
+import { ROLE_WORDS } from './intent.js';
 
-export type View = 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'message';
+export type View = 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'message' | 'describe' | 'confirm';
 
 export interface RuleNumbers {
   players: number;
@@ -41,6 +44,15 @@ export class GameAgentPanel extends CanvasPanel {
   message = '';
   activity: string[] = [];
   showActivity = false;
+  /** describe: what is understood so far, a hint line, what the hands are drawing */
+  understood: string[] = [];
+  hint = '';
+  hintOk = true;
+  marking: 'zone' | 'path' | null = null;
+  canMake = false;
+  /** confirm: the question and the answers (id, label) */
+  question = '';
+  options: [string, string][] = [];
 
   constructor() {
     super([W, H], [0.3, (0.3 * H) / W]);
@@ -83,7 +95,8 @@ export class GameAgentPanel extends CanvasPanel {
         GAME_CARDS.forEach((g, i) => this.btn(40 + (i % 3) * 312, 150 + Math.floor(i / 3) * 96, 296, 82, g, `game:${g}`, true, g === 'Surprise me' ? '#b48cf2' : undefined));
         this.btn(40, 360, 450, 82, 'Type a game name', 'game:type');
         this.btn(510, 360, 450, 82, 'My own rules', 'game:rules', true, '#e2733b');
-        this.btn(40, 460, W - 80, 82, "I don't know the rules: look them up", 'game:lookup');
+        this.btn(40, 460, 450, 82, 'Look up the rules', 'game:lookup');
+        this.btn(510, 460, 450, 82, 'Show me with my hands', 'game:describe', true, '#9fd0f5');
         if (this.showActivity) this.activity.slice(-3).forEach((l, i) => this.text(l, 40, 570 + i * 26, 18, 'rgba(244,241,236,0.7)', 500));
         else if (this.online === false) this.wrapped('The game agent is offline. The Play Kit and its five games work without it.', 565, 2, 22);
         this.btn(40, by, 330, 56, this.showActivity ? 'Hide activity' : 'Agent activity', 'activity');
@@ -135,6 +148,26 @@ export class GameAgentPanel extends CanvasPanel {
         this.btn(272, by, 250, 56, 'Show me how', 'preview:demo', true, '#9fd0f5');
         this.btn(534, by, 200, 56, 'Adjust', 'preview:adjust');
         this.btn(746, by, 214, 56, 'Cancel', 'back');
+        break;
+      }
+      case 'describe': {
+        this.text('Point at a piece or hold it up, then press what it is.', 40, 106, 23, 'rgba(244,241,236,0.8)');
+        ROLE_WORDS.forEach((r, i) => this.btn(40 + (i % 3) * 312, 132 + Math.floor(i / 3) * 84, 296, 72, `This is the ${r}`, `chip:${r}`));
+        this.btn(40, 300, 296, 72, 'Here is the goal', 'chip:here');
+        this.btn(352, 300, 296, 72, this.marking === 'zone' ? 'Done marking' : 'Mark a zone', 'mark:zone', true, this.marking === 'zone' ? '#f0b429' : undefined);
+        this.btn(664, 300, 296, 72, this.marking === 'path' ? 'Done drawing' : 'Draw a path', 'mark:path', true, this.marking === 'path' ? '#f0b429' : undefined);
+        if (this.hint) this.text(this.hint, 40, 404, 22, this.hintOk ? '#5fbf72' : '#f0b429', 600);
+        if (!this.understood.length) this.text('Nothing shown yet.', 40, 446, 22, 'rgba(244,241,236,0.6)');
+        this.understood.slice(-4).forEach((l, i) => this.text(`• ${l}`, 40, 446 + i * 32, 22, '#f4f1ec', 500));
+        this.btn(40, by, 250, 56, 'Type it', 'describe:type');
+        this.btn(302, by, 200, 56, 'Clear', 'describe:clear');
+        this.btn(W - 360, by, 320, 56, 'Make it', 'describe:make', this.canMake, '#5fbf72');
+        break;
+      }
+      case 'confirm': {
+        this.wrapped(this.question, 150, 2, 28, '#f4f1ec');
+        this.options.forEach(([id, label], i) => this.btn(40, 250 + i * 96, W - 80, 82, label, `pick:${id}`, true, i === 0 ? '#f0b429' : undefined));
+        this.btn(40, by, 300, 56, 'Neither: try again', 'pick:');
         break;
       }
       case 'message': {

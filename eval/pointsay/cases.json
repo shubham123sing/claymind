@@ -18,6 +18,7 @@
     { "id": "en-it-holdup", "words": [["throw", 800], ["it", 1000], ["at", 1100], ["the", 1200], ["tower", 1400]], "attention": [["holdup", 700, "A"], ["point", 1350, "T"]], "expect": { "1": ["A"] } },
     { "id": "no-deixis", "words": [["make", 500], ["a", 600], ["bowling", 800], ["game", 1000]], "attention": [["point", 700, "A"]], "expect": {} },
     { "id": "en-that-there", "words": [["put", 500], ["that", 900], ["there", 1800]], "attention": [["point", 800, "A"], ["zone", 1900, "z4"]], "expect": { "1": ["A"], "2": ["z4"] } },
+    { "id": "en-ball-and-pins", "words": [["this", 1000], ["is", 1150], ["the", 1300], ["ball", 1450], ["and", 1600], ["these", 1750], ["are", 1900], ["the", 2050], ["pins", 2200]], "attention": [["hold", 1000, "A"], ["point", 1700, "P1"], ["point", 1800, "P2"]], "expect": { "0": ["A"], "5": ["P1", "P2"] } },
     { "id": "same-item-twice", "words": [["this", 1000], ["is", 1100], ["heavy", 1200], ["so", 1600], ["this", 1800], ["rolls", 2000]], "attention": [["hold", 1000, "A"]], "expect": { "0": ["A"], "4": ["A"] } }
   ]
 }

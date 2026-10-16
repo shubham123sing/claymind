@@ -4,6 +4,10 @@
  * cards + typed words). The backend's answer (Kit Analyst, Researcher, Game Designer,
  * Referee) becomes a preview: Play, Show me how, Adjust (a rules card checked again by the
  * Referee here before playing) or Cancel.
+ * Point + Say ("Show me with my hands"): point at pieces or hold them up and press what they
+ * are, mark the goal or a path on the table, type the rest; the pointing words bind to what the
+ * hands showed (binder.ts) and the player's pointing wins over any guess (intent.ts). With no
+ * words to read it is all code, offline: the built-in game that fits, set up the way shown.
  * Typing: prompt() in the browser, the pinch keypad in the headset (no voice input).
  * Offline: one plain line, and the built-in games keep working.
  */
@@ -15,7 +19,7 @@ import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { TEMPLATES, templateById } from '../playkit/templates.js';
 import { dryRunInWorker } from '../sim/sim-client.js';
 import type { DryRun } from '../sim/dry-run.js';
-import type { GameSpec } from '../playkit/game-spec.js';
+import type { GameSpec, RoleSpec } from '../playkit/game-spec.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { room, type RoomMsg } from '../multiplayer/room-client.js';
 import { validateSpec } from '../playkit/game-spec.js';
@@ -24,6 +28,10 @@ import { applyNumbers, numbersOf, rulesInWords } from './adjust.js';
 import { agentApi, OFFLINE, OfflineError, type GameAnswer } from './agent-client.js';
 import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game-agent-panel.js';
 import { KeypadPanel } from '../ui/keypad.js';
+import { ObjectSystem } from '../objects/object-system.js';
+import { bind, bindOrdered, type Word } from './binder.js';
+import { addRole, applyIntent, chooseGame, rolesFromWords, type Intent, type RoleWord } from './intent.js';
+import { PointSaySystem } from './point-say.js';
 
 const IDLE_CLOSE_MS = 90000;
 
@@ -40,6 +48,11 @@ export class GameAgentSystem extends createSystem({}) {
   private v = new Vector3();
   private v2 = new Vector3();
   private tip = new Vector3();
+  /** Point + Say: what has been shown and said so far */
+  private intent: Intent = { roles: [], zones: [], paths: [], text: '' };
+  private pending: RoleWord | null = null;
+  /** the roles the player chose for the game being previewed (game role -> kit item) */
+  private chosen: Record<string, string> = {};
 
   init(): void {
     for (const [m, order] of [[this.panel.mesh, 24], [this.keypad.mesh, 26]] as const) {
@@ -67,6 +80,10 @@ export class GameAgentSystem extends createSystem({}) {
     return this.world.getSystem(PlayKitSystem)!;
   }
 
+  private get ps() {
+    return this.world.getSystem(PointSaySystem)!;
+  }
+
   // ---------- views ----------
 
   private go(view: View): void {
@@ -76,6 +93,7 @@ export class GameAgentSystem extends createSystem({}) {
   }
 
   private back(): void {
+    if (this.panel.view === 'describe') this.endDescribe();
     this.panel.view = this.history.pop() ?? 'games';
     this.panel.problems = [];
     this.panel.invalidate();
@@ -96,6 +114,7 @@ export class GameAgentSystem extends createSystem({}) {
   }
 
   private close(): void {
+    this.endDescribe();
     this.panel.mesh.visible = false;
     this.keypad.mesh.visible = false;
     this.onTyped = null;
@@ -155,26 +174,176 @@ export class GameAgentSystem extends createSystem({}) {
 
   // ---------- make a game ----------
 
-  private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }): Promise<void> {
+  private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }, shown?: Intent, local?: GameAnswer): Promise<void> {
     const status = req.rules ? 'Using your rules…' : req.rulesUnknown ? 'Looking up the rules…' : 'Choosing a game…';
-    let answer: GameAnswer | null = await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()]));
+    const kitOf = shown ? await this.kitOfShown(shown) : null;
+    const withShown = (a: GameAnswer): GameAnswer => (shown && kitOf ? this.withIntent(a, shown, kitOf) : a);
+    this.chosen = {};
+    let answer: GameAnswer | null = local ?? (await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()])));
     if (!answer) return;
+    answer = withShown(answer);
     // the Referee's dry run: a designed game (not a tested built-in one) is played in the real physics first
-    for (let round = 0; round < 2; round++) {
+    // in order: the player's toys that failed become built-in pieces; the agent fixes its game once; the closest built-in game
+    const dropped = new Set<string>();
+    let fixTried = false;
+    for (let round = 0; round < 3; round++) {
       const spec: GameSpec | null = answer.spec;
       if (!spec) break;
-      const check: DryRun | null = await this.run('Testing it in the physics…', (): Promise<DryRun> => dryRunInWorker(this.kit.dryRunScene(spec), spec));
+      const check: DryRun | null = await this.run('Testing it in the physics…', (): Promise<DryRun> => dryRunInWorker(this.kit.dryRunScene(spec, this.chosen), spec));
       if (!check) return;
       answer.physics = { ok: check.ok, problems: check.problems };
       if (check.ok) break;
-      if (round === 0) {
+      const mine: RoleSpec[] = spec.roles.filter((r) => this.chosen[r.id]);
+      if (mine.length) {
+        // the player's toys first: the ones the test names (else all) become built-in pieces, the rest stays as shown
+        const named: RoleSpec[] = mine.filter((r) => check.problems.some((p) => p.includes(r.label)));
+        const notes: string[] = (named.length ? named : mine).map((r) => {
+          const note = `Your ${this.kit.kitName(this.chosen[r.id])} did not work as ${r.label.toLowerCase()} in the physics test: built-in ones instead`;
+          dropped.add(this.chosen[r.id]);
+          delete this.chosen[r.id];
+          return note;
+        });
+        answer = { ...answer, cannot: [...notes, ...answer.cannot] };
+        continue;
+      }
+      if (!local && !fixTried) {
+        fixTried = true;
         const problems: string[] = check.problems;
         const fixed: GameAnswer | null = await this.run('Fixing what the test found…', (): Promise<GameAnswer> => agentApi.game({ ...req, checkProblems: problems }, [...this.kit.kitItems()]));
         if (!fixed) return;
-        answer = fixed;
-      } else answer = this.safeInstead(answer, check.problems);
+        answer = withShown(fixed);
+        for (const [role, kitId] of Object.entries(this.chosen)) if (dropped.has(kitId)) delete this.chosen[role];
+      } else {
+        answer = this.safeInstead(answer, check.problems);
+        this.chosen = {};
+        break;
+      }
     }
     this.showPreview(answer);
+  }
+
+  // ---------- Point + Say ----------
+
+  private startDescribe(): void {
+    this.intent = { roles: [], zones: [], paths: [], text: '' };
+    this.ps.clearMarks();
+    this.ps.begin();
+    this.ps.marking = null;
+    Object.assign(this.panel, { hint: '', hintOk: true, marking: null });
+    this.understand();
+    this.go('describe');
+  }
+
+  private endDescribe(): void {
+    if (!this.ps.active) return;
+    this.ps.end();
+    this.panel.marking = null;
+  }
+
+  private hint(text: string, ok = true): void {
+    this.panel.hint = text;
+    this.panel.hintOk = ok;
+  }
+
+  /** The "understood so far" list, from the intent and the marks on the table. */
+  private understand(): void {
+    const i = this.intent, lines: string[] = [];
+    for (const r of i.roles) lines.push(`The ${r.role}${r.items.length > 1 ? 's' : ''}: ${r.items.map((k) => this.kit.itemName(k)).join(', ')}`);
+    const zones = this.ps.marks.filter((m) => m.kind === 'zone').length, paths = this.ps.marks.filter((m) => m.kind === 'path').length;
+    if (zones) lines.push(`${zones} zone${zones > 1 ? 's' : ''} on the table${i.goal ? ' (one is the goal)' : ''}`);
+    if (paths) lines.push(`${paths} path${paths > 1 ? 's' : ''} on the table`);
+    if (i.text) lines.push(`You said: "${i.text}"`);
+    this.panel.understood = lines;
+    this.panel.canMake = lines.length > 0;
+  }
+
+  /** A chip ("This is the ball", "Here is the goal"): its words at this moment, bound to what the hands showed. */
+  private chip(role: RoleWord | 'here'): void {
+    const now = performance.now(), ps = this.ps;
+    const text = role === 'here' ? 'here is the goal' : `this is the ${role}`;
+    const words: Word[] = text.split(' ').map((w, k) => ({ text: w, t: now + k * 120 }));
+    const r = bind(words, ps.attention, ps.now());
+    if (r.ambiguous.length) {
+      // one short question, the first candidate glowing
+      this.pending = role === 'here' ? 'goal' : role;
+      const options = r.ambiguous[0].options;
+      const first = options[0], id = first.slice(first.indexOf(':') + 1);
+      this.world.getSystem(ObjectSystem)?.highlight(first.startsWith('toy:') ? { toyId: id } : { creationId: id });
+      this.panel.question = `Which one is the ${this.pending}?`;
+      this.panel.options = options.map((o) => [o, this.kit.itemName(o)]);
+      return this.go('confirm');
+    }
+    const got = rolesFromWords(words, r);
+    if (got.goal) {
+      this.intent.goal = got.goal;
+      this.hint('Got it: that zone is the goal');
+    } else if (got.roles.length) {
+      for (const a of got.roles) addRole(this.intent.roles, a.role, a.items);
+      this.hint(`Got it: ${got.roles[0].items.map((k) => this.kit.itemName(k)).join(', ')} = the ${got.roles[0].role}`);
+    } else if (role === 'here') this.hint('Mark a zone first: press Mark a zone, then pinch and draw a loop on the table', false);
+    else this.hint('Point at it or hold it up first, then press within 2 seconds', false);
+    this.understand();
+  }
+
+  private picked(item: string): void {
+    if (item && this.pending) addRole(this.intent.roles, this.pending, [item]);
+    this.hint(item ? `Got it: ${this.kit.itemName(item)} = the ${this.pending}` : 'Point at it again, a little longer', !!item);
+    this.pending = null;
+    this.understand();
+    this.panel.view = this.history.pop() ?? 'describe';
+  }
+
+  /** Typed words: pointing words bind to what was shown, in order; role words are read too. */
+  private typed(text: string): void {
+    const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
+    const got = rolesFromWords(words, bindOrdered(words, this.ps.attention));
+    for (const a of got.roles) addRole(this.intent.roles, a.role, a.items);
+    if (got.goal) this.intent.goal = got.goal;
+    this.intent.text = text;
+    this.hint(got.roles.length || got.goal ? 'Got it' : 'Noted');
+    this.understand();
+  }
+
+  private async make(): Promise<void> {
+    const marks = this.ps.marks;
+    const shown: Intent = { ...this.intent, roles: this.intent.roles.map((r) => ({ ...r, items: [...r.items] })), zones: marks.filter((m) => m.kind === 'zone'), paths: marks.filter((m) => m.kind === 'path') };
+    this.endDescribe();
+    // with words, the agent reads them (when it is there); otherwise all code: instant and offline
+    if (shown.text && this.panel.online) return this.askGame({ name: shown.text.slice(0, 60), rules: this.shownInWords(shown) }, shown);
+    const pick = chooseGame(shown, TEMPLATES);
+    if (!pick) {
+      this.ps.begin();
+      return this.hint('Show me at least one piece and what it is, or type the name of the game', false);
+    }
+    const local: GameAnswer = {
+      path: 'template', note: 'A built-in game, set up the way you showed', templateId: pick.spec.id, spec: pick.spec,
+      preview: { name: pick.spec.name, howToPlay: pick.spec.howToPlay.slice(0, 4), missing: [] }, cannot: [], adjustments: [], sources: [], guessed: false,
+    };
+    return this.askGame({}, shown, local);
+  }
+
+  /** What was shown, in words for the game agent; the roles and marks are applied here anyway. */
+  private shownInWords(i: Intent): string {
+    const parts = i.roles.map((r) => `the ${r.role}${r.items.length > 1 ? 's are' : ' is'} ${r.items.map((k) => this.kit.itemName(k)).join(', ')}`);
+    if (i.zones.length) parts.push(`${i.zones.length} zone(s) marked on the table${i.goal ? ', one is the goal' : ''}`);
+    if (i.paths.length) parts.push(`${i.paths.length} path(s) drawn on the table`);
+    return `${i.text}. Shown with the hands: ${parts.join('; ') || 'nothing'}.`.slice(0, 600);
+  }
+
+  /** Every item shown -> its kit item (creations are added to the Play Kit). */
+  private async kitOfShown(i: Intent): Promise<Map<string, string | null>> {
+    const items = [...new Set(i.roles.flatMap((r) => r.items))];
+    return new Map(await Promise.all(items.map(async (k) => [k, await this.kit.kitIdOfItem(k)] as const)));
+  }
+
+  /** The player's pointing wins: their toys in their roles, their marks as zones and paths. */
+  private withIntent(a: GameAnswer, shown: Intent, kitOf: Map<string, string | null>): GameAnswer {
+    const base = this.specOf(a);
+    if (!base) return a;
+    const r = applyIntent(base, shown, (k) => kitOf.get(k) ?? null);
+    if (r.problems.length) return { ...a, cannot: [...a.cannot, `Your set-up: ${r.problems[0]}`] };
+    this.chosen = r.roleMap;
+    return { ...a, spec: r.spec, cannot: [...r.notes, ...a.cannot], preview: { ...a.preview, howToPlay: r.spec.howToPlay.slice(0, 4) } };
   }
 
   /** The physics test failed twice: the closest built-in game, which is known to work. */
@@ -196,7 +365,7 @@ export class GameAgentSystem extends createSystem({}) {
     if (!spec) return this.say("I couldn't make that game. The built-in games are in Play Kit -> Games.");
     if (room.connected && room.isHost) room.send('game', { data: { k: 'preview', name: a.preview.name } });
     this.panel.answer = a;
-    this.panel.uses = this.kit.usesFor(spec);
+    this.panel.uses = this.kit.usesFor(spec, this.chosen);
     this.panel.view = 'preview';
     this.panel.invalidate();
   }
@@ -207,11 +376,12 @@ export class GameAgentSystem extends createSystem({}) {
       room.send('vote', { data: { k: 'suggest', answer: { ...this.panel.answer, spec } } });
       return this.say('Sent to the host: in a room the host decides what everyone plays.');
     }
-    const problems = demo ? this.kit.showMeHow(spec) : this.kit.playSpec(spec);
+    const problems = demo ? this.kit.showMeHow(spec, this.chosen) : this.kit.playSpec(spec, this.chosen);
     if (problems.length) {
       this.panel.problems = problems;
       return this.say(`That game is not safe to play: ${problems[0]}`);
     }
+    this.ps.clearMarks();
     this.close();
   }
 
@@ -247,6 +417,16 @@ export class GameAgentSystem extends createSystem({}) {
         p.invalidate();
       }).catch(() => (p.activity = ['(offline)']));
     } else if (id === 'game:Surprise me') void this.askGame({ surprise: true });
+    else if (id === 'game:describe') this.startDescribe();
+    else if (id.startsWith('chip:')) this.chip(id.slice(5) as RoleWord | 'here');
+    else if (id.startsWith('mark:')) {
+      const kind = id.slice(5) as 'zone' | 'path';
+      this.ps.marking = p.marking = p.marking === kind ? null : kind;
+      this.hint(p.marking ? `Pinch on the table and draw ${kind === 'zone' ? 'a loop around the area' : 'the way'}, then let go` : 'Done');
+    } else if (id === 'describe:type') this.type('Say it in words (this, these, here…)', (t) => this.typed(t));
+    else if (id === 'describe:clear') this.startDescribe();
+    else if (id === 'describe:make') void this.make();
+    else if (id.startsWith('pick:')) this.picked(id.slice(5));
     else if (id.startsWith('game:') && !['game:type', 'game:rules', 'game:lookup'].includes(id)) void this.askGame({ name: id.slice(5) });
     else if (id === 'game:type') this.type('Which game?', (name) => void this.askGame({ name }));
     else if (id === 'game:lookup') this.type("Which game? I'll look up the rules", (name) => void this.askGame({ name, rulesUnknown: true }));

@@ -54,7 +54,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
-          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), multiplayer: world.getSystem(MultiplayerSystem),
+          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
           coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem),
         },
       });
