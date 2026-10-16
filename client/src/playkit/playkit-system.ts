@@ -35,6 +35,8 @@ import {
 import { GameHud, PlayKitPanel } from './playkit-panels.js';
 import { DemoPlayer } from './demo-player.js';
 import type { PieceView, V3 } from './demo-planner.js';
+import type { SimPiece } from '../sim/headless-sim.js';
+import type { SimScene } from '../sim/dry-run.js';
 import { RuleEngine, type Observation } from './rule-engine.js';
 import { TEMPLATES, templateById } from './templates.js';
 
@@ -607,6 +609,33 @@ export class PlayKitSystem extends createSystem({}) {
     this.timeScale = 1;
     if (this.paused) this.setPaused(false);
     if (sync) this.syncHud();
+  }
+
+  // ---------- the Referee's dry run (V5): the game as it would be set up, for the physics check ----------
+
+  /** The pieces this game would place (your toys where they fit, built-in shapes for the rest) on your table, in the play area's frame. */
+  dryRunScene(spec: GameSpec): SimScene {
+    if (this.mode === 'off') this.computeFrame();
+    const roleMap = suggestRoleMap(spec, this.kit);
+    const count = new Map<string, number>();
+    const pieces: SimPiece[] = [];
+    for (const place of spec.layout) {
+      const role = spec.roles.find((r) => r.id === place.role);
+      if (!role) continue;
+      const i = count.get(role.id) ?? 0;
+      count.set(role.id, i + 1);
+      const kitId = roleMap[role.id] ?? null;
+      const parts = this.partsOf({ kitId, builtin: kitId ? undefined : { shape: role.fallback, material: role.material } });
+      if (!parts) continue;
+      const yaw = place.rotY ?? 0;
+      pieces.push({
+        key: `${role.id}:${i}`, role: role.id, fixed: !!role.pinned,
+        parts: parts.map((x) => ({ materialId: x.materialId, mesh: { positions: x.mesh.positions }, collider: x.collider, frame: x.frame })),
+        p: [place.at[0], place.at[1] - bottomOf(parts) + 0.001, place.at[2]], q: [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)],
+      });
+    }
+    const c = this.toLocal(new Vector3(surface.centerX, surface.topY, surface.centerZ));
+    return { table: { cx: c[0], cz: c[2], halfW: surface.halfW, halfD: surface.halfD, yaw: surface.yaw - this.yaw, floorY: -this.origin.y }, pieces };
   }
 
   // ---------- multiplayer (Update 3, Step C): the host runs the game, the others mirror it ----------

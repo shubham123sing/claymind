@@ -130,7 +130,7 @@ class Orchestrator:
 
     # ---------- games ----------
 
-    async def make_game(self, name: str | None, user_rules: str | None, rules_unknown: bool, surprise: bool, kit: list[KitDescriptor], user: str) -> dict:
+    async def make_game(self, name: str | None, user_rules: str | None, rules_unknown: bool, surprise: bool, kit: list[KitDescriptor], user: str, check_problems: list[str] | None = None) -> dict:
         reports = [analyse(k).model_dump() for k in kit]
         kg = KitGraph(kit, self.cache.by_kind("rulecard"), [])
         name = (name or "").strip()[:60]
@@ -139,11 +139,11 @@ class Orchestrator:
             ans = self._template_answer(fb, "fallback", "That doesn't fit here: here is a built-in game instead")
             ans["blocked"] = True
             return ans
-        if surprise or not (name or user_rules):
+        if surprise and not check_problems or not (name or user_rules):
             best = kg.local_games()[0]
             return self._template_answer(template(best["id"]), "surprise", "Surprise: the game that uses most of your toys")
         known = self._template_named(name) if name else None
-        if known and not user_rules and not rules_unknown:
+        if known and not user_rules and not rules_unknown and not check_problems:
             return self._template_answer(known, "template", "Using the built-in rules")
         kit_roles = {r for rep in reports for r in rep.get("suggestedRoles", [])}
         builtin = rulebook.find(name) if name else None
@@ -174,7 +174,8 @@ class Orchestrator:
             "example_template": TEMPLATES[1], "template_ids": [{"id": t["id"], "name": t["name"], "summary": t["summary"]} for t in TEMPLATES],
             "passages": [p["text"][:600] for p in self.passages.search(f"{name} rules {user_rules or ''}", 3)],
         }
-        errors: list[str] = []
+        # the client's physics dry run of the previous answer: the first design must fix it
+        errors: list[str] = [f"physics test: {p}" for p in (check_problems or [])]
         for attempt in range(MAX_REPAIRS + 1):
             try:
                 d: DesignOut = await self.call("designer", {**design_in, "REFEREE_ERRORS": errors}, DesignOut)  # type: ignore[assignment]

@@ -13,7 +13,7 @@ import { numbersOf } from '../../src/game-agent/adjust';
 import { validateSpec, type GameSpec } from '../../src/playkit/game-spec';
 import { templateById } from '../../src/playkit/templates';
 import { HavokSim } from '../physics/havok-sim';
-import { runGame, sceneFromSpec } from '../physics/demo-run';
+import { runGame, sceneFromSpec } from '../../src/sim/dry-run';
 
 const BASE = process.env.CLAYMIND_AGENTS ?? 'http://127.0.0.1:8790';
 const ROOT = new URL('../../../', import.meta.url);

@@ -38,6 +38,8 @@ class GameIn(BaseModel):
     rulesUnknown: bool = False
     surprise: bool = False
     kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
+    #: the client's physics dry run of the last answer failed: the Designer must fix these
+    checkProblems: list[str] = Field(default_factory=list, max_length=4)
 
 
 class KitIn(BaseModel):
@@ -98,7 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @base.post("/v1/game")
     async def game(body: GameIn, x_player_id: str | None = Header(default=None)):
-        out = await orch.make_game(body.name, body.rules, body.rulesUnknown, body.surprise, body.kit, player(x_player_id))
+        out = await orch.make_game(body.name, body.rules, body.rulesUnknown, body.surprise, body.kit, player(x_player_id), [p[:160] for p in body.checkProblems])
         if body.rules:
             memory.update(player(x_player_id), rulesChanged=[{"game": body.name, "rules": body.rules[:200]}])
         return out

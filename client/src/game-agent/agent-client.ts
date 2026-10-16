@@ -25,6 +25,8 @@ export interface GameAnswer {
   adjustments: string[];
   sources: { title: string; url: string }[];
   guessed: boolean;
+  /** The client's physics dry run: passed, or what it found (set here, not by the backend). */
+  physics?: { ok: boolean; problems: string[] };
 }
 
 function store(key: string, value?: string): string | null {
@@ -88,7 +90,7 @@ export const agentApi = {
       return false;
     }
   },
-  game: (req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }, kit: KitItem[]) => call<GameAnswer>('/v1/game', { ...req, kit: describeKit(kit) }),
+  game: (req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean; checkProblems?: string[] }, kit: KitItem[]) => call<GameAnswer>('/v1/game', { ...req, kit: describeKit(kit) }),
   trace: () => call<{ calls: Record<string, unknown>[] }>('/v1/trace'),
   forget: () => call<{ deleted: boolean }>('/v1/memory', undefined, 'DELETE'),
 };

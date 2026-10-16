@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { HavokSim } from './havok-sim';
 import { templateById } from '../../src/playkit/templates';
-import { runGame, sceneFromSpec } from './demo-run';
+import { runGame, sceneFromSpec } from '../../src/sim/dry-run';
 
 // HavokSim.create patches fetch so Havok's .wasm loads from disk in Node
 beforeAll(async () => (await HavokSim.create()).destroy());

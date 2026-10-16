@@ -3,14 +3,14 @@
  * extended IWSDK runtime: compound colliders, contact events) stepped directly at 72 Hz,
  * without drawing. Same bodies as the game (physics/body-build.ts), so a simulated toy
  * behaves like the real one. Deterministic: the same scene and actions give the same run.
- * Test harness: plays the demo planner headless in Node.
+ * Runs in the dry-run worker (sim-worker.ts) and in Node for tests.
  */
 import {
   PHYSICS_HEADER_WORDS, PHYSICS_INPUT_RECORD_FLOATS, PHYSICS_OUTPUT_RECORD_FLOATS, PHYSICS_PROTOCOL_VERSION, physicsExchangeByteLength,
 } from '../../node_modules/@iwsdk/core/dist/physics/physics-worker-protocol.js';
-import { BODY_DAMPING, buildBody, type BodyPart } from '../../src/physics/body-build.js';
-import { encodeCompound, type ContactMessage } from '../../src/physics/runtime/compound-format.js';
-import { PhysicsRuntime } from '../../src/physics/runtime/physics-runtime-ext.js';
+import { BODY_DAMPING, buildBody, type BodyPart } from '../physics/body-build.js';
+import { encodeCompound, type ContactMessage } from '../physics/runtime/compound-format.js';
+import { PhysicsRuntime } from '../physics/runtime/physics-runtime-ext.js';
 
 export type V3 = [number, number, number];
 export type Q4 = [number, number, number, number];

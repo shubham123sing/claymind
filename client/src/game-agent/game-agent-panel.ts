@@ -129,7 +129,8 @@ export class GameAgentPanel extends CanvasPanel {
         }
         for (const l of extra.slice(0, 3)) y = this.wrapped(l, y, 1, 20, '#f0b429') + 2;
         if (a.sources.length) y = this.wrapped(`Sources: ${a.sources.map((s) => s.title).join(', ')} (Wikipedia)`, y + 4, 1, 19, 'rgba(159,208,245,0.9)');
-        if (a.guessed) this.wrapped('Some of these rules are a guess: no source described them.', y + 4, 1, 19, '#d9534f');
+        if (a.guessed) y = this.wrapped('Some of these rules are a guess: no source described them.', y + 4, 1, 19, '#d9534f');
+        if (a.physics) this.wrapped(a.physics.ok ? 'Tested in the physics: it works.' : `Physics test: ${a.physics.problems[0]}`, y + 4, 1, 19, a.physics.ok ? '#5fbf72' : '#f0b429');
         this.btn(40, by, 220, 56, 'Play', 'preview:play', true, '#5fbf72');
         this.btn(272, by, 250, 56, 'Show me how', 'preview:demo', true, '#9fd0f5');
         this.btn(534, by, 200, 56, 'Adjust', 'preview:adjust');

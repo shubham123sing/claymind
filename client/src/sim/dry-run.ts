@@ -1,6 +1,7 @@
 /**
- * Test harness: the demo planner plays a Game Spec headless (no AI needed, deterministic).
- * Kept from Update 2's "Simulate it for me" (Will it work? and What-if were removed in Update 3).
+ * The Referee's dry run (V5): a Game Spec played headless in the game's own physics (Havok,
+ * the same bodies), by the demo planner with human-possible actions, deterministic.
+ * Used in the client's dry-run worker before a new game is offered, and by the tests.
  * - runGame: the demo player plays a Game Spec on a simulated table with the real rule
  *   engine, until the game ends or 60 s of game time pass;
  * - stability ("Will it work?"): does everything stay where it is? If not, a fix is
@@ -9,11 +10,11 @@
  *   again to prove the replay is identical.
  * All in the play area's frame (table top at y = 0).
  */
-import type { GameSpec } from '../../src/playkit/game-spec.js';
-import { bottomOf, fallbackParts } from '../../src/playkit/fallback-shapes.js';
-import { RuleEngine, type Observation } from '../../src/playkit/rule-engine.js';
-import { HeadlessSim, speed, type Q4, type SimPiece, type SimTable, type V3 } from './headless-sim';
-import { Planner, type Action, type PieceView } from '../../src/playkit/demo-planner.js';
+import type { GameSpec } from '../playkit/game-spec.js';
+import { bottomOf, fallbackParts } from '../playkit/fallback-shapes.js';
+import { RuleEngine, type Observation } from '../playkit/rule-engine.js';
+import { HeadlessSim, speed, type Q4, type SimPiece, type SimTable, type V3 } from './headless-sim.js';
+import { Planner, type Action, type PieceView } from '../playkit/demo-planner.js';
 
 export interface SimScene {
   table: SimTable;
@@ -125,4 +126,47 @@ export function sceneFromSpec(spec: GameSpec, table: SimTable = { cx: 0, cz: 0, 
     return { key: `${role.id}:${i}`, role: role.id, parts, p: [place.at[0], place.at[1] - bottomOf(parts) + 0.001, place.at[2]], q: [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)], fixed: !!role.pinned };
   });
   return { table, pieces };
+}
+
+// ---------- the Referee's dry run ----------
+
+export interface DryRun {
+  ok: boolean;
+  /** Plain problems for the Designer's repair (or the player). */
+  problems: string[];
+  run: GameRun | null;
+}
+
+/**
+ * Does the game work in the real physics? The set-up must stand still on the table (nothing
+ * falls off or topples by itself), and a test game by the demo planner must make progress
+ * (score, count or end) within `seconds`.
+ */
+export async function dryRun(scene: SimScene, spec: GameSpec, seed = 7, seconds = 20): Promise<DryRun> {
+  const problems: string[] = [];
+  const sim = await HeadlessSim.create(scene.table);
+  try {
+    for (const p of scene.pieces) sim.put(p);
+    for (let i = 0; i < 108; i++) sim.step(); // 1.5 s
+    for (const p of scene.pieces) {
+      if (p.fixed) continue;
+      const s = sim.get(p.key);
+      if (!s) continue;
+      const label = spec.roles.find((r) => r.id === p.role)?.label ?? p.key;
+      if (s.p[1] < -0.03) problems.push(`${label} falls off the table at the start`);
+      else if (Math.hypot(s.p[0] - p.p[0], s.p[2] - p.p[2]) > 0.05) problems.push(`${label} does not stay where it is placed`);
+    }
+  } finally {
+    sim.destroy();
+  }
+  let run: GameRun | null = null;
+  try {
+    run = await runGame(scene, spec, seed, seconds);
+    const moved = run.result !== 'unfinished' || run.scores.some((v) => v !== 0) || Object.values(run.counters).some((v) => v > 0);
+    if (run.actions === 0 && spec.allowedActions.length) problems.push('the test player found no move it could make with these pieces');
+    else if (!moved) problems.push(`nothing scored or counted in a ${seconds} s test game`);
+  } catch (e) {
+    problems.push(`the test game stopped: ${String(e).slice(0, 80)}`);
+  }
+  return { ok: problems.length === 0, problems: [...new Set(problems)].slice(0, 4), run };
 }

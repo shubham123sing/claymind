@@ -12,7 +12,10 @@ import { uiSounds } from '../audio/ui-sounds.js';
 import { bus } from '../core/event-bus.js';
 import { input } from '../platform/input/input-system.js';
 import { PlayKitSystem } from '../playkit/playkit-system.js';
-import { templateById } from '../playkit/templates.js';
+import { TEMPLATES, templateById } from '../playkit/templates.js';
+import { dryRunInWorker } from '../sim/sim-client.js';
+import type { DryRun } from '../sim/dry-run.js';
+import type { GameSpec } from '../playkit/game-spec.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { room, type RoomMsg } from '../multiplayer/room-client.js';
 import { validateSpec } from '../playkit/game-spec.js';
@@ -154,9 +157,34 @@ export class GameAgentSystem extends createSystem({}) {
 
   private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }): Promise<void> {
     const status = req.rules ? 'Using your rules…' : req.rulesUnknown ? 'Looking up the rules…' : 'Choosing a game…';
-    const answer = await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()]));
+    let answer: GameAnswer | null = await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()]));
     if (!answer) return;
+    // the Referee's dry run: a designed game (not a tested built-in one) is played in the real physics first
+    for (let round = 0; round < 2; round++) {
+      const spec: GameSpec | null = answer.spec;
+      if (!spec) break;
+      const check: DryRun | null = await this.run('Testing it in the physics…', (): Promise<DryRun> => dryRunInWorker(this.kit.dryRunScene(spec), spec));
+      if (!check) return;
+      answer.physics = { ok: check.ok, problems: check.problems };
+      if (check.ok) break;
+      if (round === 0) {
+        const problems: string[] = check.problems;
+        const fixed: GameAnswer | null = await this.run('Fixing what the test found…', (): Promise<GameAnswer> => agentApi.game({ ...req, checkProblems: problems }, [...this.kit.kitItems()]));
+        if (!fixed) return;
+        answer = fixed;
+      } else answer = this.safeInstead(answer, check.problems);
+    }
     this.showPreview(answer);
+  }
+
+  /** The physics test failed twice: the closest built-in game, which is known to work. */
+  private safeInstead(a: GameAnswer, problems: string[]): GameAnswer {
+    const id = a.spec?.id ?? '';
+    const t = TEMPLATES.find((x) => id.startsWith(x.id)) ?? TEMPLATES.find((x) => x.roles.some((r) => a.spec?.roles.some((q) => q.fallback === r.fallback))) ?? TEMPLATES[0];
+    return {
+      ...a, path: 'fallback', templateId: t.id, spec: null, note: `The physics test found: ${problems[0]}. Here is ${t.name} instead`,
+      preview: { name: t.name, howToPlay: t.howToPlay.slice(0, 4), missing: a.preview.missing }, physics: { ok: true, problems: [] },
+    };
   }
 
   private specOf(a: GameAnswer) {
