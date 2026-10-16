@@ -1,0 +1,69 @@
+{
+  "about": "Second held-out Point + Say set (same format as modes.json), written on 2026-10-17 BEFORE the typed-words work in branch v5.1-typed-words and scored once after it, with no code change after. modes-heldout.json (the first held-out set) became tuning data for that work.",
+  "scenarios": [
+    {
+      "id": "h2-skittles",
+      "items": { "R": ["Rubber ball", "kit_rubber"], "S1": ["Skittle 1", "kit_skittle"], "S2": ["Skittle 2", "kit_skittle"], "S3": ["Skittle 3", "kit_skittle"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["R"], "target": ["S1", "S2", "S3"] } },
+      "chat": "roll the rubber ball at the skittles and knock them all down",
+      "cards": [["hold", "R", 1000], ["chip", "ball", 1600], ["point", "S1", 4000], ["chip", "target", 4600], ["point", "S2", 7000], ["chip", "target", 7600], ["point", "S3", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["hold", "R", 1000], ["point", "S1", 2500], ["point", "S2", 2800], ["point", "S3", 3100]], "text": "roll this at those" }
+    },
+    {
+      "id": "h2-bucket",
+      "items": { "BU": ["Bucket", "kit_bucket"], "PB": ["Paper ball", "kit_paper"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["BU"], "ball": ["PB"] } },
+      "chat": "throw the paper ball into the bucket",
+      "cards": [["hold", "PB", 1000], ["chip", "ball", 1600], ["point", "BU", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["hold", "PB", 1000], ["point", "BU", 2400]], "text": "throw this into that" }
+    },
+    {
+      "id": "h2-hinglish-bottle",
+      "items": { "GE": ["Gend", "kit_gend"], "B1": ["Bottle 1", "kit_bottle"], "B2": ["Bottle 2", "kit_bottle"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["GE"], "target": ["B1", "B2"] } },
+      "chat": "gend se bottles girao",
+      "cards": [["hold", "GE", 1000], ["chip", "ball", 1600], ["point", "B1", 4000], ["chip", "target", 4600], ["point", "B2", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["hold", "GE", 1000], ["point", "B1", 2500], ["point", "B2", 2800]], "text": "isse ye sab girao" }
+    },
+    {
+      "id": "h2-carrom-words",
+      "items": { "ST": ["Flat disc", "kit_flat"], "P1": ["Token 1", "kit_token"], "P2": ["Token 2", "kit_token"], "BD": ["Wooden board", "kit_wboard"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "launcher": ["ST"], "ball": ["P1", "P2"], "board": ["BD"] } },
+      "chat": "on the wooden board, flick the flat disc to send the tokens into the pockets",
+      "cards": [["point", "BD", 1000], ["chip", "board", 1600], ["hold", "ST", 4000], ["chip", "launcher", 4600], ["point", "P1", 7000], ["chip", "ball", 7600], ["point", "P2", 10000], ["chip", "ball", 10600]],
+      "combined": { "gestures": [["point", "BD", 1000], ["hold", "ST", 2500], ["point", "P1", 4000], ["point", "P2", 4300]], "text": "this is the board, this is the striker and these are the coins" }
+    },
+    {
+      "id": "h2-tower-hinglish",
+      "items": { "L1": ["Lakdi 1", "kit_lakdi"], "L2": ["Lakdi 2", "kit_lakdi"], "L3": ["Lakdi 3", "kit_lakdi"] },
+      "truth": { "game": "tower-balance", "roles": { "target": ["L1", "L2", "L3"] } },
+      "chat": "lakdi se uncha tower banao",
+      "cards": [["point", "L1", 1000], ["chip", "target", 1600], ["point", "L2", 4000], ["chip", "target", 4600], ["point", "L3", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["point", "L1", 1000], ["point", "L2", 1300], ["point", "L3", 1600]], "text": "ye sab se tower banao" }
+    },
+    {
+      "id": "h2-marble-chute",
+      "items": { "CH": ["Chute", "kit_chute"], "M": ["Steel marble", "kit_steel"] },
+      "truth": { "game": "marble-run", "roles": { "launcher": ["CH"], "ball": ["M"] } },
+      "chat": "the steel marble goes down the chute",
+      "cards": [["point", "CH", 1000], ["chip", "launcher", 1600], ["hold", "M", 4000], ["chip", "ball", 4600]],
+      "combined": { "gestures": [["hold", "M", 1000], ["point", "CH", 2500]], "text": "drop this down that ramp" }
+    },
+    {
+      "id": "h2-two-cups",
+      "items": { "C1": ["Mug", "kit_mug"], "C2": ["Bowl", "kit_bowl"], "BB": ["Bead", "kit_bead"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["C1", "C2"], "ball": ["BB"] } },
+      "chat": "get the bead into the mug or the bowl, the mug and the bowl are goals",
+      "cards": [["hold", "BB", 1000], ["chip", "ball", 1600], ["point", "C1", 4000], ["chip", "goal", 4600], ["point", "C2", 7000], ["chip", "goal", 7600]],
+      "combined": { "gestures": [["hold", "BB", 1000], ["point", "C1", 2500], ["point", "C2", 2800]], "text": "this ball goes into these" }
+    },
+    {
+      "id": "h2-just-talk",
+      "items": { "A": ["Red ball", "kit_red"], "CUP": ["Cup", "kit_cup"] },
+      "truth": { "game": null, "roles": {} },
+      "chat": "I like the red ball, it looks nice next to the cup",
+      "cards": [["point", "A", 1000]],
+      "combined": { "gestures": [["point", "A", 1000]], "text": "I like this" }
+    }
+  ]
+}

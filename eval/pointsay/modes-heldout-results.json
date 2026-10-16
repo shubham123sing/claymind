@@ -2,9 +2,9 @@
  "summary": {
   "chat": {
    "scenarios": 8,
-   "allRight": 1,
-   "gameRight": 4,
-   "rolesRight": 6,
+   "allRight": 6,
+   "gameRight": 8,
+   "rolesRight": 21,
    "rolesTotal": 21,
    "marksKept": 6,
    "confirmCards": 0,
@@ -24,13 +24,13 @@
   },
   "combined": {
    "scenarios": 8,
-   "allRight": 5,
-   "gameRight": 7,
-   "rolesRight": 19,
+   "allRight": 8,
+   "gameRight": 8,
+   "rolesRight": 21,
    "rolesTotal": 21,
    "marksKept": 8,
    "confirmCards": 0,
-   "wrongRoles": 2,
+   "wrongRoles": 0,
    "invalidSpecs": 0
   }
  },
@@ -38,16 +38,16 @@
   {
    "id": "ho-bowling-pins",
    "chat": {
-    "game": "tower-balance",
-    "gameOk": false,
-    "rolesRight": 3,
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
     "rolesTotal": 4,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "knock-down",
@@ -77,16 +77,16 @@
   {
    "id": "ho-basket",
    "chat": {
-    "game": null,
-    "gameOk": false,
-    "rolesRight": 0,
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
     "rolesTotal": 2,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "target-throw",
@@ -118,14 +118,14 @@
    "chat": {
     "game": "target-throw",
     "gameOk": true,
-    "rolesRight": 1,
+    "rolesRight": 2,
     "rolesTotal": 2,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "target-throw",
@@ -142,14 +142,14 @@
    "combined": {
     "game": "target-throw",
     "gameOk": true,
-    "rolesRight": 1,
+    "rolesRight": 2,
     "rolesTotal": 2,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    }
   },
   {
@@ -157,14 +157,14 @@
    "chat": {
     "game": "flick-and-pocket",
     "gameOk": true,
-    "rolesRight": 1,
+    "rolesRight": 4,
     "rolesTotal": 4,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "flick-and-pocket",
@@ -194,16 +194,16 @@
   {
    "id": "ho-stack",
    "chat": {
-    "game": null,
-    "gameOk": false,
-    "rolesRight": 0,
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 4,
     "rolesTotal": 4,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "tower-balance",
@@ -233,11 +233,11 @@
   {
    "id": "ho-marble-goal",
    "chat": {
-    "game": "knock-down",
-    "gameOk": false,
-    "rolesRight": 1,
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 2,
     "rolesTotal": 2,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": false,
     "confirms": 0,
     "wrong": 0,
@@ -259,14 +259,14 @@
    "combined": {
     "game": "marble-run",
     "gameOk": true,
-    "rolesRight": 1,
+    "rolesRight": 2,
     "rolesTotal": 2,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
-    "wrong": 1,
+    "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    }
   },
   {
@@ -274,9 +274,9 @@
    "chat": {
     "game": "knock-down",
     "gameOk": true,
-    "rolesRight": 0,
+    "rolesRight": 3,
     "rolesTotal": 3,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": false,
     "confirms": 0,
     "wrong": 0,
@@ -335,16 +335,16 @@
     "ok": true
    },
    "combined": {
-    "game": "tower-balance",
-    "gameOk": false,
+    "game": null,
+    "gameOk": true,
     "rolesRight": 0,
     "rolesTotal": 0,
     "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
-    "wrong": 1,
+    "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    }
   }
  ]

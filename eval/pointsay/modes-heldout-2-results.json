@@ -1,0 +1,351 @@
+{
+ "summary": {
+  "chat": {
+   "scenarios": 8,
+   "allRight": 5,
+   "gameRight": 7,
+   "rolesRight": 16,
+   "rolesTotal": 21,
+   "marksKept": 8,
+   "confirmCards": 0,
+   "wrongRoles": 5,
+   "invalidSpecs": 0
+  },
+  "cards": {
+   "scenarios": 8,
+   "allRight": 8,
+   "gameRight": 8,
+   "rolesRight": 21,
+   "rolesTotal": 21,
+   "marksKept": 8,
+   "confirmCards": 0,
+   "wrongRoles": 0,
+   "invalidSpecs": 0
+  },
+  "combined": {
+   "scenarios": 8,
+   "allRight": 7,
+   "gameRight": 7,
+   "rolesRight": 18,
+   "rolesTotal": 21,
+   "marksKept": 8,
+   "confirmCards": 0,
+   "wrongRoles": 0,
+   "invalidSpecs": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "h2-skittles",
+   "chat": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-bucket",
+   "chat": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-hinglish-bottle",
+   "chat": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 1,
+    "rolesTotal": 3,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 2,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": null,
+    "gameOk": false,
+    "rolesRight": 0,
+    "rolesTotal": 3,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   }
+  },
+  {
+   "id": "h2-carrom-words",
+   "chat": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 4,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 1,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-tower-hinglish",
+   "chat": {
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-marble-chute",
+   "chat": {
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-two-cups",
+   "chat": {
+    "game": "knock-down",
+    "gameOk": false,
+    "rolesRight": 1,
+    "rolesTotal": 3,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 2,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "h2-just-talk",
+   "chat": {
+    "game": null,
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": null,
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": null,
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  }
+ ]
+}

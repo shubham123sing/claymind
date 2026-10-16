@@ -37,7 +37,7 @@ function understand(s: Scenario, mode: Mode): { intent: Intent; confirms: number
   const marks = s.marks ?? [];
   const typed = (text: string, attention: Attention[]) => {
     const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
-    const got = rolesFromWords(words, bindOrdered(words, attention));
+    const got = rolesFromWords(words, bindOrdered(words, attention, (k) => s.items[k]?.[0] ?? ''));
     const pointed = new Set(got.roles.flatMap((r) => r.items));
     for (const a of rolesFromNames(text, names)) got.roles.push({ role: a.role, items: a.items.filter((k) => !pointed.has(k)) });
     for (const a of got.roles) if (a.items.length) addRole(intent.roles, a.role, a.items);
@@ -127,6 +127,11 @@ describe('Point + Say: chat only vs gestures + cards vs combined', () => {
 
   it('held-out scenarios (scored as they come: the honest number)', () => {
     const { summary } = run('modes-heldout');
+    for (const m of modes) expect(summary[m].invalidSpecs, m).toBe(0);
+  });
+
+  it('second held-out set (written before the typed-words work, scored once after it)', () => {
+    const { summary } = run('modes-heldout-2');
     for (const m of modes) expect(summary[m].invalidSpecs, m).toBe(0);
   });
 });

@@ -299,7 +299,7 @@ export class GameAgentSystem extends createSystem({}) {
   /** Typed words: pointing words bind to what was shown, in order; role words are read too. */
   private typed(text: string): void {
     const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
-    const bound = bindOrdered(words, this.ps.attention);
+    const bound = bindOrdered(words, this.ps.attention, (k) => this.kit.itemName(k));
     const got = rolesFromWords(words, bound);
     // pieces named in the words ("the Red ball is the ball"), unless the hands already said what they are
     const pointed = new Set(got.roles.flatMap((r) => r.items));
