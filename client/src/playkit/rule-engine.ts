@@ -17,6 +17,8 @@ export interface PieceObs {
   top: number;
   speed: number;
   held: boolean;
+  /** Degrees between the piece's up and its up at the start (for tilt_exceeded). */
+  tilt?: number;
 }
 
 export interface Observation {
@@ -125,8 +127,8 @@ export class RuleEngine {
       if (m) m.moving = true;
     }
 
-    const run = (i: number, rule: Rule, key: string | null) => {
-      for (const a of rule.do) if (this.act(a, key, out)) return;
+    const run = (i: number, rule: Rule, key: string | null, zoneValue?: number) => {
+      for (const a of rule.do) if (this.act(a, key, out, zoneValue)) return;
     };
 
     this.spec.rules.forEach((rule, i) => {
@@ -142,8 +144,8 @@ export class RuleEngine {
             const m = this.memo.get(p.key)!;
             const inside = !p.held && inZone(zone, p.p);
             const was = m.inZone.has(zone.id);
-            if (!first && !p.held && t.type === 'enters_zone' && inside && !was) run(i, rule, p.key);
-            if (!first && !p.held && t.type === 'leaves_zone' && !inside && was) run(i, rule, p.key);
+            if (!first && !p.held && t.type === 'enters_zone' && inside && !was) run(i, rule, p.key, this.zoneValue(t.zone));
+            if (!first && !p.held && t.type === 'leaves_zone' && !inside && was) run(i, rule, p.key, this.zoneValue(t.zone));
           }
           break;
         }
@@ -153,6 +155,16 @@ export class RuleEngine {
             const m = this.memo.get(p.key)!;
             const limit = t.relative ? m.startY - t.height : t.height;
             if (p.p[1] < limit && !m.fell.has(i)) {
+              m.fell.add(i);
+              run(i, rule, p.key);
+            }
+          }
+          break;
+        case 'tilt_exceeded':
+          for (const p of obs.pieces) {
+            if (!fits(p, t.role) || p.held || p.tilt === undefined) continue;
+            const m = this.memo.get(p.key)!;
+            if (p.tilt > t.degrees && !m.fell.has(i)) {
               m.fell.add(i);
               run(i, rule, p.key);
             }
@@ -237,11 +249,15 @@ export class RuleEngine {
   }
 
   /** Runs one action; true when the game ended (stop the rule). */
-  private act(a: Action, key: string | null, out: Command[]): boolean {
+  private zoneValue(id: string): number | undefined {
+    return this.spec.zones.find((z) => z.id === id)?.value;
+  }
+
+  private act(a: Action, key: string | null, out: Command[], zoneValue?: number): boolean {
     const s = this.state;
     switch (a.type) {
       case 'add_score':
-        if (a.points) s.scores[s.player] += a.points;
+        if (a.points ?? zoneValue) s.scores[s.player] += a.points ?? zoneValue ?? 0;
         if (a.counter) s.counters[a.counter] = (s.counters[a.counter] ?? 0) + 1;
         break;
       case 'end_turn':

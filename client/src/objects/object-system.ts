@@ -148,6 +148,8 @@ const MATERIAL_REBUILD_DELAY = 400;
 const MAX_CREATIONS = 8;
 const MAX_PIECES = 24;
 const MAX_THROW = 6;
+/** A held tool never moves faster than this (m/s): a hard swing, not a glitch. */
+const TOOL_MAX_SPEED = 8;
 /** Play Kit pieces on the table at once. */
 const MAX_TOYS = 40;
 /** Fingertip flick: speeds (m/s) and how long a piece ignores the next flick (ms). */
@@ -407,6 +409,23 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.hist.length > 16) rec.hist.shift();
   }
   private qa: number[] = [0, 0, 0, 1];
+
+  /** Play Kit pieces held as tools (a bat, a paddle): driven by velocity, so they hit with the hand's speed. */
+  readonly tools = new Set<string>();
+
+  /** A held object goes to the hand: tools by velocity (the physics sees the swing), the rest at once. */
+  private follow(rec: Live, p: Vector3, dt: number): void {
+    if (!rec.toyId || !this.tools.has(rec.toyId) || dt <= 0) return this.teleport(rec, p);
+    const v = this.tmpV.copy(p).sub(rec.mesh.position).divideScalar(Math.max(dt, 1 / 90));
+    if (v.length() > TOOL_MAX_SPEED) v.setLength(TOOL_MAX_SPEED);
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: [v.x, v.y, v.z] });
+    rec.hist.push({ x: rec.mesh.position.x, y: rec.mesh.position.y, z: rec.mesh.position.z, t: performance.now() });
+    if (rec.hist.length > 16) rec.hist.shift();
+    // a tool that fell far behind the hand (stuck on something) is put back in it
+    if (rec.mesh.position.distanceTo(p) > 0.25) this.teleport(rec, p);
+  }
+  private tmpV = new Vector3();
 
   private hold(rec: Live, mode: Mode, side: Handedness | null): void {
     if (rec.side && rec.side !== side) input.claims[rec.side] = null;
@@ -1372,7 +1391,7 @@ export class ObjectSystem extends createSystem({}) {
           break;
         }
         this.carryTarget(rec, h, this.v);
-        this.teleport(rec, this.v);
+        this.follow(rec, this.v, dt);
         break;
       }
       case 'pinch': {
@@ -1382,7 +1401,7 @@ export class ObjectSystem extends createSystem({}) {
           break;
         }
         this.v.set(h.pinchPoint[0], h.pinchPoint[1], h.pinchPoint[2]).add(rec.offset);
-        this.teleport(rec, this.v);
+        this.follow(rec, this.v, dt);
         break;
       }
       case 'ray': {

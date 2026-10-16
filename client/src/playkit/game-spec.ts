@@ -15,7 +15,7 @@ export const ROLE_TAGS = ['board', 'piece', 'launcher', 'target', 'obstacle', 'c
 export type RoleTag = (typeof ROLE_TAGS)[number];
 
 export const TRIGGERS = [
-  'enters_zone', 'leaves_zone', 'falls_below_height', 'comes_to_rest', 'hit_by', 'stack_height_reached', 'timer', 'count_reached',
+  'enters_zone', 'leaves_zone', 'falls_below_height', 'tilt_exceeded', 'comes_to_rest', 'hit_by', 'stack_height_reached', 'timer', 'count_reached',
 ] as const;
 export const ACTIONS = ['add_score', 'end_turn', 'respawn', 'reset_piece', 'show_message', 'win', 'lose'] as const;
 export const HAND_ACTIONS = ['flick', 'throw', 'push', 'drop', 'place'] as const;
@@ -41,6 +41,8 @@ export interface RoleSpec {
   pinned?: boolean;
   /** Where `respawn` puts a piece of this role (default: its start). */
   respawnAt?: Vec3;
+  /** A tool held in the hand while playing (a bat, a paddle, a club): it follows the hand and hits with the hand's speed. */
+  handHeld?: boolean;
 }
 
 export interface Placement {
@@ -56,6 +58,14 @@ export interface Zone {
   center: Vec3;
   /** box: full size x, y, z · cylinder: [radius, height, 0] */
   size: Vec3;
+  /** Points for a piece that enters it (`add_score` without its own points uses this). */
+  value?: number;
+}
+
+/** A route on the table (a marble's way, a lane), points in the play area's frame. */
+export interface Path {
+  id: string;
+  points: Vec3[];
 }
 
 export type Trigger =
@@ -63,6 +73,8 @@ export type Trigger =
   | { type: 'leaves_zone'; zone: string; role?: string }
   /** Below `height` m above the table, or with `relative`, `height` m below where the piece started. */
   | { type: 'falls_below_height'; height: number; relative?: boolean; role?: string }
+  /** A piece tipped more than `degrees` from how it stood at the start (once per piece). */
+  | { type: 'tilt_exceeded'; degrees: number; role?: string }
   | { type: 'comes_to_rest'; role?: string }
   | { type: 'hit_by'; role: string; by: string }
   | { type: 'stack_height_reached'; role: string; height: number }
@@ -70,7 +82,7 @@ export type Trigger =
   | { type: 'count_reached'; counter: string; value: number };
 
 export type Action =
-  /** Points to the current player and/or +1 on a named counter. */
+  /** Points to the current player (or the entered zone's value) and/or +1 on a named counter. */
   | { type: 'add_score'; points?: number; counter?: string }
   | { type: 'end_turn' }
   /** The piece that triggered the rule goes to its role's respawn point. */
@@ -108,6 +120,8 @@ export interface GameSpec {
   resetEachTurn?: boolean;
   allowedActions: HandAction[];
   rules: Rule[];
+  /** Routes on the table (shown as lines). */
+  paths?: Path[];
   /** Counter shown on the scoreboard next to the scores (optional). */
   counter?: { id: string; label: string; target?: number };
 }
@@ -149,11 +163,13 @@ export function validateSpec(s: unknown): string[] {
       if (!(FALLBACK_SHAPES as readonly string[]).includes(r.fallback)) e.push(`role ${r.id}: unknown built-in shape`);
       if (typeof r.material !== 'string') e.push(`role ${r.id}: material missing`);
       if (r.respawnAt !== undefined && !isVec(r.respawnAt)) e.push(`role ${r.id}: bad respawn point`);
+      if (r.handHeld !== undefined && typeof r.handHeld !== 'boolean') e.push(`role ${r.id}: handHeld must be true or false`);
     }
     if (total > 30) e.push('at most 30 pieces');
   }
 
   const zones = new Set<string>();
+  const zoneValues = new Map<string, number>();
   if (!Array.isArray(g.zones) || g.zones.length > 8) e.push('zones must be 0-8');
   else for (const z of g.zones) {
     if (!isText(z?.id, 24) || zones.has(z.id)) { e.push('zone id missing or repeated'); continue; }
@@ -161,7 +177,12 @@ export function validateSpec(s: unknown): string[] {
     if (z.shape !== 'box' && z.shape !== 'cylinder') e.push(`zone ${z.id}: shape must be box or cylinder`);
     if (!isVec(z.center) || Math.hypot(z.center[0], z.center[2]) > REACH) e.push(`zone ${z.id}: centre off the table`);
     if (!isVec(z.size) || z.size[0] <= 0 || z.size[1] <= 0) e.push(`zone ${z.id}: bad size`);
+    if (z.value !== undefined) {
+      if (!isNum(z.value) || Math.abs(z.value) > 100) e.push(`zone ${z.id}: value must be -100 to 100`);
+      else zoneValues.set(z.id, z.value);
+    }
   }
+  const zoneValued = (t: Trigger) => (t.type === 'enters_zone' || t.type === 'leaves_zone') && zoneValues.has(t.zone);
 
   if (!Array.isArray(g.layout)) e.push('layout missing');
   else {
@@ -188,11 +209,12 @@ export function validateSpec(s: unknown): string[] {
       if (t.type === 'hit_by' && !roles.has(t.by)) e.push(`rule ${i + 1}: unknown role ${t.by}`);
       if ((t.type === 'falls_below_height' || t.type === 'stack_height_reached') && (!isNum(t.height) || t.height < 0 || t.height > 1)) e.push(`rule ${i + 1}: bad height`);
       if (t.type === 'timer' && (!isNum(t.seconds) || t.seconds <= 0 || t.seconds > 600)) e.push(`rule ${i + 1}: bad timer`);
+      if (t.type === 'tilt_exceeded' && (!isNum(t.degrees) || t.degrees < 5 || t.degrees > 90)) e.push(`rule ${i + 1}: tilt must be 5-90 degrees`);
       if (t.type === 'count_reached' && (!counters.has(t.counter) || !Number.isInteger(t.value) || t.value < 1)) e.push(`rule ${i + 1}: counter ${t.counter} is never counted`);
       if (!Array.isArray(rule.do) || rule.do.length < 1 || rule.do.length > 6) { e.push(`rule ${i + 1}: needs 1-6 actions`); return; }
       for (const a of rule.do) {
         if (!a || !(ACTIONS as readonly string[]).includes(a.type)) e.push(`rule ${i + 1}: unknown action`);
-        else if (a.type === 'add_score' && ((a.points !== undefined && (!isNum(a.points) || Math.abs(a.points) > 100)) || (a.points === undefined && !a.counter))) e.push(`rule ${i + 1}: add_score needs points or a counter`);
+        else if (a.type === 'add_score' && ((a.points !== undefined && (!isNum(a.points) || Math.abs(a.points) > 100)) || (a.points === undefined && !a.counter && !zoneValued(t)))) e.push(`rule ${i + 1}: add_score needs points, a counter or a zone with a value`);
         else if (a.type === 'show_message' && !isText(a.text, 60)) e.push(`rule ${i + 1}: message missing or too long`);
         else if ((a.type === 'respawn' || a.type === 'reset_piece') && (t.type === 'timer' || t.type === 'count_reached' || t.type === 'stack_height_reached')) e.push(`rule ${i + 1}: ${a.type} needs a piece trigger`);
         if (a?.type === 'win' || a?.type === 'lose') ends = true;
@@ -201,5 +223,12 @@ export function validateSpec(s: unknown): string[] {
     if (!ends) e.push('the game can never end (add a win/lose rule, turns or a time limit)');
   }
   if (g.counter && (!isText(g.counter.id, 24) || !isText(g.counter.label, 30))) e.push('counter needs an id and a label');
+  if (g.paths !== undefined) {
+    if (!Array.isArray(g.paths) || g.paths.length > 4) e.push('paths must be 0-4');
+    else for (const p of g.paths) {
+      if (!isText(p?.id, 24) || !Array.isArray(p.points) || p.points.length < 2 || p.points.length > 12) e.push('a path needs an id and 2-12 points');
+      else if (p.points.some((q) => !isVec(q) || Math.hypot(q[0], q[2]) > REACH)) e.push(`path ${p.id}: off the table`);
+    }
+  }
   return e;
 }

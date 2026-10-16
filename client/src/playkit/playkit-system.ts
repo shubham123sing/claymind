@@ -292,6 +292,9 @@ export class PlayKitSystem extends createSystem({}) {
 
   /** Edit: everything pinned where it is, free to move by hand. Play: physics runs, fixed pieces locked. */
   private applyMode(): void {
+    // pieces of a hand-held role are tools: they follow the hand by velocity and hit with its speed
+    this.objects.tools.clear();
+    for (const p of this.pieces) if (this.spec?.roles.find((r) => r.id === p.role)?.handHeld) this.objects.tools.add(p.toyId);
     for (const p of this.pieces) {
       const pinned = this.mode === 'edit' || p.fixed;
       this.objects.setToyPinned(p.toyId, pinned);
@@ -440,7 +443,10 @@ export class PlayKitSystem extends createSystem({}) {
     for (const p of byToy.values()) {
       const s = this.objects.toyState(p.toyId, this.st);
       if (!s) continue;
-      obs.pieces.push({ key: p.key!, role: p.role!, p: this.toLocal(this.st.p), top: s.top - this.origin.y, speed: s.speed, held: s.held });
+      // tilt: the angle between the piece's up now and at the start
+      const up = this.v.set(0, 1, 0).applyQuaternion(this.st.q), up0 = this.v2.set(0, 1, 0).applyQuaternion(this.q.fromArray(p.start.q));
+      const tilt = (Math.acos(Math.max(-1, Math.min(1, up.dot(up0)))) * 180) / Math.PI;
+      obs.pieces.push({ key: p.key!, role: p.role!, p: this.toLocal(this.st.p), top: s.top - this.origin.y, speed: s.speed, held: s.held, tilt });
     }
     for (const [a, b] of this.contacts) {
       const pa = byToy.get(a), pb = byToy.get(b);

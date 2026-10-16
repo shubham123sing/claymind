@@ -148,3 +148,40 @@ describe('room games (Update 3, Step C)', () => {
     expect(e.state.message).toBe('Ben wins with 3');
   });
 });
+
+describe('V5 vocabulary: tilt, zone values, paths, held tools', () => {
+  it('tilt_exceeded fires once per piece; a zone value scores; paths and handHeld are checked', () => {
+    const g = clone(templateById('tower-balance')!);
+    g.rules = [
+      { when: { type: 'tilt_exceeded', degrees: 30, role: g.roles.find((r) => !r.pinned)!.id }, do: [{ type: 'add_score', counter: 'tipped' }] },
+      ...g.rules,
+    ];
+    expect(validateSpec(g)).toEqual([]);
+    const role = g.roles.find((r) => !r.pinned)!.id;
+    const e = new RuleEngine(g);
+    const b = (tilt: number) => piece(`${role}:0`, [0, 0.02, 0], { tilt });
+    e.tick(0.1, obs([b(0)]));
+    e.tick(0.1, obs([b(45)]));
+    e.tick(0.1, obs([b(60)]));
+    expect(e.state.counters.tipped).toBe(1);
+
+    const t = clone(templateById('target-throw')!);
+    t.zones = t.zones.map((z, i) => ({ ...z, value: (i + 1) * 5 }));
+    const scoring = t.rules.find((r) => r.when.type === 'enters_zone')!;
+    scoring.do = scoring.do.map((a) => (a.type === 'add_score' ? { type: 'add_score' } : a));
+    expect(validateSpec(t)).toEqual([]);
+    const te = new RuleEngine(t);
+    const z = t.zones.find((x) => x.id === (scoring.when as { zone: string }).zone)!;
+    const ballRole = (scoring.when as { role?: string }).role ?? t.roles[0].id;
+    te.tick(0.1, obs([piece(`${ballRole}:0`, [0.3, 0.02, 0.3])]));
+    te.tick(0.1, obs([piece(`${ballRole}:0`, [z.center[0], z.center[1], z.center[2]])]));
+    expect(te.state.scores[0]).toBe(z.value);
+
+    const p = clone(templateById('marble-run')!);
+    p.paths = [{ id: 'lane', points: [[0, 0, -0.1], [0, 0, 0.1]] }];
+    p.roles[0].handHeld = true;
+    expect(validateSpec(p)).toEqual([]);
+    p.paths = [{ id: 'far', points: [[0, 0, 0], [3, 0, 0]] }];
+    expect(validateSpec(p).join()).toMatch(/off the table/);
+  });
+});

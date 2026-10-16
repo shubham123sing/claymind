@@ -14,6 +14,7 @@
    "enters_zone",
    "leaves_zone",
    "falls_below_height",
+   "tilt_exceeded",
    "comes_to_rest",
    "hit_by",
    "stack_height_reached",

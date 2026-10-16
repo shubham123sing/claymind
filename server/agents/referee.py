@@ -89,10 +89,13 @@ def validate_spec(g: object) -> list[str]:
                 e.append(f"role {rid}: material missing")
             if "respawnAt" in r and r["respawnAt"] is not None and not _vec(r["respawnAt"]):
                 e.append(f"role {rid}: bad respawn point")
+            if "handHeld" in r and r["handHeld"] is not None and not isinstance(r["handHeld"], bool):
+                e.append(f"role {rid}: handHeld must be true or false")
         if total > 30:
             e.append("at most 30 pieces")
 
     zones: set[str] = set()
+    zone_values: dict[str, float] = {}
     zl = g.get("zones")
     if not isinstance(zl, list) or len(zl) > 8:
         e.append("zones must be 0-8")
@@ -111,6 +114,11 @@ def validate_spec(g: object) -> list[str]:
             sz = z.get("size")
             if not _vec(sz) or sz[0] <= 0 or sz[1] <= 0:
                 e.append(f"zone {zid}: bad size")
+            if z.get("value") is not None:
+                if not _num(z["value"]) or abs(z["value"]) > 100:
+                    e.append(f"zone {zid}: value must be -100 to 100")
+                else:
+                    zone_values[zid] = z["value"]
 
     lay = g.get("layout")
     if not isinstance(lay, list):
@@ -156,6 +164,9 @@ def validate_spec(g: object) -> list[str]:
                 e.append(f"rule {i}: bad height")
             if tt == "timer" and (not _num(t.get("seconds")) or not 0 < t["seconds"] <= 600):
                 e.append(f"rule {i}: bad timer")
+            if tt == "tilt_exceeded" and (not _num(t.get("degrees")) or not 5 <= t["degrees"] <= 90):
+                e.append(f"rule {i}: tilt must be 5-90 degrees")
+            zone_valued = tt in ("enters_zone", "leaves_zone") and t.get("zone") in zone_values
             if tt == "count_reached" and (t.get("counter") not in counters or not _int(t.get("value")) or t["value"] < 1):
                 e.append(f"rule {i}: counter {t.get('counter')} is never counted")
             acts = rule.get("do")
@@ -166,8 +177,8 @@ def validate_spec(g: object) -> list[str]:
                 at = a.get("type") if isinstance(a, dict) else None
                 if at not in VOCAB["actions"]:
                     e.append(f"rule {i}: unknown action")
-                elif at == "add_score" and ((a.get("points") is not None and (not _num(a["points"]) or abs(a["points"]) > 100)) or (a.get("points") is None and not a.get("counter"))):
-                    e.append(f"rule {i}: add_score needs points or a counter")
+                elif at == "add_score" and ((a.get("points") is not None and (not _num(a["points"]) or abs(a["points"]) > 100)) or (a.get("points") is None and not a.get("counter") and not zone_valued)):
+                    e.append(f"rule {i}: add_score needs points, a counter or a zone with a value")
                 elif at == "show_message" and not _text(a.get("text"), 60):
                     e.append(f"rule {i}: message missing or too long")
                 elif at in ("respawn", "reset_piece") and tt in ("timer", "count_reached", "stack_height_reached"):
@@ -176,6 +187,17 @@ def validate_spec(g: object) -> list[str]:
                     ends = True
         if not ends:
             e.append("the game can never end (add a win/lose rule, turns or a time limit)")
+    pl = g.get("paths")
+    if pl is not None:
+        if not isinstance(pl, list) or len(pl) > 4:
+            e.append("paths must be 0-4")
+        else:
+            for p in pl:
+                pts = p.get("points") if isinstance(p, dict) else None
+                if not _text(p.get("id") if isinstance(p, dict) else None, 24) or not isinstance(pts, list) or not 2 <= len(pts) <= 12:
+                    e.append("a path needs an id and 2-12 points")
+                elif any(not _vec(q) or math.hypot(q[0], q[2]) > REACH for q in pts):
+                    e.append(f"path {p['id']}: off the table")
     c = g.get("counter")
     if c is not None and (not isinstance(c, dict) or not _text(c.get("id"), 24) or not _text(c.get("label"), 30)):
         e.append("counter needs an id and a label")
