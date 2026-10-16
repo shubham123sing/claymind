@@ -272,10 +272,10 @@ Other findings:
 - **Environment:** the room's planes (walls, floor, ceiling, furniture tops) become colliders in the XR environment; real-room mesh collision on a phone or in passthrough is not done (phone AR is paused). Fast objects are stopped by thick colliders (no continuous collision detection in the IWSDK physics).
 - **Multiplayer:**
   - Edits are applied when they come back from the room, so your own stroke shows after one round trip (about 0.1 s on a good connection, 0.56 s at 250 ms each way).
-  - Only the clay and the Play Kit games are shared: an object made with Bring to life stays on the player's own table.
+  - Bring to life in a room (V5): the object appears for everyone; a hold is sent about 15 times a second, a throw runs in each table's own physics and the thrower's resting pose re-aligns the others, so between the throw and the rest the tables can differ by a few centimetres. Objects made before joining a room stay on their own table.
   - Host leaves: the room carries on with a new host, but the game in progress ends (no physics hand-over).
   - The relay keeps rooms in memory: a restarted server ends every room.
-  - Presence is head and two hands (no finger joints); the wave is the only gesture (no thumbs-up yet).
+  - Presence is head and two hands (no finger joints); a wave or a thumbs-up held for half a second shows on the name tag (thumbs-up detection tuned on emulated hands only).
   - Turning or resizing the shared clay with two hands is your own view only.
   - Tested with two browser tabs, scripted players and simulated latency / loss, not with two headsets.
 - **Emulator vs Quest:** every hand result comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate must be measured on a Quest (list in `docs/QA_REPORT.md`).
