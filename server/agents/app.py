@@ -25,6 +25,7 @@ from .flows import Orchestrator
 from .governed_model import install
 from .governor import Governor
 from .knowledge import Memory, PassageIndex
+from .rooms import RoomHub
 from .schemas import KitDescriptor
 from .store import Cache, Trace
 from .team import build_team
@@ -119,6 +120,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def delete_memory(x_player_id: str | None = Header(default=None)):
         return {"deleted": memory.delete(player(x_player_id))}
 
+    # multiplayer rooms (Update 3, Step C): a WebSocket relay, memory only
+    hub = RoomHub(s.allowed_origins)
+    base.add_api_websocket_route("/v1/rooms", hub.handle)
+
+    @base.get("/v1/rooms/health")
+    async def rooms_health():
+        return {"ok": True, "rooms": len(hub.rooms), "players": sum(len(r.players) for r in hub.rooms.values())}
+
     agent_os = AgentOS(
         id="claymind", name="ClayMind agents", agents=list(team.values()), a2a_interface=True,
         base_app=base, telemetry=False, on_route_conflict="preserve_base_app",
@@ -126,5 +135,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = agent_os.get_app()
     # CORS last = outermost: only the game's own pages may call /v1
     app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_methods=["GET", "POST", "DELETE"], allow_headers=["Content-Type", "X-Player-ID"])
-    app.state.settings, app.state.orch, app.state.trace = s, orch, trace
+    app.state.settings, app.state.orch, app.state.trace, app.state.rooms = s, orch, trace, hub
     return app
