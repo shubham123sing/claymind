@@ -92,10 +92,6 @@ export type AppEvents = {
   'object:pinned': { creationId: string };
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
-  /** The helper character (src/helper/mascot.ts): speak (and point at a world spot), think, hop. */
-  'mascot:say': { text: string; point?: number[] };
-  'mascot:think': { on: boolean; text?: string };
-  'mascot:hop': Record<string, never>;
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */
   /** A part's material changed (`part` = index into creation.parts); materialId is then the creation's main material. */
   'object:material-set': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number; partMaterialId?: string };
