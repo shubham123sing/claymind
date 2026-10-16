@@ -274,6 +274,9 @@ export class GameAgentSystem extends createSystem({}) {
       return this.go('confirm');
     }
     const got = rolesFromWords(words, r);
+    // "Here is the goal" a little after the loop was drawn (the hand had to reach the panel): the latest zone
+    const lastZone = [...ps.marks].reverse().find((m) => m.kind === 'zone');
+    if (role === 'here' && !got.goal && !got.roles.length && lastZone) got.goal = lastZone.id;
     if (got.goal) {
       this.intent.goal = got.goal;
       this.hint('Got it: that zone is the goal');

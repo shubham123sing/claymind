@@ -35,7 +35,7 @@ export class PointSaySystem extends createSystem({}) {
   private touched: Record<'left' | 'right', string | null> = { left: null, right: null };
   private held = new Set<string>();
   private heldUp = new Set<string>();
-  private stroke: { side: 'left' | 'right'; pts: [number, number, number][]; line: Line } | null = null;
+  private stroke: { side: 'left' | 'right'; kind: 'zone' | 'path'; pts: [number, number, number][]; line: Line } | null = null;
   private drawn: Line[] = [];
   private v = new Vector3();
   private d = new Vector3();
@@ -172,7 +172,7 @@ export class PointSaySystem extends createSystem({}) {
       if (this.marking && h.pinchStarted && !input.claims[side] && this.onTable(h.pinchPoint) && !objects.touchedItem(h.pinchPoint, 0.02)) {
         this.cancelStroke();
         input.claims[side] = 'mark';
-        this.stroke = { side, pts: [this.kit.toPlayFrame(this.v.fromArray(h.pinchPoint as number[]))], line: this.line([], 0x9fd0f5) };
+        this.stroke = { side, kind: this.marking, pts: [this.kit.toPlayFrame(this.v.fromArray(h.pinchPoint as number[]))], line: this.line([], 0x9fd0f5) };
       }
       const st = this.stroke;
       if (st && st.side === side) {
@@ -193,7 +193,8 @@ export class PointSaySystem extends createSystem({}) {
     this.disposeLine(st.line);
     input.claims[st.side] = null;
     this.stroke = null;
-    if (this.marking === 'zone') {
+    // what the stroke started as (Done may have been pressed while drawing)
+    if (st.kind === 'zone') {
       const z = fitZone(st.pts);
       if (!z) return;
       const id = `z${this.marks.filter((m) => m.kind === 'zone').length + 1}`;

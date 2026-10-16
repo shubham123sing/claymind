@@ -280,3 +280,11 @@ Other findings:
   - Tested with two browser tabs, scripted players and simulated latency / loss, not with two headsets.
 - **Emulator vs Quest:** every hand result comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate must be measured on a Quest (list in `docs/QA_REPORT.md`).
 - **No voice** by design: no microphone and no voice chat anywhere; typing is the browser text box or the pinch keypad.
+
+## V5 (Play Kit, game agent, Point + Say), 2026-10-16
+- **Point + Say is code first:** pointing words bind to what the hands showed within 2 s (typed words afterwards bind in the order things were shown). Words alone (no hands) are read by simple name and role matching offline: on held-out sentences it got 1 of 8 games fully right; the online Intent Resolver and Designer read free sentences better but are free models (numbers in `docs/EVAL_REPORT.md`).
+- **A marked goal the game's fixed pieces cannot reach** (a marble run's finish moved away from its ramp) fails the physics test; you get the plain game and a note saying why. The game does not move its fixed pieces to fit your mark.
+- **Your toy in a role is tested too:** a toy that fails the physics test in its role (a big clay lump as a marble) is swapped for the built-in piece, and the preview says so.
+- **Vision check** (off by default): a free vision model looks at two views the game renders of a new toy (no camera: the Quest Browser gives web apps no camera feed). About 1.3k tokens per picture, so 2 or 3 toys a minute on the free tier; it only suggests a role, with Undo.
+- **Emulator only:** pointing, zone marking, the assisted flick and holding a tool were tested with emulated hands at about 5 frames a second in a browser pane; at that rate the physics runs in slow motion, so a fast swing of a held tool could not be judged (a slow push moves the blocks). Feel, reach and fast swings need a Quest.
+
