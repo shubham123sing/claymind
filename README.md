@@ -68,8 +68,21 @@ keypad in the headset). The preview says which path ran, how to play, which of y
 what is missing or not possible, and the sources; **Play**, **Show me how**, **Adjust** (a rules card,
 checked again here) or **Cancel**.
 
+**Show me with my hands (Point + Say):** point at a piece (or hold it up, or tap it) and press what it is
+(*This is the ball / target / goal / board / tool / launcher*), mark the goal or a path on the table with a
+pinch-drag, type the rest if you like ("these are the pins"); **Make it**. The pointing words bind to what
+your hands showed within 2 seconds, in code (no AI); one short question when two pieces were shown at once.
+Offline it picks the built-in game that fits and puts your toys and marks in it; online the agent reads your
+words too, and your pointing still wins. Every designed game is first played in the same physics (the
+Referee's dry run); a toy that does not work in its role is swapped for the built-in piece, and you are told.
+Optional **Vision check** (Settings, off by default): pictures the game renders of a new Play Kit toy go to a
+free vision model, which suggests what it looks like (with Undo). There is no camera: the Quest Browser gives
+web apps no camera feed.
+
 The agent team (`server/agents`, FastAPI + Agno AgentOS, one process):
 - **Kit Analyst** (code): a shape report and roles for each toy from its measured geometry.
+- **Intent Resolver** (LLM, only when needed): which role a pointed-at piece plays, from typed words the code
+  could not read; it only names your pieces, never others.
 - **Researcher** (LLM): Wikipedia only when you do not know the rules or name an unknown game; the page with
   the game's own name first; a Rule Card in its own words, with sources. Web text is screened for prompt
   injection and summarised, never followed.
@@ -79,7 +92,8 @@ The agent team (`server/agents`, FastAPI + Agno AgentOS, one process):
   at most two repairs, else the closest built-in game, and you are told.
 - The game flow reaches the Researcher and the Designer over **A2A** on the same server. Free Groq models go
   through a quota governor (per-minute and per-day budgets, fall-through, circuit breaker); answers are
-  cached; unsafe requests are refused without AI. Eval: `eval/playkit/` and `docs/EVAL_REPORT.md`.
+  cached; unsafe requests are refused without AI. About 30 built-in Rule Cards are used before any web search.
+  Evals: `eval/playkit/`, `eval/pointsay/` and `docs/EVAL_REPORT.md`; QA: `docs/QA_REPORT.md`.
 
 ## Multiplayer (room code)
 Menu -> **Multiplayer** -> **Create a room** (a 5-character code of easy letters and digits) or **Join a
@@ -91,7 +105,7 @@ a player; anyone can leave; rooms disappear when empty. No accounts, no voice.
   per socket, sockets and new rooms per IP, origin check, names filtered.
 - **One table for everyone:** each player's own table is the shared table; seats around it by colour, so the
   others sit across from you as a simple head and two hands with a name tag (about 15 updates a second,
-  interpolated). Wave with a raised hand to say hi.
+  interpolated). Wave with a raised hand or hold a thumbs-up to say hi.
 - **Building together:** the clay is shared at the table's centre. Strokes, Undo and Redo travel as edit
   operations (never meshes) with a room sequence number and every client applies them in that order; Undo is
   per player. A late joiner gets the host's snapshot plus the edits after it; the host sends a checksum every
@@ -102,7 +116,11 @@ a player; anyone can leave; rooms disappear when empty. No accounts, no voice.
   throw with your own hands: your hand's pose goes to the host (the piece is locked to you), the release
   sends the throw. If the host leaves, the game ends cleanly and the next player hosts the room.
 - **Game agent in a room:** anyone can make a game; a player's choice goes to the host, who decides.
-- **Shared Play Kit:** Kit -> Share sends a toy to the room; everyone gets a copy in their own Play Kit.
+- **Shared Play Kit:** Kit -> Share sends a toy to the room; everyone gets a copy in their own Play Kit and
+  Library.
+- **Living objects:** what you bring to life in a room appears for everyone; holding it shows it moving for
+  the others (they cannot take it meanwhile), a throw runs in every table's physics and the resting pose
+  re-aligns them; deleting it removes it for everyone; a late joiner gets them all.
 
 ## Run it
 - **Client:** Node 24; `cd client && npm install && npm run dev` (HTTPS on port 8081, opens the IWSDK
