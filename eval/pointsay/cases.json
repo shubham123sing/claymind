@@ -1,0 +1,23 @@
+{
+  "about": "Point + Say binding cases (V5 Phase 6.6). Each: words with times (ms), what the hands showed (gesture, time, target), what was pointed at / held when finished, and the expected binding per pointing word (target ids; 'unresolved'; 'ambiguous'). Words without an expectation must not bind (a false trigger otherwise).",
+  "cases": [
+    { "id": "en-this-point", "words": [["this", 1000], ["is", 1200], ["the", 1300], ["ball", 1500]], "attention": [["point", 900, "A"]], "expect": { "0": ["A"] } },
+    { "id": "en-this-and-that", "words": [["this", 1000], ["is", 1200], ["the", 1300], ["ball", 1400], ["and", 2600], ["that", 2800], ["is", 3000], ["the", 3100], ["goal", 3300]], "attention": [["point", 950, "A"], ["point", 2750, "B"]], "expect": { "0": ["A"], "5": ["B"] } },
+    { "id": "en-these-holdup", "words": [["knock", 500], ["these", 1500], ["down", 1700]], "attention": [["point", 1000, "P1"], ["point", 1400, "P2"], ["point", 1900, "P3"]], "expect": { "1": ["P1", "P2", "P3"] } },
+    { "id": "en-here-zone", "words": [["the", 500], ["goal", 700], ["is", 900], ["here", 1200]], "attention": [["zone", 1500, "z1"]], "expect": { "3": ["z1"] } },
+    { "id": "hi-idhar-path", "words": [["ball", 500], ["idhar", 900], ["se", 1100], ["jayega", 1300]], "attention": [["path", 1200, "p1"]], "expect": { "1": ["p1"] } },
+    { "id": "hi-yeh-ball", "words": [["yeh", 1000], ["ball", 1200], ["hai", 1400]], "attention": [["hold", 800, "A"]], "expect": { "0": ["A"] } },
+    { "id": "hi-ye-sab-pins", "words": [["ye", 2000], ["sab", 2200], ["pins", 2400], ["hain", 2600]], "attention": [["tap", 1200, "P1"], ["tap", 1700, "P2"], ["tap", 2300, "P3"]], "expect": { "0": ["P1", "P2", "P3"] } },
+    { "id": "now-held-fallback", "words": [["this", 5000], ["is", 5200], ["my", 5300], ["bat", 5500]], "attention": [["point", 1000, "X"]], "held": ["H"], "expect": { "0": ["H"] } },
+    { "id": "nothing-shown", "words": [["this", 5000], ["is", 5200], ["the", 5300], ["ball", 5500]], "attention": [], "expect": { "0": "unresolved" } },
+    { "id": "two-at-once", "words": [["this", 1000], ["one", 1200]], "attention": [["point", 950, "A"], ["point", 1050, "B"]], "expect": { "0": "ambiguous" } },
+    { "id": "hi-is-ko-udhar", "words": [["is", 1000], ["ko", 1100], ["udhar", 2200], ["rakho", 2400]], "attention": [["point", 900, "A"], ["zone", 2300, "z2"]], "expect": { "0": ["A"], "2": ["z2"] } },
+    { "id": "too-early", "words": [["this", 5000], ["is", 5200], ["the", 5300], ["ball", 5500]], "attention": [["point", 2000, "A"]], "pointed": "B", "expect": { "0": ["B"] } },
+    { "id": "no-false-trigger-en", "words": [["this", 1000], ["game", 1200], ["is", 1300], ["fun", 1500]], "attention": [], "expect": { "0": "unresolved" } },
+    { "id": "hi-itna-zone", "words": [["itna", 1000], ["bada", 1200], ["goal", 1400]], "attention": [["zone", 1300, "z3"]], "expect": { "0": ["z3"] } },
+    { "id": "en-it-holdup", "words": [["throw", 800], ["it", 1000], ["at", 1100], ["the", 1200], ["tower", 1400]], "attention": [["holdup", 700, "A"], ["point", 1350, "T"]], "expect": { "1": ["A"] } },
+    { "id": "no-deixis", "words": [["make", 500], ["a", 600], ["bowling", 800], ["game", 1000]], "attention": [["point", 700, "A"]], "expect": {} },
+    { "id": "en-that-there", "words": [["put", 500], ["that", 900], ["there", 1800]], "attention": [["point", 800, "A"], ["zone", 1900, "z4"]], "expect": { "1": ["A"], "2": ["z4"] } },
+    { "id": "same-item-twice", "words": [["this", 1000], ["is", 1100], ["heavy", 1200], ["so", 1600], ["this", 1800], ["rolls", 2000]], "attention": [["hold", 1000, "A"]], "expect": { "0": ["A"], "4": ["A"] } }
+  ]
+}

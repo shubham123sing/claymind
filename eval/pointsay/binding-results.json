@@ -1,0 +1,138 @@
+{
+ "summary": {
+  "cases": 18,
+  "casesRight": 18,
+  "words": 21,
+  "wordsRight": 21,
+  "falseTriggers": 0,
+  "confirmCards": 3
+ },
+ "rows": [
+  {
+   "id": "en-this-point",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"A\"]}"
+  },
+  {
+   "id": "en-this-and-that",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"A\"],\"5\":[\"B\"]}"
+  },
+  {
+   "id": "en-these-holdup",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"1\":[\"P1\",\"P2\",\"P3\"]}"
+  },
+  {
+   "id": "en-here-zone",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"3\":[\"z1\"]}"
+  },
+  {
+   "id": "hi-idhar-path",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"1\":[\"p1\"]}"
+  },
+  {
+   "id": "hi-yeh-ball",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"A\"]}"
+  },
+  {
+   "id": "hi-ye-sab-pins",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"P1\",\"P2\",\"P3\"]}"
+  },
+  {
+   "id": "now-held-fallback",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"H\"]}"
+  },
+  {
+   "id": "nothing-shown",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 1,
+   "got": "{\"0\":\"unresolved\"}"
+  },
+  {
+   "id": "two-at-once",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 1,
+   "got": "{\"0\":\"ambiguous\"}"
+  },
+  {
+   "id": "hi-is-ko-udhar",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"A\"],\"2\":[\"z2\"]}"
+  },
+  {
+   "id": "too-early",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"B\"]}"
+  },
+  {
+   "id": "no-false-trigger-en",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 1,
+   "got": "{\"0\":\"unresolved\"}"
+  },
+  {
+   "id": "hi-itna-zone",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"z3\"]}"
+  },
+  {
+   "id": "en-it-holdup",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"1\":[\"A\"]}"
+  },
+  {
+   "id": "no-deixis",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{}"
+  },
+  {
+   "id": "en-that-there",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"1\":[\"A\"],\"2\":[\"z4\"]}"
+  },
+  {
+   "id": "same-item-twice",
+   "ok": true,
+   "falseTriggers": 0,
+   "confirms": 0,
+   "got": "{\"0\":[\"A\"],\"4\":[\"A\"]}"
+  }
+ ]
+}
