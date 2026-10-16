@@ -594,6 +594,8 @@ export class PlayKitSystem extends createSystem({}) {
   roomCanStart: (() => string | null) | null = null;
   /** Set by the room: names for the scoreboard. */
   roomNames: (() => string[]) | null = null;
+  /** Set by the room: share a kit item with the room (false: not in a room). */
+  roomShare: ((item: KitItem) => boolean) | null = null;
   /** This table mirrors the host's game: no rules here, poses and scores come from the host. */
   mirror = false;
   private mirrorHud: { lines: string[]; message: string; over: boolean } | null = null;
@@ -804,6 +806,9 @@ export class PlayKitSystem extends createSystem({}) {
     } else if (id === 'kit:role') {
       item.role = ROLE_TAGS[(ROLE_TAGS.indexOf(item.role) + 1) % ROLE_TAGS.length];
       void saveKitItem(item);
+    } else if (id === 'kit:share') {
+      if (this.roomShare?.(item)) this.toast(`Shared "${item.name}" with the room`);
+      else this.toast('Join a room first (menu -> Multiplayer)');
     } else if (id === 'kit:dup') {
       const copy = makeKitItem(item.data, `${item.name} 2`.slice(0, 40));
       copy.role = item.role;

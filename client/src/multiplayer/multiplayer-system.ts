@@ -49,6 +49,7 @@ export class MultiplayerSystem extends createSystem({}) {
     this.cleanupFuncs.push(
       bus.on('multiplayer:toggle', () => (this.panel.mesh.visible ? this.close() : this.open())),
       room.on('players', () => this.syncRoom()),
+      room.on('error', (m) => this.toast(String(m.message ?? 'The room server refused that'))),
       room.on('host', () => {
         this.syncRoom();
         if (room.isHost) this.toast('You are the host now');

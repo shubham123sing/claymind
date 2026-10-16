@@ -164,7 +164,7 @@ class RoomHub:
                 if not isinstance(msg, dict):
                     continue
                 kind = msg.get("t")
-                if kind not in ("snapshot", "game") and len(raw) > MAX_MSG:  # a game may carry players' own toys
+                if kind not in ("snapshot", "game", "kit") and len(raw) > MAX_MSG:  # games and shared toys carry meshes
                     await self.send(me, {"t": "error", "message": "Message too large"})
                     continue
                 if not self.rate_ok(me):

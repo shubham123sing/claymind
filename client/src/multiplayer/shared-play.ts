@@ -14,6 +14,7 @@ import { createSystem, Quaternion, Vector3 } from '@iwsdk/core';
 import { bus } from '../core/event-bus.js';
 import { ObjectSystem } from '../objects/object-system.js';
 import { validateSpec, type GameSpec } from '../playkit/game-spec.js';
+import type { KitItem } from '../playkit/kit-store.js';
 import { PlayKitSystem, type RoomPiece } from '../playkit/playkit-system.js';
 import { packDeep, unpackDeep } from './codec.js';
 import { room, type RoomMsg } from './room-client.js';
@@ -66,6 +67,11 @@ export class SharedPlaySystem extends createSystem({}) {
     kit.roomAdapt = (spec) => (room.connected && room.isHost ? adaptForRoom(spec, room.players.length) : spec);
     kit.roomCanStart = () => (room.connected && !room.isHost ? 'In a room the host starts the games' : null);
     kit.roomNames = () => (room.connected ? room.players.map((p) => p.name) : []);
+    kit.roomShare = (item) => {
+      if (!room.connected) return false;
+      void packDeep(item).then((data) => room.send('kit', { data }));
+      return true;
+    };
     snapshotParts.set('game', {
       save: () => (room.isHost && kit.hasGame && !kit.mirror ? this.describe() : null),
       load: (data) => (data ? this.mirrorGame(data as GameMsg) : undefined),
@@ -80,6 +86,7 @@ export class SharedPlaySystem extends createSystem({}) {
       room.on('game', (m) => void this.onGame(m)),
       room.on('state', (m) => this.onState(m)),
       room.on('input', (m) => this.onInput(m)),
+      room.on('kit', (m) => void this.received(m)),
     );
   }
 
@@ -154,6 +161,10 @@ export class SharedPlaySystem extends createSystem({}) {
     const g = m.data as GameMsg;
     if (g?.k === 'start') await this.mirrorGame(g);
     else if (g?.k === 'end') this.leaveGame('The host ended the game');
+    else if ((g as { k: string })?.k === 'preview') {
+      const host = room.players.find((p) => p.id === room.host)?.name ?? 'The host';
+      bus.emit('ui:toast', { text: `${host} is looking at "${String((g as { name?: string }).name ?? 'a game').slice(0, 40)}"` });
+    }
   }
 
   private async mirrorGame(g: GameMsg): Promise<void> {
@@ -165,6 +176,15 @@ export class SharedPlaySystem extends createSystem({}) {
     this.kit.roomMirror(d, this.P, tableFrame.yawIn(g.yaw));
     for (const p of this.kit.roomPieces) if (!p.fixed) this.objects.demoHold(p.toyId);
     this.kit.roomLock(null, true); // until the host says whose turn it is
+  }
+
+  /** A toy someone shared: a copy goes into my Play Kit. */
+  private async received(m: RoomMsg): Promise<void> {
+    const item = (await unpackDeep(m.data)) as KitItem;
+    if (!item?.data?.parts?.length || typeof item.name !== 'string') return;
+    this.kit.importKit([item], []);
+    const who = room.players.find((p) => p.id === m.from)?.name ?? 'Someone';
+    bus.emit('ui:toast', { text: `${who} shared "${item.name.slice(0, 40)}": a copy is in your Play Kit` });
   }
 
   private leaveGame(why: string): void {

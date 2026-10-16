@@ -111,11 +111,12 @@ export class PlayKitPanel extends CanvasPanel {
     });
     const has = this.selectedKit !== null, by = H - 76;
     const sel = this.kit.find((k) => k.id === this.selectedKit);
-    this.btn(ctx, add, 20, by, 160, 'Place', 'kit:place', has, '#5fbf72');
-    this.btn(ctx, add, 188, by, 170, 'Rename', 'kit:rename', has);
-    this.btn(ctx, add, 366, by, 230, sel ? `Role: ${sel.role}` : 'Role', 'kit:role', has);
-    this.btn(ctx, add, 604, by, 170, 'Duplicate', 'kit:dup', has);
-    this.btn(ctx, add, 782, by, 198, this.armedRemove ? 'Tap again' : 'Remove', 'kit:remove', has, has ? '#d9534f' : undefined);
+    this.btn(ctx, add, 20, by, 150, 'Place', 'kit:place', has, '#5fbf72');
+    this.btn(ctx, add, 178, by, 140, 'Rename', 'kit:rename', has);
+    this.btn(ctx, add, 326, by, 200, sel ? `Role: ${sel.role}` : 'Role', 'kit:role', has);
+    this.btn(ctx, add, 534, by, 150, 'Duplicate', 'kit:dup', has);
+    this.btn(ctx, add, 692, by, 140, 'Share', 'kit:share', has, has ? '#5aa9e6' : undefined);
+    this.btn(ctx, add, 840, by, 140, this.armedRemove ? 'Tap again' : 'Remove', 'kit:remove', has, has ? '#d9534f' : undefined);
   }
 
   private paintSets(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {

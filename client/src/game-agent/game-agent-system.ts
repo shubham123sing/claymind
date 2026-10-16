@@ -14,6 +14,8 @@ import { input } from '../platform/input/input-system.js';
 import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { templateById } from '../playkit/templates.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
+import { room, type RoomMsg } from '../multiplayer/room-client.js';
+import { validateSpec } from '../playkit/game-spec.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { applyNumbers, numbersOf, rulesInWords } from './adjust.js';
 import { agentApi, OFFLINE, OfflineError, type GameAnswer } from './agent-client.js';
@@ -43,7 +45,11 @@ export class GameAgentSystem extends createSystem({}) {
       (m.material as { depthTest: boolean }).depthTest = false;
       this.world.createTransformEntity(m);
     }
-    this.cleanupFuncs.push(bus.on('gameagent:open', () => this.open()));
+    this.cleanupFuncs.push(
+      bus.on('gameagent:open', () => this.open()),
+      // in a room anyone can make a game; the host decides what the room plays
+      room.on('vote', (m) => this.suggested(m)),
+    );
     const onDown = (e: PointerEvent) => this.onPointer(e, true);
     const onMove = (e: PointerEvent) => this.onPointer(e, false);
     addEventListener('pointerdown', onDown, { capture: true });
@@ -160,6 +166,7 @@ export class GameAgentSystem extends createSystem({}) {
   private showPreview(a: GameAnswer): void {
     const spec = this.specOf(a);
     if (!spec) return this.say("I couldn't make that game. The built-in games are in Play Kit -> Games.");
+    if (room.connected && room.isHost) room.send('game', { data: { k: 'preview', name: a.preview.name } });
     this.panel.answer = a;
     this.panel.uses = this.kit.usesFor(spec);
     this.panel.view = 'preview';
@@ -168,12 +175,27 @@ export class GameAgentSystem extends createSystem({}) {
 
   private playGame(spec = this.panel.answer && this.specOf(this.panel.answer), demo = false): void {
     if (!spec) return;
+    if (room.connected && !room.isHost && this.panel.answer) {
+      room.send('vote', { data: { k: 'suggest', answer: { ...this.panel.answer, spec } } });
+      return this.say('Sent to the host: in a room the host decides what everyone plays.');
+    }
     const problems = demo ? this.kit.showMeHow(spec) : this.kit.playSpec(spec);
     if (problems.length) {
       this.panel.problems = problems;
       return this.say(`That game is not safe to play: ${problems[0]}`);
     }
     this.close();
+  }
+
+  /** Host: a player suggests a game (checked here like any game). */
+  private suggested(m: RoomMsg): void {
+    const d = m.data as { k?: string; answer?: GameAnswer } | undefined;
+    if (!room.isHost || d?.k !== 'suggest' || !d.answer?.preview) return;
+    const spec = this.specOf(d.answer);
+    if (!spec || validateSpec(spec).length) return;
+    const who = room.players.find((p) => p.id === m.from)?.name ?? 'A player';
+    if (!this.panel.mesh.visible) this.open();
+    this.showPreview({ ...d.answer, note: `${who} suggests this game` });
   }
 
   private step(k: keyof RuleNumbers, d: number): void {
