@@ -29,6 +29,7 @@ from .rooms import RoomHub
 from .schemas import KitDescriptor
 from .store import Cache, Trace
 from .team import build_team
+from .vision import look, views_ok
 
 
 
@@ -49,6 +50,14 @@ class IntentIn(BaseModel):
     items: dict[str, str] = Field(max_length=12)
     zones: int = Field(default=0, ge=0, le=8)
     paths: int = Field(default=0, ge=0, le=4)
+
+
+class VisionIn(BaseModel):
+    """Pictures the game rendered of one toy (never a camera image), with what it measured."""
+    name: str = Field(max_length=40)
+    sizeCm: list[float] = Field(min_length=3, max_length=3)
+    massKg: float = Field(ge=0, le=100)
+    views: list[str] = Field(min_length=1, max_length=2)
 
 
 class KitIn(BaseModel):
@@ -118,6 +127,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def intent(body: IntentIn):
         items = {k[:4]: v[:60] for k, v in body.items.items()}
         return await orch.resolve_intent(body.text, items, body.zones, body.paths)
+
+    @base.post("/v1/vision")
+    async def vision(body: VisionIn):
+        if not views_ok(body.views):
+            return JSONResponse({"error": "pictures must be 1-2 small PNG / JPEG / WebP data URLs"}, status_code=422)
+        return await look(s, governor, trace, cache, orch.http, body.views, body.name, body.sizeCm, body.massKg)
 
     @base.post("/v1/kit/analyse")
     async def kit_analyse(body: KitIn):

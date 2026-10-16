@@ -199,3 +199,18 @@ def test_intent_resolver_keeps_to_the_pointed_items(server):
     body = httpx.post(f"{server}/v1/intent", json={"text": "fly [A]", "items": {"A": "a toy"}}, timeout=30).json()
     assert body["roles"] == [] and body["unsure"] == ["A"]
     assert httpx.post(f"{server}/v1/intent", json={"text": "", "items": {}}, timeout=30).status_code == 422
+
+
+TINY = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+
+def test_vision_check_answers_strict_json_and_refuses_other_input(server):
+    FAKE_ANSWERS["vision"] = answer({"looks_like": "a small bowl", "roles": ["container", "container", "target"], "confidence": 0.8, "note": "round with a rim"})
+    body = httpx.post(f"{server}/v1/vision", json={"name": "Bowl", "sizeCm": [8, 4, 8], "massKg": 0.2, "views": [TINY]}, timeout=30).json()
+    assert body == {"looksLike": "a small bowl", "roles": ["container", "target"], "confidence": 0.8, "note": "round with a rim"}
+    # a link or any non-picture text is not accepted; neither are 3 pictures
+    assert httpx.post(f"{server}/v1/vision", json={"name": "x", "sizeCm": [1, 1, 1], "massKg": 0.1, "views": ["https://example.com/a.png"]}, timeout=30).status_code == 422
+    assert httpx.post(f"{server}/v1/vision", json={"name": "x", "sizeCm": [1, 1, 1], "massKg": 0.1, "views": [TINY] * 3}, timeout=30).status_code == 422
+    FAKE_ANSWERS["vision"] = answer({"looks_like": "a spaceship", "roles": ["rocket"], "confidence": 3})
+    body = httpx.post(f"{server}/v1/vision", json={"name": "Ship", "sizeCm": [5, 5, 5], "massKg": 0.1, "views": [TINY]}, timeout=30).json()
+    assert "error" in body

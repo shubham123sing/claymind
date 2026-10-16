@@ -10,7 +10,7 @@ import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
-const W = 760, H = 700;
+const W = 760, H = 800;
 const SIZE: [number, number] = [0.24, (0.24 * H) / W];
 
 const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
@@ -19,6 +19,7 @@ const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
   { key: 'leftHanded', label: 'Left-handed', hint: 'left hand sculpts, right palm menu' },
   { key: 'oneHanded', label: 'One-handed menu', hint: 'menu stays beside the clay' },
   { key: 'sound', label: 'Sound', hint: 'all sounds on / off' },
+  { key: 'vision', label: 'Vision check (online)', hint: 'pictures of new Play Kit toys go to Groq; their terms apply' },
 ];
 
 class SettingsPanel extends CanvasPanel {
@@ -46,7 +47,7 @@ class SettingsPanel extends CanvasPanel {
       ctx.fillText(t.label, 44, y + 28);
       ctx.font = '500 21px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(244,241,236,0.65)';
-      ctx.fillText(t.hint, 44, y + 58);
+      ctx.fillText(t.hint, 44, y + 58, W - 220);
       // switch
       const sx = W - 140, sy = y + 22;
       ctx.fillStyle = on ? '#5fbf72' : settings.highContrast ? '#444' : 'rgba(255,255,255,0.18)';

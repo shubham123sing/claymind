@@ -26,6 +26,8 @@ import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { copySaved, fromSurfaceFrame, toSurfaceFrame, type SavedPart } from '../storage/library.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { offerUndo } from '../ui/undo-toast.js';
+import { settings } from '../core/settings.js';
+import { agentApi } from '../game-agent/agent-client.js';
 import { bottomOf, fallbackParts } from './fallback-shapes.js';
 import { ROLE_TAGS, validateSpec, type FallbackShape, type GameSpec, type RoleSpec } from './game-spec.js';
 import {
@@ -846,6 +848,31 @@ export class PlayKitSystem extends createSystem({}) {
     this.refreshPanel();
     uiSounds.tick();
     offerUndo(`Added "${name}" to the Play Kit (${item.role})`, () => void this.removeKit(item.id), input.xr);
+    if (settings.vision) void this.visionCheck(item, id!);
+  }
+
+  /**
+   * The optional vision check (Settings): two pictures rendered from the toy's own model go to the
+   * game agent's vision model, which says what it looks like. Only a suggestion: a confident,
+   * different role tag is offered with Undo; offline or busy, nothing changes.
+   */
+  private async visionCheck(item: KitItem, creationId: string): Promise<void> {
+    const views = this.objects.viewsOf(creationId);
+    if (!views.length) return;
+    try {
+      const r = await agentApi.vision({ name: item.name, sizeCm: item.stats.sizeCm, massKg: item.stats.massKg, views });
+      if (!r.looksLike || !r.roles?.length) return;
+      item.vision = { looksLike: r.looksLike, roles: r.roles, confidence: r.confidence ?? 0 };
+      const before = item.role, role = r.roles[0];
+      if (role !== before && (r.confidence ?? 0) >= 0.7) item.role = role;
+      await saveKitItem(item);
+      this.refreshPanel();
+      const undo = item.role !== before ? () => ((item.role = before), void saveKitItem(item), this.refreshPanel()) : null;
+      if (undo) offerUndo(`Vision check: "${item.name}" looks like ${r.looksLike}, so its role is now ${item.role}`, undo, input.xr);
+      else this.toast(`Vision check: "${item.name}" looks like ${r.looksLike}`);
+    } catch {
+      // offline or busy: the measured role stays
+    }
   }
 
   private async removeKit(id: string): Promise<void> {

@@ -32,6 +32,8 @@ export interface KitItem {
   data: SavedCreation;
   stats: KitStats;
   addedAt: number;
+  /** What the optional vision check saw in the game's own pictures of it (a suggestion only). */
+  vision?: { looksLike: string; roles: RoleTag[]; confidence: number };
 }
 
 export interface SetPiece {

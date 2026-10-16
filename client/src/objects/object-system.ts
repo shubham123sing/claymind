@@ -42,7 +42,7 @@ import { Creation, newCreationId, syncMainMaterial } from './creation.js';
 import { bakeFromSdf } from './bake.js';
 import type { SavedCreation } from '../storage/library.js';
 import { fromSurfaceFrame, LIBRARY_SCHEMA, toSurfaceFrame } from '../storage/library.js';
-import { renderThumbnail } from './thumbnail.js';
+import { renderThumbnail, renderViews } from './thumbnail.js';
 import { envFor, initEnvMap } from './env-map.js';
 import { PhysObject } from './object-components.js';
 import { blobTexture, geometryFrom, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
@@ -836,6 +836,12 @@ export class ObjectSystem extends createSystem({}) {
       if (d < margin && d < bestD) (best = r), (bestD = d);
     }
     return best ? { toyId: best.toyId ?? undefined, creationId: best.creation?.id } : null;
+  }
+
+  /** Pictures of a creation rendered from its own model (the optional vision check; never a camera). */
+  viewsOf(creationId: string): string[] {
+    const rec = this.byCreation(creationId);
+    return rec ? [renderViews(this.world.renderer, rec.view)] : [];
   }
 
   /** Glow an item for a moment (the confirm card shows which one it means). */

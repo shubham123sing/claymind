@@ -15,10 +15,12 @@ export interface Settings {
   oneHanded: boolean;
   sound: boolean;
   tutorialDone: boolean;
+  /** Vision check (online, off by default): pictures of a toy added to the Play Kit go to the game agent's free vision model. */
+  vision: boolean;
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false, vision: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();

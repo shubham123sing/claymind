@@ -23,6 +23,8 @@ class KitDescriptor(BaseModel):
     #: optional extras the client may add later
     holes: int = Field(default=0, ge=0, le=20)
     rimCm: float = Field(default=0, ge=0, le=50)
+    #: what the optional vision check saw in the game's own pictures of it ("" when off)
+    looksLike: str = Field(default="", max_length=40)
 
 
 class ShapeReport(BaseModel):

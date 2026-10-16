@@ -6,7 +6,7 @@
  * The player id is a random string kept in this browser (no account, nothing personal).
  * The game never waits on this: a call gives up after 30 s and the built-in games stay.
  */
-import type { GameSpec } from '../playkit/game-spec.js';
+import type { GameSpec, RoleTag } from '../playkit/game-spec.js';
 import type { KitItem } from '../playkit/kit-store.js';
 
 const URL_KEY = 'claymind.agentsUrl';
@@ -56,6 +56,7 @@ function playerId(): string {
 export function describeKit(kit: KitItem[]) {
   return kit.slice(0, 50).map((k) => ({
     id: k.id, name: k.name, role: k.role, sizeCm: k.stats.sizeCm, massKg: k.stats.massKg, materials: k.stats.materials, parts: k.stats.parts, fill: k.stats.fill,
+    ...(k.vision ? { looksLike: k.vision.looksLike.slice(0, 40) } : {}),
   }));
 }
 
@@ -94,6 +95,9 @@ export const agentApi = {
   /** Point + Say: the roles of pointed-at items, from typed words the client's code could not read. */
   intent: (req: { text: string; items: Record<string, string>; zones: number; paths: number }) =>
     call<{ roles: { ref: string; role: string }[]; game: string | null; goalIsMarkedZone: boolean; unsure: string[] }>('/v1/intent', req),
+  /** The optional vision check: pictures the game rendered of one toy (Settings -> Vision check). */
+  vision: (req: { name: string; sizeCm: number[]; massKg: number; views: string[] }) =>
+    call<{ looksLike?: string; roles?: RoleTag[]; confidence?: number; note?: string; error?: string }>('/v1/vision', req),
   trace: () => call<{ calls: Record<string, unknown>[] }>('/v1/trace'),
   forget: () => call<{ deleted: boolean }>('/v1/memory', undefined, 'DELETE'),
 };

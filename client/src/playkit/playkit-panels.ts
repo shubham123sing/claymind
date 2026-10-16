@@ -102,7 +102,7 @@ export class PlayKitPanel extends CanvasPanel {
       ctx.fillText(k.name, x + cw / 2, y + 128, cw - 20);
       ctx.font = '600 18px system-ui, sans-serif';
       ctx.fillStyle = '#f0b429';
-      ctx.fillText(k.role, x + cw / 2, y + 156, cw - 20);
+      ctx.fillText(k.vision ? `${k.role} · ${k.vision.looksLike}` : k.role, x + cw / 2, y + 156, cw - 20);
       ctx.fillStyle = 'rgba(244,241,236,0.65)';
       ctx.font = '500 16px system-ui, sans-serif';
       const [sx, sy, sz] = k.stats.sizeCm;

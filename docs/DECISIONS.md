@@ -12,4 +12,6 @@
 - **Embeddings:** BAAI/bge-small-en-v1.5 via fastembed (MIT / Apache-2.0), local, about 65 MB.
 - **Multiplayer:** FastAPI WebSockets relay on the same backend (memory only), host-authoritative; IWSDK has no built-in networking; no WebRTC (no free TURN confirmed).
 - **Snapshots on the wire:** gzip via the browser's CompressionStream + base64: no dependency.
+- **Point + Say:** pure-code binder (2 s window, gesture weights) and intent rules in the client; the Intent Resolver (LLM) only names roles for items the code could not, and the pointing always wins.
+- **Vision check:** Groq qwen3.8-27b (takes images, free tier) on the game's own rendered views (no camera: Quest Browser gives web apps none); off by default in Settings; one image with two views (~1.3k tokens each image, so 2-3 toys a minute).
 - **Hosting:** GitHub Pages for the static client (already set up); backend host to be chosen in Phase 7.
