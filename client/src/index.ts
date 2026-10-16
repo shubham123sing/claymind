@@ -15,6 +15,7 @@ import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
 import { GameAgentSystem } from './game-agent/game-agent-system.js';
 import { MultiplayerSystem } from './multiplayer/multiplayer-system.js';
+import { PresenceSystem } from './multiplayer/presence.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
@@ -33,6 +34,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
     world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
     world.registerSystem(MultiplayerSystem); // room panel before objects too
+    world.registerSystem(PresenceSystem);
     world.registerSystem(SettingsSystem);
     world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);
