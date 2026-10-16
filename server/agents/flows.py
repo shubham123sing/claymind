@@ -1,6 +1,6 @@
-"""How the agents work together. The Helper's decisions drive these flows; the Helper reaches
-the Researcher, Designer and Coach through A2A on this server (A2A_MODE=local) or by direct
-calls (A2A_MODE=inproc). Kit Analyst and Referee are code.
+"""How the game agent team works together (Update 3: only the game agent remains). The
+orchestrator below is code: it reaches the Researcher and the Game Designer through A2A on this
+server (A2A_MODE=local) or by direct calls (A2A_MODE=inproc). Kit Analyst and Referee are code.
 
 Web priority for a game (never search just because it is possible):
   1. the player's own rules (no web) -> 2. a built-in template or a cached Rule Card ->
@@ -23,7 +23,7 @@ from .analyst import analyse
 from .governed_model import STATE
 from .knowledge import KitGraph, Memory, PassageIndex
 from .referee import TEMPLATES, VOCAB, apply_adapt, closest_template, describe, referee, template
-from .schemas import CheckIn, CheckOut, CoachGuide, DesignOut, HelperOut, KitDescriptor, RuleCard, Source
+from .schemas import DesignOut, KitDescriptor, RuleCard, Source
 from .store import Cache, Trace, current_agent, input_hash
 from .web import GUARD_THRESHOLD, injection_score, search_pages
 
@@ -122,32 +122,17 @@ class Orchestrator:
             raise AgentDown(f"{agent_id} failed: {texts[-1] if texts else state}")
         return texts[-1]
 
-    # ---------- Helper ----------
-
-    async def helper(self, message: str, context: dict, kit: list[KitDescriptor], user: str) -> dict:
-        if BLOCKED.search(message):
-            return {"intent": "blocked", "reply": "That doesn't fit here. Ask me about building or playing with your clay."}
-        try:
-            h: HelperOut = await self.call("helper", {"message": message[:600], "context": context}, HelperOut, use_cache=False)  # type: ignore[assignment]
-        except AgentDown:
-            return {"intent": "offline", "reply": "AI helper is offline, built-in games still work."}
-        out: dict = {"intent": h.intent, "reply": h.reply, "fix": h.fix if h.intent == "stuck" else "none"}
-        if h.intent == "teach" and h.object_name:
-            out["guide"] = await self.coach_guide(h.object_name)
-        elif h.intent == "kit_ideas":
-            kg = KitGraph(kit, self.cache.by_kind("rulecard"), self.memory.get(user).get("sets", []))
-            out["games"] = kg.local_games()[:5]
-            out["summary"] = kg.global_summary()
-        elif h.intent == "make_game":
-            out["game"] = await self.make_game(h.game_name, h.user_rules, h.rules_unknown, h.surprise, kit, user)
-        return out
-
     # ---------- games ----------
 
     async def make_game(self, name: str | None, user_rules: str | None, rules_unknown: bool, surprise: bool, kit: list[KitDescriptor], user: str) -> dict:
         reports = [analyse(k).model_dump() for k in kit]
         kg = KitGraph(kit, self.cache.by_kind("rulecard"), [])
         name = (name or "").strip()[:60]
+        if BLOCKED.search(f"{name} {user_rules or ''}"):
+            fb = template("knock-down")
+            ans = self._template_answer(fb, "fallback", "That doesn't fit here: here is a built-in game instead")
+            ans["blocked"] = True
+            return ans
         if surprise or not (name or user_rules):
             best = kg.local_games()[0]
             return self._template_answer(template(best["id"]), "surprise", "Surprise: the game that uses most of your toys")
@@ -256,30 +241,6 @@ class Orchestrator:
         for p in safe:
             self.passages.add(p["url"], p["title"], p["text"])
         return card
-
-    # ---------- coach ----------
-
-    async def coach_guide(self, goal: str) -> dict:
-        try:
-            g: CoachGuide = await self.call("coach", {"build": goal[:80]}, CoachGuide)  # type: ignore[assignment]
-            return g.model_dump()
-        except AgentDown:
-            return {"title": goal, "steps": [], "offline": True}
-
-    @staticmethod
-    def coach_check(c: CheckIn) -> CheckOut:
-        """Code, no AI: the creation against the step's measurements, one specific fix."""
-        st = c.step
-        if st.material and st.material not in c.materials:
-            return CheckOut(ok=False, message=f"This step wants {st.material}.", fix=f"Touch the piece, then Material -> {st.material}")
-        if st.size_cm:
-            names = ["wide", "tall", "deep"]
-            for i, (want, have) in enumerate(zip(st.size_cm, c.sizeCm)):
-                if want > 0 and abs(have - want) / want > 0.25:
-                    d = want - have
-                    verb = "add" if d > 0 else "take off"
-                    return CheckOut(ok=False, message=f"It is {have:.1f} cm {names[i]}, the step wants about {want:.1f} cm.", fix=f"{verb} about {abs(d):.1f} cm")
-        return CheckOut(ok=True, message="Looks good!")
 
     def models(self) -> dict:
         return STATE["governor"].snapshot() if STATE["governor"] else {}

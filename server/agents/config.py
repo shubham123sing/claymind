@@ -30,7 +30,7 @@ DEFAULT_ORIGINS = "http://localhost:5190,http://localhost:5191,https://localhost
 @dataclass
 class Settings:
     port: int = 8790
-    #: Helper -> other agents: "local" = A2A over HTTP on this server, "inproc" = direct calls
+    #: the game flow -> Researcher / Designer: "local" = A2A over HTTP on this server, "inproc" = direct calls
     a2a_mode: str = "local"
     #: shared token for the /a2a routes (random per start unless A2A_TOKEN is set)
     a2a_token: str = field(default_factory=lambda: secrets.token_urlsafe(24))

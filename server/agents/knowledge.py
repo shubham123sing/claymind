@@ -1,4 +1,4 @@
-"""What the Helper knows, kept on this server only:
+"""What the game agent knows, kept on this server only:
 
 - Kit KG (per player): nodes Item, Role, Game, Rule, Source, Set; edges can_be (Item->Role),
   needs (Game->Role), fits (Item->Game), variant_of (Game->Game), cites (Game->Source).

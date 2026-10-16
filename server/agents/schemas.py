@@ -41,23 +41,6 @@ class ShapeReport(BaseModel):
     fitsShapes: list[str]
 
 
-# ---------- Helper ----------
-
-Intent = Literal["teach", "kit_ideas", "make_game", "stuck", "chat", "blocked"]
-
-
-class HelperOut(BaseModel):
-    intent: Intent
-    reply: str = Field(description="1-3 short friendly sentences for the player", max_length=400)
-    game_name: Optional[str] = Field(default=None, description="game the player named, if any", max_length=60)
-    object_name: Optional[str] = Field(default=None, description="thing to build, for teach", max_length=60)
-    user_rules: Optional[str] = Field(default=None, description="rules the player wrote in their own words, copied", max_length=600)
-    rules_unknown: bool = Field(default=False, description="the player said they do not know the rules")
-    surprise: bool = Field(default=False, description="the player asked to be surprised")
-    fix: Literal["none", "undo", "bring_to_life", "open_material", "open_color", "reset_game", "end_game"] = Field(
-        default="none", description="for stuck: one safe, undoable action that would help, else none")
-
-
 # ---------- Researcher ----------
 
 class Source(BaseModel):
@@ -102,33 +85,3 @@ class DesignOut(BaseModel):
     adjustments: list[str] = Field(default_factory=list, max_length=8, description="size / mass changes that would help")
     cannot: list[str] = Field(default_factory=list, max_length=8, description="rules that cannot be expressed, with the closest alternative")
     how_to_play: list[str] = Field(default_factory=list, max_length=4)
-
-
-# ---------- Coach ----------
-
-Tool = Literal["shape", "add", "carve", "smooth", "paint", "new_piece", "material", "color", "join", "bring_to_life"]
-
-
-class CoachStep(BaseModel):
-    text: str = Field(max_length=200)
-    tool: Tool
-    size_cm: Optional[list[float]] = Field(default=None, min_length=3, max_length=3, description="target width, height, depth in cm")
-    material: Optional[str] = None
-    color: Optional[str] = Field(default=None, max_length=20)
-
-
-class CoachGuide(BaseModel):
-    title: str = Field(max_length=60)
-    steps: list[CoachStep] = Field(min_length=3, max_length=10)
-
-
-class CheckIn(BaseModel):
-    step: CoachStep
-    sizeCm: list[float] = Field(min_length=3, max_length=3)
-    materials: list[str] = Field(default_factory=list)
-
-
-class CheckOut(BaseModel):
-    ok: bool
-    message: str
-    fix: Optional[str] = None

@@ -2,7 +2,7 @@
 
 Public (the game): /v1/* only, CORS locked to the app origins, rate-limited per IP.
 Internal: AgentOS routes and the A2A routes (/a2a/agents/{id}/v1/message:send) need the
-shared token (header X-A2A-Token); the Helper uses them to reach the other agents.
+shared token (header X-A2A-Token); the game flow uses them to reach the Researcher and the Designer.
 
 Run (dev):  cd server && .venv/Scripts/python -m agents.run
 """
@@ -25,15 +25,10 @@ from .flows import Orchestrator
 from .governed_model import install
 from .governor import Governor
 from .knowledge import Memory, PassageIndex
-from .schemas import CheckIn, KitDescriptor
+from .schemas import KitDescriptor
 from .store import Cache, Trace
 from .team import build_team
 
-
-class HelperIn(BaseModel):
-    message: str = Field(min_length=1, max_length=600)
-    context: dict = Field(default_factory=dict)
-    kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
 
 
 class GameIn(BaseModel):
@@ -47,10 +42,6 @@ class GameIn(BaseModel):
 class KitIn(BaseModel):
     kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
     sets: list[dict] = Field(default_factory=list, max_length=50)
-
-
-class GoalIn(BaseModel):
-    goal: str = Field(min_length=1, max_length=80)
 
 
 class _QuietAgno(logging.Filter):
@@ -104,10 +95,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health():
         return {"ok": True, "a2aMode": s.a2a_mode, "web": s.web, "models": orch.models(), "fake": s.fake_llm}
 
-    @base.post("/v1/helper")
-    async def helper(body: HelperIn, x_player_id: str | None = Header(default=None)):
-        return await orch.helper(body.message, body.context, body.kit, player(x_player_id))
-
     @base.post("/v1/game")
     async def game(body: GameIn, x_player_id: str | None = Header(default=None)):
         out = await orch.make_game(body.name, body.rules, body.rulesUnknown, body.surprise, body.kit, player(x_player_id))
@@ -123,14 +110,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def kit_memory(body: KitIn, x_player_id: str | None = Header(default=None)):
         memory.update(player(x_player_id), kit=[k.model_dump() for k in body.kit], sets=body.sets)
         return {"ok": True}
-
-    @base.post("/v1/coach/guide")
-    async def coach_guide(body: GoalIn):
-        return await orch.coach_guide(body.goal)
-
-    @base.post("/v1/coach/check")
-    async def coach_check(body: CheckIn):
-        return orch.coach_check(body).model_dump()
 
     @base.get("/v1/trace")
     async def get_trace():

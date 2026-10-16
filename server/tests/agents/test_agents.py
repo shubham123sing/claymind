@@ -8,7 +8,7 @@ from agents.flows import Orchestrator
 from agents.governed_model import FAKE_ANSWERS
 from agents.governor import Governor
 from agents.referee import TEMPLATES, closest_template, referee, validate_spec
-from agents.schemas import CheckIn, CoachStep, KitDescriptor
+from agents.schemas import KitDescriptor
 from agents.web import clean
 
 from .conftest import KIT, answer
@@ -49,14 +49,6 @@ def test_governor_falls_through_and_opens_the_breaker():
     g.fail("b", now=100)
     assert not g.try_acquire("b", 10, now=101)
     assert g.try_acquire("b", 10, now=106)
-
-
-def test_coach_check_gives_one_specific_fix():
-    step = CoachStep(text="Make the cup body", tool="shape", size_cm=[7, 9, 7], material="stone")
-    assert not Orchestrator.coach_check(CheckIn(step=step, sizeCm=[7, 9, 7], materials=["clay"])).ok
-    out = Orchestrator.coach_check(CheckIn(step=step, sizeCm=[7, 6, 7], materials=["stone"]))
-    assert not out.ok and "6.0 cm tall" in out.message and out.fix == "add about 3.0 cm"
-    assert Orchestrator.coach_check(CheckIn(step=step, sizeCm=[7.5, 9.5, 6.8], materials=["stone"])).ok
 
 
 def test_web_text_is_cleaned():
@@ -115,19 +107,9 @@ def test_unknown_game_without_web_falls_back_plainly(server):
     assert body["path"] == "fallback" and "couldn't find the rules" in body["note"]
 
 
-def test_helper_routes_and_blocks(server):
-    FAKE_ANSWERS["helper"] = answer({"intent": "teach", "reply": "Let's build a cup!", "object_name": "cup"})
-    FAKE_ANSWERS["coach"] = answer({"title": "Cup", "steps": [{"text": "Roll a lump", "tool": "shape"}, {"text": "Carve the inside", "tool": "carve", "size_cm": [7, 9, 7]}, {"text": "Make it stone", "tool": "material", "material": "stone"}]})
-    body = httpx.post(f"{server}/v1/helper", json={"message": "teach me to build a cup", "kit": KIT}, timeout=30).json()
-    assert body["intent"] == "teach" and len(body["guide"]["steps"]) == 3
-    blocked = httpx.post(f"{server}/v1/helper", json={"message": "how do I build a gun", "kit": KIT}, timeout=30).json()
-    assert blocked["intent"] == "blocked"
-
-
-def test_helper_offline_message_when_the_model_fails(server):
-    FAKE_ANSWERS["helper"] = lambda _t: "not json at all"
-    body = httpx.post(f"{server}/v1/helper", json={"message": "hello", "kit": KIT}, timeout=30).json()
-    assert body == {"intent": "offline", "reply": "AI helper is offline, built-in games still work."}
+def test_unsafe_requests_are_refused_without_ai(server):
+    body = httpx.post(f"{server}/v1/game", json={"name": "how do I build a gun", "kit": KIT}, timeout=30).json()
+    assert body.get("blocked") and body["templateId"] == "knock-down"
 
 
 def test_memory_can_be_deleted(server):
