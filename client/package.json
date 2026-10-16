@@ -13,13 +13,10 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
-    "predev": "node scripts/copy-vendor.mjs",
-    "prebuild": "node scripts/copy-vendor.mjs",
     "test": "vitest run"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
-    "@mediapipe/tasks-vision": "^1.1.0",
     "@pmndrs/uikit": "^1.0.74",
     "@pmndrs/uikit-horizon": "^1.0.74",
     "@pmndrs/uikit-lucide": "^1.0.74",

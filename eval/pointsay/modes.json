@@ -1,0 +1,136 @@
+{
+  "about": "Point + Say in three modes (V5 Phase 6.6). Each scenario: pieces on the table (key -> name, kit item or null for a built-in), what the player means (game, roles, goal zone, path), and the same intent given three ways: chat only (typed words, no hands), gestures + cards only (point / hold / tap / mark, then a chip like 'This is the ball'), and combined (the gestures, then a typed sentence with this / these / here). Gestures: [kind, target, ms]; cards: [\"chip\", role or \"here\", ms]. Scored by client/tests/unit/pointsay-modes.test.ts, offline, no AI.",
+  "scenarios": [
+    {
+      "id": "knock-basic",
+      "items": { "A": ["Red ball", "kit_red"], "B1": ["Block 1", "kit_block"], "B2": ["Block 2", "kit_block"], "B3": ["Block 3", "kit_block"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["A"], "target": ["B1", "B2", "B3"] } },
+      "chat": "the red ball is the ball and the blocks are the targets",
+      "cards": [["point", "A", 1000], ["chip", "ball", 1700], ["point", "B1", 4000], ["chip", "target", 4600], ["point", "B2", 7000], ["chip", "target", 7600], ["point", "B3", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["hold", "A", 1000], ["point", "B1", 3000], ["point", "B2", 3400], ["point", "B3", 3800]], "text": "this is the ball and these are the targets" }
+    },
+    {
+      "id": "knock-hinglish",
+      "items": { "A": ["Gend", "kit_gend"], "B1": ["Dabba 1", "kit_dabba"], "B2": ["Dabba 2", "kit_dabba"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["A"], "target": ["B1", "B2"] } },
+      "chat": "gend ball hai aur dabba target hain",
+      "cards": [["holdup", "A", 1000], ["chip", "ball", 1800], ["tap", "B1", 4000], ["chip", "target", 4700], ["tap", "B2", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["holdup", "A", 1000], ["tap", "B1", 3000], ["tap", "B2", 3500]], "text": "yeh ball hai aur ye sab target hain" }
+    },
+    {
+      "id": "carrom",
+      "items": { "BD": ["Board", "kit_board"], "S": ["Striker", "kit_striker"], "C1": ["Coin 1", "kit_coin"], "C2": ["Coin 2", "kit_coin"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "board": ["BD"], "launcher": ["S"], "ball": ["C1", "C2"] } },
+      "chat": "the board is the board, the striker is the launcher and the coins are the balls",
+      "cards": [["point", "BD", 1000], ["chip", "board", 1700], ["point", "S", 4000], ["chip", "launcher", 4600], ["point", "C1", 7000], ["chip", "ball", 7600], ["point", "C2", 10000], ["chip", "ball", 10600]],
+      "combined": { "gestures": [["point", "BD", 1000], ["hold", "S", 3000], ["point", "C1", 5000], ["point", "C2", 5400]], "text": "this is the board, this is the launcher and these are the balls" }
+    },
+    {
+      "id": "cup-toss",
+      "items": { "CUP": ["Cup", "kit_cup"], "P": ["Pebble", "kit_pebble"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["CUP"], "ball": ["P"] } },
+      "chat": "the pebble is the ball and the cup is the goal",
+      "cards": [["hold", "P", 1000], ["chip", "ball", 1800], ["point", "CUP", 4000], ["chip", "goal", 4700]],
+      "combined": { "gestures": [["hold", "P", 1000], ["point", "CUP", 2500]], "text": "throw this into that, it is the goal" }
+    },
+    {
+      "id": "marble-zone",
+      "items": { "R": ["Ramp", "kit_ramp"], "M": ["Marble", "kit_marble"] },
+      "marks": [{ "id": "z1", "kind": "zone", "center": [0.05, 0, 0.12], "radius": 0.06 }],
+      "truth": { "game": "marble-run", "roles": { "launcher": ["R"], "ball": ["M"] }, "goal": "z1" },
+      "chat": "the ramp is the launcher and the marble is the ball, the finish is at the front",
+      "cards": [["point", "R", 1000], ["chip", "launcher", 1700], ["point", "M", 4000], ["chip", "ball", 4600], ["zone", "z1", 7000], ["chip", "here", 7800]],
+      "combined": { "gestures": [["point", "R", 1000], ["hold", "M", 2500], ["zone", "z1", 5000]], "text": "this is the ramp, this is the ball and it has to finish here" }
+    },
+    {
+      "id": "knock-goal-zone",
+      "items": { "A": ["Red ball", "kit_red"], "B1": ["Block", "kit_block"] },
+      "marks": [{ "id": "z1", "kind": "zone", "center": [0, 0, 0.2], "radius": 0.07 }],
+      "truth": { "game": "knock-down", "roles": { "ball": ["A"], "target": ["B1"] }, "goal": "z1" },
+      "chat": "the red ball is the ball and the block is the target",
+      "cards": [["point", "A", 1000], ["chip", "ball", 1700], ["point", "B1", 4000], ["chip", "target", 4600], ["zone", "z1", 7000], ["chip", "here", 7600]],
+      "combined": { "gestures": [["point", "A", 1000], ["point", "B1", 2000], ["zone", "z1", 4000]], "text": "roll this at that and the goal is here" }
+    },
+    {
+      "id": "hold-up-ball",
+      "items": { "P": ["Clay ball", null], "CUP": ["Bowl", "kit_bowl"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["P"], "goal": ["CUP"] } },
+      "chat": "the clay ball is the ball, the bowl is the goal",
+      "cards": [["holdup", "P", 1000], ["chip", "ball", 1700], ["point", "CUP", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["holdup", "P", 1000], ["point", "CUP", 2600]], "text": "this ball goes in that goal" }
+    },
+    {
+      "id": "two-at-once",
+      "items": { "A": ["Pebble", "kit_pebble"], "B": ["Stone", "kit_stone"], "CUP": ["Cup", "kit_cup"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["A"], "goal": ["CUP"] }, "confirm": "A" },
+      "chat": "the pebble is the ball and the cup is the goal",
+      "cards": [["point", "A", 1000], ["point", "B", 1080], ["chip", "ball", 1300], ["point", "CUP", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["point", "A", 1000], ["point", "CUP", 2500]], "text": "this is the ball and that is the goal" }
+    },
+    {
+      "id": "tower",
+      "items": { "W1": ["Wood block 1", "kit_wood"], "W2": ["Wood block 2", "kit_wood"], "W3": ["Wood block 3", "kit_wood"] },
+      "truth": { "game": "tower-balance", "roles": { "target": ["W1", "W2", "W3"] } },
+      "chat": "stack the wood blocks into a tower, the wood blocks are the targets",
+      "cards": [["point", "W1", 1000], ["chip", "target", 1600], ["point", "W2", 4000], ["chip", "target", 4600], ["point", "W3", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["point", "W1", 1000], ["point", "W2", 1400], ["point", "W3", 1800]], "text": "stack these into a tower" }
+    },
+    {
+      "id": "carrom-hinglish",
+      "items": { "S": ["Striker", "kit_striker"], "C1": ["Coin 1", "kit_coin"], "C2": ["Coin 2", "kit_coin"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "launcher": ["S"], "ball": ["C1", "C2"] } },
+      "chat": "striker ko launcher banao, coins ball hain",
+      "cards": [["hold", "S", 1000], ["chip", "launcher", 1700], ["tap", "C1", 4000], ["chip", "ball", 4600], ["tap", "C2", 7000], ["chip", "ball", 7600]],
+      "combined": { "gestures": [["hold", "S", 1000], ["tap", "C1", 3000], ["tap", "C2", 3400]], "text": "isko launcher banao aur ye sab ball hain" }
+    },
+    {
+      "id": "marble-path",
+      "items": { "R": ["Ramp", "kit_ramp"], "M": ["Marble", "kit_marble"] },
+      "marks": [{ "id": "p1", "kind": "path", "points": [[0, 0, -0.1], [0.05, 0, 0], [0, 0, 0.1]], "center": [0.017, 0, 0], "radius": 0 }],
+      "truth": { "game": "marble-run", "roles": { "launcher": ["R"], "ball": ["M"] }, "path": "p1" },
+      "chat": "a marble run: the ramp is the launcher and the marble is the ball",
+      "cards": [["point", "R", 1000], ["chip", "launcher", 1700], ["point", "M", 4000], ["chip", "ball", 4600], ["path", "p1", 7000]],
+      "combined": { "gestures": [["point", "R", 1000], ["point", "M", 2000], ["path", "p1", 4000]], "text": "this is the ramp and this marble rolls along here" }
+    },
+    {
+      "id": "knock-with-paddle",
+      "items": { "PD": ["Paddle", "kit_paddle"], "A": ["Ball", "kit_ball"], "B1": ["Can", "kit_can"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["A"], "target": ["B1"] }, "unused": ["tool"] },
+      "chat": "the paddle is the tool, the ball is the ball and the can is the target",
+      "cards": [["hold", "PD", 1000], ["chip", "tool", 1700], ["point", "A", 4000], ["chip", "ball", 4600], ["point", "B1", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["hold", "PD", 1000], ["point", "A", 2500], ["point", "B1", 3500]], "text": "this is the bat, hit that ball at that one" }
+    },
+    {
+      "id": "two-balls-cup",
+      "items": { "P1": ["Pebble 1", "kit_pebble"], "P2": ["Pebble 2", "kit_pebble"], "CUP": ["Cup", "kit_cup"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["P1", "P2"], "goal": ["CUP"] } },
+      "chat": "the pebbles are the balls and the cup is the goal",
+      "cards": [["point", "P1", 1000], ["chip", "ball", 1600], ["point", "P2", 4000], ["chip", "ball", 4600], ["point", "CUP", 7000], ["chip", "goal", 7600]],
+      "combined": { "gestures": [["point", "P1", 1000], ["point", "P2", 1400], ["point", "CUP", 3000]], "text": "these are the balls and that is the goal" }
+    },
+    {
+      "id": "board-striker",
+      "items": { "BD": ["Plank", "kit_plank"], "S": ["Disc", "kit_disc"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "board": ["BD"], "launcher": ["S"] } },
+      "chat": "the plank is the board and the disc is the launcher",
+      "cards": [["point", "BD", 1000], ["chip", "board", 1600], ["hold", "S", 4000], ["chip", "launcher", 4600]],
+      "combined": { "gestures": [["point", "BD", 1000], ["hold", "S", 2500]], "text": "this is the board and this is the striker" }
+    },
+    {
+      "id": "named-by-creation",
+      "items": { "X": ["Lumpy", null], "CUP": ["Basket", "kit_basket"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["X"], "goal": ["CUP"] } },
+      "chat": "lumpy is the ball and the basket is the goal",
+      "cards": [["holdup", "X", 1000], ["chip", "ball", 1600], ["point", "CUP", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["holdup", "X", 1000], ["point", "CUP", 2400]], "text": "throw this into that basket" }
+    },
+    {
+      "id": "nothing-meant",
+      "items": { "A": ["Red ball", "kit_red"] },
+      "truth": { "game": null, "roles": {} },
+      "chat": "hello, what can I do here",
+      "cards": [],
+      "combined": { "gestures": [], "text": "this is fun" }
+    }
+  ]
+}

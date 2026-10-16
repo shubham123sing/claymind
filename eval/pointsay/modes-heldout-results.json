@@ -1,0 +1,351 @@
+{
+ "summary": {
+  "chat": {
+   "scenarios": 8,
+   "allRight": 1,
+   "gameRight": 4,
+   "rolesRight": 6,
+   "rolesTotal": 21,
+   "marksKept": 6,
+   "confirmCards": 0,
+   "wrongRoles": 0,
+   "invalidSpecs": 0
+  },
+  "cards": {
+   "scenarios": 8,
+   "allRight": 8,
+   "gameRight": 8,
+   "rolesRight": 21,
+   "rolesTotal": 21,
+   "marksKept": 8,
+   "confirmCards": 0,
+   "wrongRoles": 0,
+   "invalidSpecs": 0
+  },
+  "combined": {
+   "scenarios": 8,
+   "allRight": 5,
+   "gameRight": 7,
+   "rolesRight": 19,
+   "rolesTotal": 21,
+   "marksKept": 8,
+   "confirmCards": 0,
+   "wrongRoles": 2,
+   "invalidSpecs": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "ho-bowling-pins",
+   "chat": {
+    "game": "tower-balance",
+    "gameOk": false,
+    "rolesRight": 3,
+    "rolesTotal": 4,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "ho-basket",
+   "chat": {
+    "game": null,
+    "gameOk": false,
+    "rolesRight": 0,
+    "rolesTotal": 2,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "ho-hinglish-cup",
+   "chat": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 1,
+    "rolesTotal": 2,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 1,
+    "rolesTotal": 2,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   }
+  },
+  {
+   "id": "ho-flick-coins",
+   "chat": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 1,
+    "rolesTotal": 4,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "flick-and-pocket",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "ho-stack",
+   "chat": {
+    "game": null,
+    "gameOk": false,
+    "rolesRight": 0,
+    "rolesTotal": 4,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "tower-balance",
+    "gameOk": true,
+    "rolesRight": 4,
+    "rolesTotal": 4,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "ho-marble-goal",
+   "chat": {
+    "game": "knock-down",
+    "gameOk": false,
+    "rolesRight": 1,
+    "rolesTotal": 2,
+    "rolesOk": false,
+    "marksOk": false,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 2,
+    "rolesTotal": 2,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "marble-run",
+    "gameOk": true,
+    "rolesRight": 1,
+    "rolesTotal": 2,
+    "rolesOk": false,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 1,
+    "valid": true,
+    "ok": false
+   }
+  },
+  {
+   "id": "ho-knock-cans-zone",
+   "chat": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 3,
+    "rolesOk": false,
+    "marksOk": false,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": false
+   },
+   "cards": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 3,
+    "rolesTotal": 3,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   }
+  },
+  {
+   "id": "ho-pointing-only-no-chip",
+   "chat": {
+    "game": null,
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "cards": {
+    "game": null,
+    "gameOk": true,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 0,
+    "valid": true,
+    "ok": true
+   },
+   "combined": {
+    "game": "tower-balance",
+    "gameOk": false,
+    "rolesRight": 0,
+    "rolesTotal": 0,
+    "rolesOk": true,
+    "marksOk": true,
+    "confirms": 0,
+    "wrong": 1,
+    "valid": true,
+    "ok": false
+   }
+  }
+ ]
+}

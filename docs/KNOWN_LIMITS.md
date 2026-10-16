@@ -207,3 +207,84 @@ Other findings:
 - Vertex colours: engines that ignore `COLOR_0` by default (e.g. Unity's standard shader) show painted pieces white; unpainted pieces carry their colour in the material and look right everywhere.
 - The Library no longer adds sample items on first run. Items saved automatically by older versions stay in the Library until deleted. Pinned creations from older versions are not put back automatically (pin them again).
 - Phone AR: untouched in this update (its diagnosis and touch fix came with pull request #1, above).
+
+## Update 2, Step 0: XR environment and emulated hands (2026-10-15, branch update-2-playkit)
+- Nothing XR-related had been removed from git history: the IWSDK emulator (IWER), its `living_room` room and the scene's `IBLGradient` were only ever injected by the dev server. The live site therefore had no emulator.
+- Now `iwsdk.config.json` sets `dev.emulator.injectOnBuild: true` and `activation: "always"`: the deployed build carries the emulator (about 1.1 MB, room mesh bundled, no CDN request). It is skipped when the browser reports `OculusBrowser|Quest|Pico|Wolvic|Android|iPhone|iPad|Mobile`, so headsets and phones keep their real WebXR. A desktop PC with a real PC-VR headset in desktop Chrome would still get the emulator.
+- Hands tested in the emulator (programmatic IWER hands, seated head at 1.15 m): pinch-pull, Add, Carve, Smooth, Paint, palm-up menu pokes (8/8 in a row), Undo/Redo, Material ring, colour picker, Bring to life, pinch-grab and drop, distance grab, Pin, Add to Library, Library Use/Download, Remove from scene + Undo, Delete + Undo, one-handed menu Hide/Tools, two-hand scale. **Emulated hands are not a real Quest**: pinch reliability, reach, fatigue and tracking loss need the headset.
+- Fixed: two-hand scale/turn never started when objects stood on the table (each pinch became a distance grab); the wrist menu grew to 8 rows (35 cm, down past the table), now 5 x 5 (22 x 18 cm); floating cards covered menu buttons; the tutorial card kept the desktop wording in XR.
+- Not present: a physics on/off switch (Update 2 Step 1 adds Edit / Play).
+- Frame time in the emulator (desktop browser pane, 19 objects incl. Play Kit, 91k triangles, 178 draw calls): about 54 fps, median 16.7 ms (60 Hz display), p95 43 ms. Not a Quest number.
+
+## Update 2, Step 1: Play Kit (2026-10-15)
+- Verified offline in the browser and the XR emulator: Add to Play Kit (3 creations, roles guessed: piece, piece, obstacle), Place, Save Set, End, reopen the Set, Edit / Play, Pause (pieces hang until Resume), Reset (all pieces back within 0.3 mm; a missing piece is rebuilt), kit download and import (3 toys and 1 Set back as new copies), all five games set up with every piece resting on the table, Knock-down won with mouse throws (6/6) and played with emulated hand throws (2 blocks down), Flick-and-pocket with fingertip flicks (turns alternate) and a pocketed coin scoring and going to the tray. No request left localhost.
+- Fixed on the way: balls thrown hard fell through the 3-4 cm table colliders (no continuous collision detection): table colliders are now 25 cm deep under the top; the play area is centred on the table's usable depth and every layout fits a 50 cm deep table; mouse drags of Play Kit pieces slide over the table so they can be thrown; toys much bigger than a role's slot, or the wrong shape (a ball as a stacking block), are not suggested for it.
+- Emulated hands move slowly in the browser pane (about 30 fps): throws and flicks there are weaker than real ones. Throw strength, flick feel and reach must be checked on a Quest.
+- A held object trails the hand slightly, so a throw leaves at a little less than hand speed.
+- Pause stops all physics (also any creation on the table); holding a piece during a pause moves it without physics until Resume.
+- Kit files carry each toy's breakage pieces: about 2 MB per toy (limit 50 MB).
+- Rename in the headset is not available (no keyboard): names default to "Toy N" / "Set N"; rename in a browser.
+
+## Update 2, Step 2: agent backend (2026-10-15)
+- Verified live with Groq: "carrom" with unknown rules went Wikipedia (2 pages) -> Researcher -> Designer -> Referee in 12.7 s and became Flick-and-pocket with an honest list of what cannot be done and what the kit lacks; three sets of player rules (bowling, cups, marble run) were applied in 2-4 s each; the Coach wrote a 9-step mug guide. A real 429 (tokens per minute) fell through to the next model without an error.
+- **Free models cannot write a whole Game Spec reliably** (two live attempts broke basic fields). The Designer therefore adapts a built-in template (players, turns, pieces, win target, time) by default; full specs are the exception and must pass the Referee, else the closest built-in game is used and the player is told.
+- Free-tier budgets are small (about 8000 tokens per minute per model): a web lookup plus a design uses most of a minute's budget; busy minutes fall through to slower or smaller models.
+- The Referee checks rules and reachability on the server; the physics dry run of a new game is not done yet (it needs the client's physics: Step 3b).
+- Web: Wikipedia only (no other search source was needed or verified); pages flagged by the prompt-guard model are dropped. Some games have no Wikipedia page: the Helper then offers the closest built-in game.
+- First start downloads the 65 MB embedding model; without it the passage index falls back to keyword search.
+- The backend is not deployed publicly yet; the public game does not call it. The Groq key pasted in chat on 2026-10-15 should be rotated after the competition.
+
+## Update 2, Step 3: agent features in the game (2026-10-16)
+- Verified in the browser with the live backend: Make a game -> Carrom (web: Wikipedia, 17 s) gave "Mini Carrom" with how to play, uses, missing / not possible and sources; Adjust lowered the win target 10 -> 5 and the game started with the HUD showing 0 / 5; the same request again came from the cache in 0.5 s. Teach me to build a cup: 8 steps in 6 s; Check my work on the 11 cm clay said "the step wants about 8.0 cm, take off about 3.0 cm". Help during a finished Knock-down offered "Reset the game", which reset the table. Offline: "AI helper is offline, built-in games still work." and a built-in game still started.
+- Pinch keypad: the XR flow (keypad opens, typed "Jenga", Done sends it, the backend answered Tower balance) was checked by calling the keypad's buttons; poking them with emulated fingertips could not run because the browser pane was hidden (no frames). Re-test the keypad by hand in the emulator and on a Quest.
+- A web lookup can read an unhelpful second page (for Carrom: "List of sports"); it is listed as a source because it was read.
+- The status line says "Choosing a game..." for typed names until the answer arrives; the preview then says which path really ran.
+- The public game (GitHub Pages) has no backend: Ask AI shows offline there until the backend is hosted and `?agents=` points to it.
+
+## Update 2, Step 3b: Simulate it for me (2026-10-15)
+- Verified in the browser: a full Knock-down demo (3 throws, 4 down, live scoreboard); Flick-and-pocket (10 flicks, turns alternate; in the headset run a whole game ended inside 20 s); Will it work? passes a straight tower and fails a leaning one, the proposed fix ("Line the pieces up") passes the re-test and Undo restores the lean; What-if with light foam balls offered steel (4 down instead of 0), Apply worked, every replay was identical. All with no network.
+- The visible demo stops at 20 s by design: a long game (e.g. 8 turns of Flick-and-pocket with slow coins) can be cut short there; the headless runs play to the end (60 s cap).
+- The demo player is simple code, not an expert: it aims at the easiest pocket or the middle of what still stands, with a little seeded randomness; it never tries trick shots.
+- What-if varies one thing (material = mass, or the built-in ramp's angle) in steps; it does not change sizes of the player's own toys.
+- Will it work? judges "stays where it is for 3 s" (moved more than 1.5 cm or tipped more than 15 degrees fails). The suggested fixes are lining a stack up or a heavier bottom piece, each proven in simulation; other problems get "no simple fix found".
+- Slow motion slows the whole physics clock (also anything else on the table) while the demo runs.
+
+## Update 2, Step 4: the helper character (2026-10-15)
+- Built from the clay mesher at start-up (about 5k triangles); no external 3D assets. If it cannot be built the bubble works alone.
+- Voice output uses the browser's built-in speech synthesis (voices differ by device; off by default). No voice input by design.
+- It sits on the table's left (right for left-handed players), clear of the play area; on a very small real table it is clamped onto the table's edge.
+
+## Update 2, Step 5: XR emulator run (2026-10-15)
+- Full results and the awkward-hands list: `docs/STEP5_XR_TEST.md`. Fixed from it: throws lost half their speed (hand smoothing beta, release velocity), HUD buttons too small and too far for seated play, and four Researcher problems (wrong pages, over-long answers thrown away, Qwen's output limit, the "busy" message).
+- The new hand smoothing (beta 4) must be checked on a Quest for jitter on a still hand while sculpting.
+
+## Update 2 in short: what to expect
+- **Free LLMs are not fully reliable.** Free-tier budgets are small (about 8000 tokens per minute per model, Qwen 1000 output tokens per minute); a busy minute makes requests slower or ends in the closest built-in game, and the player is told which. Full Game Specs written by a model often fail the Referee, so most games are a built-in template plus changes.
+- **Web search** is Wikipedia only: the game's own page first (when it is about a game), then search hits. Games without a page get the closest built-in game. Text from the web is screened for prompt injection and summarised, never followed.
+- **Cold starts:** the backend's first start downloads a 65 MB embedding model; the first web lookup for a game takes 10-17 s, later ones come from the cache in under a second.
+- **Emulator vs real Quest:** every hand result in this update comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate on a Quest are still to be measured (list in `docs/STEP5_XR_TEST.md`).
+- **No voice input**, by design: typing is the browser text box or the pinch keypad; the helper's voice output is optional.
+
+
+## Update 3 (focus, environment, multiplayer), 2026-10-16
+- **Removed on purpose:** the Helper, the Coach, the helper character, "Will it work?" and What-if, the brain graph / Debug the Brain / Mastery and the old AI layer (archived in `_archive/`). The game agent team stays; "Show me how" stays as an optional preview on game cards.
+- **Free LLMs are not fully reliable.** Free-tier budgets are small (about 8000 tokens per minute per model, Qwen 1000 output tokens per minute). A busy minute ends in the closest built-in game, and the player is told which. Measured accuracy: `docs/EVAL_REPORT.md`.
+- **Environment:** the room's planes (walls, floor, ceiling, furniture tops) become colliders in the XR environment; real-room mesh collision on a phone or in passthrough is not done (phone AR is paused). Fast objects are stopped by thick colliders (no continuous collision detection in the IWSDK physics).
+- **Multiplayer:**
+  - Edits are applied when they come back from the room, so your own stroke shows after one round trip (about 0.1 s on a good connection, 0.56 s at 250 ms each way).
+  - Bring to life in a room (V5): the object appears for everyone; a hold is sent about 15 times a second, a throw runs in each table's own physics and the thrower's resting pose re-aligns the others, so between the throw and the rest the tables can differ by a few centimetres. Objects made before joining a room stay on their own table.
+  - Host leaves: the room carries on with a new host, but the game in progress ends (no physics hand-over).
+  - The relay keeps rooms in memory: a restarted server ends every room.
+  - Presence is head and two hands (no finger joints); a wave or a thumbs-up held for half a second shows on the name tag (thumbs-up detection tuned on emulated hands only).
+  - Turning or resizing the shared clay with two hands is your own view only.
+  - Tested with two browser tabs, scripted players and simulated latency / loss, not with two headsets.
+- **Emulator vs Quest:** every hand result comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate must be measured on a Quest (list in `docs/QA_REPORT.md`).
+- **No voice** by design: no microphone and no voice chat anywhere; typing is the browser text box or the pinch keypad.
+
+## V5 (Play Kit, game agent, Point + Say), 2026-10-16
+- **Point + Say is code first:** pointing words bind to what the hands showed within 2 s (typed words afterwards bind in the order things were shown). Words alone (no hands) are read by simple name and role matching offline: on held-out sentences it got 1 of 8 games fully right; the online Intent Resolver and Designer read free sentences better but are free models (numbers in `docs/EVAL_REPORT.md`).
+- **A marked goal the game's fixed pieces cannot reach** (a marble run's finish moved away from its ramp) fails the physics test; you get the plain game and a note saying why. The game does not move its fixed pieces to fit your mark.
+- **Your toy in a role is tested too:** a toy that fails the physics test in its role (a big clay lump as a marble) is swapped for the built-in piece, and the preview says so.
+- **Vision check** (off by default): a free vision model looks at two views the game renders of a new toy (no camera: the Quest Browser gives web apps no camera feed). About 1.3k tokens per picture, so 2 or 3 toys a minute on the free tier; it only suggests a role, with Undo.
+- **Emulator only:** pointing, zone marking, the assisted flick and holding a tool were tested with emulated hands at about 5 frames a second in a browser pane; at that rate the physics runs in slow motion, so a fast swing of a held tool could not be judged (a slow push moves the blocks). Feel, reach and fast swings need a Quest.
+

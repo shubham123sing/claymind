@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig, Plugin } from 'vite';
@@ -28,41 +27,21 @@ function claymindPhysicsRuntime(): Plugin {
   };
 }
 
-/**
- * Release builds hold only the game (plan v4: no webcam tier, no AI): the
- * Phase 0 spike pages, the MediaPipe wasm (~37 MB) and the AI sample models
- * are left out. CLAYMIND_SPIKES=1 keeps them (development builds).
- */
-const SPIKES = process.env.CLAYMIND_SPIKES === '1';
-function pruneDevOnlyFiles(): Plugin {
-  return {
-    name: 'claymind-prune-dev-only',
-    apply: 'build',
-    closeBundle() {
-      if (SPIKES) return;
-      const dist = fileURLToPath(new URL('./dist/', import.meta.url));
-      for (const dir of ['vendor', 'samples']) rmSync(dist + dir, { recursive: true, force: true });
-    },
-  };
-}
-
 export default defineConfig({
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
-  plugins: [claymindPhysicsRuntime(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {}), pruneDevOnlyFiles()],
+  plugins: [claymindPhysicsRuntime(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
   server: {
     host: '0.0.0.0',
     port: 8081,
     open: false,
-    // dev: /api -> the local AI server (server/, `uvicorn app.main:app --port 8787`)
-    proxy: { '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') } },
   },
   build: {
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',
     target: 'esnext',
     rollupOptions: {
-      input: SPIKES ? { main: './index.html', sdf: './spikes/sdf.html', hands: './spikes/hands.html' } : { main: './index.html' },
+      input: { main: './index.html' },
     },
   },
   // workers are bundled separately: they need the runtime swap too

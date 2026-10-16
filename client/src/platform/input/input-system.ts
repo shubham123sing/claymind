@@ -11,7 +11,7 @@ import { createHandState, HandState, InputProvider } from './hand-state.js';
 import { PointerProvider } from './pointer-provider.js';
 import { XrHandsProvider } from './xr-hands-provider.js';
 
-export type HandClaim = 'object' | 'menu' | 'kg' | null;
+export type HandClaim = 'object' | 'menu' | 'mark' | null;
 
 export const input: {
   hands: Record<Handedness, HandState>;

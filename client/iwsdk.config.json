@@ -27,8 +27,16 @@
       "near": 0.001,
       "far": 200,
       "camera": {
-        "position": [0, 1.02, 0.08],
-        "lookAt": [0, 0.79, -0.37]
+        "position": [
+          0,
+          1.02,
+          0.08
+        ],
+        "lookAt": [
+          0,
+          0.79,
+          -0.37
+        ]
       }
     },
     "features": {
@@ -49,7 +57,12 @@
   "dev": {
     "emulator": {
       "device": "metaQuest3",
-      "environment": "living_room"
+      "environment": "living_room",
+      "injectOnBuild": true,
+      "activation": "always",
+      "userAgentException": {
+        "source": "OculusBrowser|Quest|Pico|Wolvic|Android|iPhone|iPad|Mobile"
+      }
     }
   }
 }

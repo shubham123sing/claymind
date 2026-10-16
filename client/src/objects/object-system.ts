@@ -18,8 +18,9 @@
  * spawns pebbles, dominoes and a glass target; creations are packed for the
  * Library (serialize / restore).
  */
+import { throwVelocity } from './throw.js';
 import {
-  Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Line, LineBasicMaterial, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PerspectiveCamera, PhysicsBody, PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion,
   Raycaster, Sphere, Vector2, Vector3,
 } from '@iwsdk/core';
@@ -41,14 +42,17 @@ import { Creation, newCreationId, syncMainMaterial } from './creation.js';
 import { bakeFromSdf } from './bake.js';
 import type { SavedCreation } from '../storage/library.js';
 import { fromSurfaceFrame, LIBRARY_SCHEMA, toSurfaceFrame } from '../storage/library.js';
-import { renderThumbnail } from './thumbnail.js';
+import { renderThumbnail, renderViews } from './thumbnail.js';
 import { envFor, initEnvMap } from './env-map.js';
 import { PhysObject } from './object-components.js';
-import { blobTexture, geometryFrom, hullVolume, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
+import { blobTexture, geometryFrom, InfoLabel, makeShadow, pbrMaterial } from './object-view.js';
+import { BODY_DAMPING, compoundChild, hullOf, toBody } from '../physics/body-build.js';
 
-type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free';
+/** demo: moved by the Play Kit's demo player (ghost hand), never by the player's hands. */
+type Mode = 'materialize' | 'fly' | 'hover' | 'carry' | 'pinch' | 'ray' | 'pointer' | 'free' | 'demo';
 /** creation = made by the player; shard = a breakage piece (fades); prop = a Play Kit item. */
-type Kind = 'creation' | 'shard' | 'prop';
+/** toy: a Play Kit piece (no label, its own limit, driven by the Play Kit). */
+type Kind = 'creation' | 'shard' | 'prop' | 'toy';
 
 /** Where a piece sits in its object (piece-local -> object-local). */
 interface Frame {
@@ -83,6 +87,10 @@ interface LivePart extends PartSpec {
 
 interface Live {
   kind: Kind;
+  /** Play Kit piece id (kind 'toy'). */
+  toyId?: string;
+  /** Cannot be grabbed (a game's board, ramp, cups while playing). */
+  locked?: boolean;
   /** Static body resting where it was pinned. */
   pinned: boolean;
   /** 'ray' grab: distance along the hand ray. */
@@ -127,6 +135,8 @@ interface Live {
 
 /** The physics carrier is never drawn (its "geometry" is the compound description). */
 const HIDDEN = new MeshBasicMaterial({ visible: false });
+/** A distance grab this new (ms) still yields to a two-hand pinch. */
+const TWO_HAND_GRACE_MS = 400;
 /** Join: pieces of two objects must be at most this far apart (m). */
 const JOIN_GAP = 0.012;
 /** Below this speed change a contact makes no sound (m/s). */
@@ -138,6 +148,14 @@ const MATERIAL_REBUILD_DELAY = 400;
 const MAX_CREATIONS = 8;
 const MAX_PIECES = 24;
 const MAX_THROW = 6;
+/** Assisted flick: pull (m) -> speed (m/s), the same range as a fingertip flick; lift more than this to grab instead. */
+const AIM_MIN_PULL = 0.015, AIM_MAX_PULL = 0.15, FLICK_AIM_MIN = 1.2, FLICK_AIM_MAX = 2.5, AIM_LIFT = 0.05;
+/** A held tool never moves faster than this (m/s): a hard swing, not a glitch. */
+const TOOL_MAX_SPEED = 8;
+/** Play Kit pieces on the table at once. */
+const MAX_TOYS = 40;
+/** Fingertip flick: speeds (m/s) and how long a piece ignores the next flick (ms). */
+const FLICK_MIN = 0.35, FLICK_MAX = 2.5, FLICK_COOLDOWN_MS = 400;
 const PIECE_LIFETIME = 7000;
 const GRAB_MARGIN = 0.035;
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -205,18 +223,6 @@ export class ObjectSystem extends createSystem({}) {
             syncMainMaterial(c);
           }
         }
-      }),
-      bus.on('creation:ai-status', (e) => {
-        const rec = this.byCreation(e.creationId);
-        if (rec?.creation) {
-          rec.creation.aiStatus = e.text;
-          rec.lastInteract = performance.now();
-        }
-      }),
-      bus.on('creation:model', (e) => {
-        // a generated model has no pieces: only single-part objects take it
-        const rec = this.byCreation(e.creationId);
-        if (rec && rec.parts.length === 1) this.rebuild(rec, { parts: [{ ...this.specOf(rec.parts[0]), mesh: e.mesh, collider: undefined }], flash: 0.8 });
       }),
     );
     const onDown = (e: PointerEvent) => this.onPointerDown(e);
@@ -308,7 +314,7 @@ export class ObjectSystem extends createSystem({}) {
     const q = quaternion as [number, number, number, number];
     const inputs: PartInput[] = parts.map((lp, i) => ({ id: i, materialId: lp.mat.id, positions: lp.bodyPositions }));
     const props = computePhysicalProperties(inputs, q);
-    const children = parts.map((lp, i) => compoundChild(lp, props.parts[i].volume));
+    const children = parts.map((lp, i) => compoundChild({ materialId: lp.mat.id, mesh: lp.mesh, collider: lp.collider, frame: lp.frame }, props.parts[i].volume));
     // the physics body: its "geometry" carries the compound description (never drawn)
     const carrier = new Mesh(compoundGeometry(encodeCompound(children)), HIDDEN);
     carrier.frustumCulled = false;
@@ -321,7 +327,7 @@ export class ObjectSystem extends createSystem({}) {
     // a pinned object is static: it rests where it was put
     entity.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, density: 1000, friction: parts[contact].mat.friction, restitution: parts[contact].mat.restitution });
     entity.addComponent(PhysicsBody, {
-      state: pinned ? PhysicsState.Static : PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: 0.08, linearDamping: 0.02, centerOfMass: props.com,
+      state: pinned ? PhysicsState.Static : PhysicsState.Dynamic, gravityFactor: held ? 0 : 1, angularDamping: BODY_DAMPING.angular, linearDamping: BODY_DAMPING.linear, centerOfMass: props.com,
     });
     entity.addComponent(PhysObject, {
       materialId: parts[contact].mat.id, massKg: props.mass, piece: o.piece ? 1 : 0, held: held ? 1 : 0, ignoreImpactsUntil: performance.now() + 250,
@@ -402,9 +408,82 @@ export class ObjectSystem extends createSystem({}) {
     if (body && this.physics) this.physics.setBodyTransform(rec.entity, { position: [p.x, p.y, p.z], quaternion: this.qa as [number, number, number, number] });
     else rec.mesh.position.copy(p);
     rec.hist.push({ x: p.x, y: p.y, z: p.z, t: performance.now() });
-    if (rec.hist.length > 6) rec.hist.shift();
+    if (rec.hist.length > 16) rec.hist.shift();
   }
   private qa: number[] = [0, 0, 0, 1];
+
+  // ---------------- assisted flick (pinch, pull back, release) ----------------
+
+  /** Set by Play Kit: may this piece be flicked by pulling back (play mode, a flick game, a small loose piece)? */
+  canAim: ((toyId: string) => boolean) | null = null;
+  private aim: { rec: Live; side: Handedness; start: Vector3; line: Line; geo: BufferGeometry } | null = null;
+
+  private startAim(rec: Live, side: Handedness, at: ArrayLike<number>): void {
+    const geo = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
+    const line = new Line(geo, new LineBasicMaterial({ color: 0xf0b429, transparent: true, opacity: 0.9, depthTest: false }));
+    line.renderOrder = 30;
+    this.scene.add(line);
+    this.aim = { rec, side, start: new Vector3(at[0], at[1], at[2]), line, geo };
+    input.claims[side] = 'object';
+    uiSounds.tick();
+  }
+
+  private endAim(): void {
+    const a = this.aim;
+    if (!a) return;
+    a.line.removeFromParent();
+    a.geo.dispose();
+    (a.line.material as LineBasicMaterial).dispose();
+    input.claims[a.side] = null;
+    this.aim = null;
+  }
+
+  /** The pull: from where the pinch started back to the hand, along the table. Released: the piece goes the other way. */
+  private updateAim(): void {
+    const a = this.aim;
+    if (!a) return;
+    const h = input.hands[a.side];
+    if (!this.live.includes(a.rec) || !h.tracked) return this.endAim();
+    const pull = this.tmpV.set(a.start.x - h.pinchPoint[0], 0, a.start.z - h.pinchPoint[2]);
+    const lift = h.pinchPoint[1] - a.start.y;
+    if (lift > AIM_LIFT && h.pinching) {
+      // lifted it: a normal grab after all
+      const rec = a.rec;
+      this.endAim();
+      rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
+      this.hold(rec, 'pinch', a.side);
+      return;
+    }
+    const len = Math.min(pull.length(), AIM_MAX_PULL);
+    const speed = len < AIM_MIN_PULL ? 0 : FLICK_AIM_MIN + ((len - AIM_MIN_PULL) / (AIM_MAX_PULL - AIM_MIN_PULL)) * (FLICK_AIM_MAX - FLICK_AIM_MIN);
+    // the aim line: from the piece in the direction it will go, as long as the pull
+    const p = a.rec.mesh.position, pos = a.geo.getAttribute('position') as BufferAttribute;
+    const dir = len > 0 ? pull.normalize() : pull.set(0, 0, 0);
+    pos.setXYZ(0, p.x, p.y, p.z);
+    pos.setXYZ(1, p.x + dir.x * len * 2, p.y, p.z + dir.z * len * 2);
+    pos.needsUpdate = true;
+    if (h.pinching) return;
+    const id = a.rec.toyId!;
+    this.endAim();
+    if (speed > 0) this.flickToy(id, [dir.x * speed, 0, dir.z * speed]);
+  }
+
+  /** Play Kit pieces held as tools (a bat, a paddle): driven by velocity, so they hit with the hand's speed. */
+  readonly tools = new Set<string>();
+
+  /** A held object goes to the hand: tools by velocity (the physics sees the swing), the rest at once. */
+  private follow(rec: Live, p: Vector3, dt: number): void {
+    if (!rec.toyId || !this.tools.has(rec.toyId) || dt <= 0) return this.teleport(rec, p);
+    const v = this.tmpV.copy(p).sub(rec.mesh.position).divideScalar(Math.max(dt, 1 / 90));
+    if (v.length() > TOOL_MAX_SPEED) v.setLength(TOOL_MAX_SPEED);
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: [v.x, v.y, v.z] });
+    rec.hist.push({ x: rec.mesh.position.x, y: rec.mesh.position.y, z: rec.mesh.position.z, t: performance.now() });
+    if (rec.hist.length > 16) rec.hist.shift();
+    // a tool that fell far behind the hand (stuck on something) is put back in it
+    if (rec.mesh.position.distanceTo(p) > 0.25) this.teleport(rec, p);
+  }
+  private tmpV = new Vector3();
 
   private hold(rec: Live, mode: Mode, side: Handedness | null): void {
     if (rec.side && rec.side !== side) input.claims[rec.side] = null;
@@ -427,17 +506,15 @@ export class ObjectSystem extends createSystem({}) {
     rec.entity.setValue(PhysicsBody, 'gravityFactor', 1);
     rec.entity.setValue(PhysObject, 'held', 0);
     rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 120);
-    // throw velocity from the last ~80 ms of held motion
-    const h = rec.hist;
     this.v.set(0, 0, 0);
-    if (h.length >= 2) {
-      const a = h[0], b = h[h.length - 1];
-      const dt = Math.max(0.016, (b.t - a.t) / 1000);
-      this.v.set((b.x - a.x) / dt, (b.y - a.y) / dt, (b.z - a.z) / dt);
-      if (this.v.length() > MAX_THROW) this.v.setLength(MAX_THROW);
-    }
+    throwVelocity(rec.hist, this.v);
+    if (this.v.length() > MAX_THROW) this.v.setLength(MAX_THROW);
     // Always set a velocity: a held body was teleported with zero velocity, so
     // Havok has put it to sleep and re-enabling gravity alone does not wake it.
+    if (rec.toyId) {
+      if (this.v.length() > 0.3) bus.emit('toy:shot', { toyId: rec.toyId });
+      bus.emit('toy:released', { toyId: rec.toyId, v: [this.v.x, this.v.y, this.v.z] });
+    } else if (rec.creation) bus.emit('body:released', { id: rec.creation.id, v: [this.v.x, this.v.y, this.v.z] });
     if (this.v.lengthSq() < 1e-4) this.v.set(0, -0.01, 0);
     if (!rec.entity.hasComponent(PhysicsManipulation))
       rec.entity.addComponent(PhysicsManipulation, { linearVelocity: [this.v.x, this.v.y, this.v.z] });
@@ -447,7 +524,7 @@ export class ObjectSystem extends createSystem({}) {
   private nearest(p: number[]): Live | null {
     let best: Live | null = null, bestD = Infinity;
     for (const r of this.live) {
-      if (r.side || r === this.pointerHeld) continue;
+      if (r.side || r === this.pointerHeld || r.locked) continue;
       const d = Math.hypot(p[0] - r.mesh.position.x, p[1] - r.mesh.position.y, p[2] - r.mesh.position.z) - r.radius;
       if (d < GRAB_MARGIN && d < bestD) {
         bestD = d;
@@ -469,6 +546,7 @@ export class ObjectSystem extends createSystem({}) {
     const hits = this.ray.intersectObjects(this.live.map((r) => r.view), true);
     if (!hits.length) return;
     let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hits[0].object))!;
+    if (rec.locked) return;
     const touched = Math.max(0, rec.parts.findIndex((lp) => lp.view === hits[0].object));
     if (rec.pinned) rec = this.setPinned(rec, false);
     rec.focusPart = touched;
@@ -523,6 +601,7 @@ export class ObjectSystem extends createSystem({}) {
    */
   private onContact(m: ContactMessage): void {
     const a = this.byHandle.get(m.a), b = this.byHandle.get(m.b);
+    if (a?.toyId && b?.toyId) bus.emit('toy:contact', { a: a.toyId, b: b.toyId });
     if (a) this.feel(a, b ?? null, m);
     if (b && this.live.includes(b)) this.feel(b, a && this.live.includes(a) ? a : null, m);
   }
@@ -661,6 +740,230 @@ export class ObjectSystem extends createSystem({}) {
     return saved;
   }
 
+  // ---------------- Play Kit pieces (toys) ----------------
+
+  private byToy(id: string): Live | undefined {
+    return this.live.find((r) => r.toyId === id);
+  }
+
+  /** A Play Kit piece from saved parts (a kit item) at a world pose; false when the table is full. */
+  spawnToy(toyId: string, parts: SavedCreation['parts'], pos: number[], quat: number[], pinned: boolean): boolean {
+    if (this.live.filter((r) => r.kind === 'toy').length >= MAX_TOYS) return false;
+    const specs: PartSpec[] = parts.map((sp) => ({
+      label: sp.label, mat: getMaterial(sp.materialId), mesh: sp.mesh, shards: sp.shards, collider: sp.collider, frame: sp.frame, color: sp.color,
+    }));
+    const rec = this.spawnBody(specs, pos, quat, { mode: 'free', kind: 'toy', pinned, velocity: pinned ? undefined : [0, -0.01, 0] });
+    rec.toyId = toyId;
+    return true;
+  }
+
+  toyIds(): string[] {
+    return this.live.filter((r) => r.toyId).map((r) => r.toyId!);
+  }
+
+  removeToy(id: string): void {
+    const rec = this.byToy(id);
+    if (rec) this.dispose(rec);
+  }
+
+  /** Where a piece is and how it moves (world). */
+  toyState(id: string, out: { p: Vector3; q: Quaternion }): { speed: number; held: boolean; top: number; halfH: number; pinned: boolean } | null {
+    const rec = this.byToy(id);
+    if (!rec) return null;
+    out.p.copy(rec.mesh.position);
+    out.q.copy(rec.mesh.quaternion);
+    const v = rec.entity.getVectorView(PhysicsBody, '_linearVelocity');
+    const held = rec.side !== null || this.pointerHeld === rec;
+    return { speed: rec.pinned || held ? 0 : Math.hypot(v[0], v[1], v[2]), held, top: rec.mesh.position.y + rec.halfH, halfH: rec.halfH, pinned: rec.pinned };
+  }
+
+  setToyPinned(id: string, pinned: boolean): void {
+    const rec = this.byToy(id);
+    if (rec && rec.pinned !== pinned) this.setPinned(rec, pinned);
+  }
+
+  setToyLocked(id: string, locked: boolean): void {
+    const rec = this.anyRec(id);
+    if (rec) rec.locked = locked;
+  }
+
+  // ---------------- demo player (ghost hand) ----------------
+
+  /** The ghost hand takes a piece: it floats where demoMove puts it. */
+  demoHold(id: string): boolean {
+    const rec = this.anyRec(id);
+    if (!rec || rec.side || this.pointerHeld === rec) return false;
+    if (rec.pinned) return false;
+    this.hold(rec, 'demo', null);
+    return true;
+  }
+
+  demoMove(id: string, at: Vector3): void {
+    const rec = this.anyRec(id);
+    if (rec?.mode === 'demo') this.teleport(rec, at);
+  }
+
+  /** Position and turn a piece the demo hand (or a room's host) holds. */
+  demoPose(id: string, at: Vector3, q: Quaternion): void {
+    const rec = this.anyRec(id);
+    if (rec?.mode !== 'demo') return;
+    rec.mesh.quaternion.copy(q);
+    this.teleport(rec, at);
+  }
+
+  // ---------------- Point + Say: what the hands show ----------------
+
+  /** The item a ray from `origin` along `dir` hits first (a Play Kit piece or a creation), within `max` m. */
+  pickAlongRay(origin: Vector3, dir: Vector3, max = 2.5): { toyId?: string; creationId?: string } | null {
+    this.ray.set(origin, dir);
+    this.ray.far = max;
+    const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
+    this.ray.far = Infinity;
+    const rec = hit && this.live.find((r) => r.parts.some((lp) => lp.view === hit.object));
+    return rec ? { toyId: rec.toyId ?? undefined, creationId: rec.creation?.id } : null;
+  }
+
+  /** Items held by a hand now, and by which hand. */
+  heldItems(): { toyId?: string; creationId?: string; side: Handedness }[] {
+    return this.live.filter((r) => r.side).map((r) => ({ toyId: r.toyId ?? undefined, creationId: r.creation?.id, side: r.side! }));
+  }
+
+  /** The item whose surface is within `margin` m of a point (a fingertip touching it). */
+  touchedItem(p: ArrayLike<number>, margin = 0.012): { toyId?: string; creationId?: string } | null {
+    let best: Live | null = null, bestD = Infinity;
+    for (const r of this.live) {
+      const d = Math.hypot(p[0] - r.mesh.position.x, p[1] - r.mesh.position.y, p[2] - r.mesh.position.z) - r.radius;
+      if (d < margin && d < bestD) (best = r), (bestD = d);
+    }
+    return best ? { toyId: best.toyId ?? undefined, creationId: best.creation?.id } : null;
+  }
+
+  // ---------------- multiplayer: living objects shared with the room ----------------
+
+  private anyRec(id: string): Live | undefined {
+    return this.byToy(id) ?? this.byCreation(id);
+  }
+
+  /** A creation another player brought to life, where they have it (false: already here). */
+  spawnShared(saved: SavedCreation, p: Vector3, q: Quaternion): boolean {
+    if (this.byCreation(saved.id)) return false;
+    const specs: PartSpec[] = saved.parts.map((sp) => ({
+      label: sp.label, mat: getMaterial(sp.materialId), mesh: sp.mesh, shards: sp.shards, collider: sp.collider, frame: sp.frame, color: sp.color,
+    }));
+    const rec = this.spawnBody(specs, p.toArray(), q.toArray(), { creation: structuredClone(saved.creation), mode: 'free', pinned: saved.pinned, velocity: [0, -0.01, 0] });
+    this.syncCreation(rec);
+    this.glow(rec, 0.6);
+    this.enforceLimits();
+    return true;
+  }
+
+  /** Where a body is now (live references: copy them). */
+  poseOf(id: string): { p: Vector3; q: Quaternion } | null {
+    const rec = this.anyRec(id);
+    return rec ? { p: rec.mesh.position, q: rec.mesh.quaternion } : null;
+  }
+
+  /** Put a resting body exactly where the room says it is. */
+  snapShared(id: string, p: Vector3, q: Quaternion): void {
+    const rec = this.anyRec(id);
+    if (!rec || rec.side || rec.mode !== 'free') return;
+    rec.mesh.quaternion.copy(q);
+    this.teleport(rec, p);
+  }
+
+  /** Pictures of a creation rendered from its own model (the optional vision check; never a camera). */
+  viewsOf(creationId: string): string[] {
+    const rec = this.byCreation(creationId);
+    return rec ? [renderViews(this.world.renderer, rec.view)] : [];
+  }
+
+  /** Glow an item for a moment (the confirm card shows which one it means). */
+  highlight(item: { toyId?: string; creationId?: string }): void {
+    const rec = item.toyId ? this.byToy(item.toyId) : this.live.find((r) => r.creation?.id === item.creationId);
+    if (rec) this.glow(rec, 1);
+  }
+
+  /** Held by a hand here (pinch, pointer, ray) right now. */
+  isHeld(id: string): boolean {
+    const rec = this.anyRec(id);
+    return !!rec && (rec.side !== null || this.pointerHeld === rec);
+  }
+
+  /** Let go with exactly this velocity (the planned throw), counted as a shot when it moves. */
+  demoRelease(id: string, v: [number, number, number]): void {
+    const rec = this.anyRec(id);
+    if (!rec || rec.mode !== 'demo') return;
+    rec.mode = 'free';
+    rec.lastInteract = performance.now();
+    rec.entity.setValue(PhysicsBody, 'gravityFactor', 1);
+    rec.entity.setValue(PhysObject, 'held', 0);
+    rec.entity.setValue(PhysObject, 'ignoreImpactsUntil', performance.now() + 120);
+    rec.hist.length = 0;
+    const vel: [number, number, number] = Math.hypot(...v) < 0.01 ? [0, -0.01, 0] : v;
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: vel });
+    if (Math.hypot(...v) > 0.3) bus.emit('toy:shot', { toyId: id });
+    bus.emit('toy:released', { toyId: id });
+  }
+
+  /** A fingertip flick by the ghost hand: the piece slides off with velocity `v`. */
+  flickToy(id: string, v: [number, number, number]): void {
+    const rec = this.byToy(id);
+    if (!rec || rec.pinned || rec.side) return;
+    if (rec.entity.hasComponent(PhysicsManipulation)) rec.entity.removeComponent(PhysicsManipulation);
+    rec.entity.addComponent(PhysicsManipulation, { linearVelocity: v });
+    rec.lastInteract = performance.now();
+    bus.emit('toy:shot', { toyId: id });
+    uiSounds.tick();
+  }
+
+  /** Put a piece somewhere at once (respawn / reset): a fresh body, still. */
+  placeToy(id: string, pos: number[], quat: number[], pinned: boolean): void {
+    const rec = this.byToy(id);
+    if (!rec) return;
+    if (rec.side || this.pointerHeld === rec) this.release(rec);
+    if (this.pointerHeld === rec) this.pointerHeld = null;
+    const specs = rec.parts.map((x) => this.specOf(x));
+    const n = this.spawnBody(specs, pos, quat, { mode: 'free', kind: 'toy', pinned, velocity: pinned ? undefined : [0, -0.01, 0] });
+    n.toyId = rec.toyId;
+    n.locked = rec.locked;
+    this.dispose(rec);
+  }
+
+  private tipLast: Record<Handedness, Vector3 | null> = { left: null, right: null };
+  private tipVel = new Vector3();
+  private flickAt = new Map<string, number>();
+
+  /** XR: a fast fingertip that hits a loose Play Kit piece flicks it. */
+  private flick(dt: number, now: number): void {
+    for (const side of ['left', 'right'] as const) {
+      const h = input.hands[side];
+      if (!h.tracked || input.claims[side] || dt <= 0) {
+        this.tipLast[side] = null;
+        continue;
+      }
+      const fresh = this.tipLast[side] === null;
+      const last = this.tipLast[side] ?? (this.tipLast[side] = new Vector3());
+      this.tipVel.set(h.indexTip[0] - last.x, h.indexTip[1] - last.y, h.indexTip[2] - last.z).divideScalar(dt);
+      last.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]);
+      if (fresh) continue;
+      const speed = this.tipVel.length();
+      if (speed < FLICK_MIN) continue;
+      for (const r of this.live) {
+        if (!r.toyId || r.pinned || r.locked || r.side || now - (this.flickAt.get(r.toyId) ?? 0) < FLICK_COOLDOWN_MS) continue;
+        if (r.mesh.position.distanceTo(last) > r.radius + 0.01) continue;
+        this.tipVel.multiplyScalar(Math.min(1, FLICK_MAX / speed));
+        this.tipVel.y = Math.max(0, this.tipVel.y * 0.3); // a flick slides it, it does not launch it
+        if (!r.entity.hasComponent(PhysicsManipulation))
+          r.entity.addComponent(PhysicsManipulation, { linearVelocity: [this.tipVel.x, this.tipVel.y, this.tipVel.z] });
+        this.flickAt.set(r.toyId, now);
+        r.lastInteract = now;
+        bus.emit('toy:shot', { toyId: r.toyId });
+        uiSounds.tick();
+      }
+    }
+  }
+
   /** Make a live creation the one the player is working on (as if just touched). */
   focusOn(id: string): void {
     const rec = this.byCreation(id);
@@ -783,6 +1086,8 @@ export class ObjectSystem extends createSystem({}) {
     // worker / impact tracking then confuse the two bodies (seen as a body that
     // sleeps mid-air, sinks through the table and reports no impacts).
     const n = this.spawnBody(specs, pos, quat, { creation: c, mode, velocity: pinned ? undefined : o.velocity, pinned, kind: rec.kind });
+    n.toyId = rec.toyId;
+    n.locked = rec.locked;
     this.dispose(rec);
     n.anchor.copy(anchor);
     n.offset.copy(offset);
@@ -957,12 +1262,14 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   /** XR: a ray from the shoulder through the pinch grabs a far object (it keeps its distance along the ray). */
+  private rayGrabAt: Record<Handedness, number> = { left: -Infinity, right: -Infinity };
+
   private rayGrab(side: Handedness, h: typeof input.hands.left): void {
     this.handRay(side, h);
     const hit = this.ray.intersectObjects(this.live.map((r) => r.view), true)[0];
     if (!hit || hit.distance > 3) return;
     let rec = this.live.find((r) => r.parts.some((lp) => lp.view === hit.object));
-    if (!rec) return;
+    if (!rec || rec.locked) return;
     if (rec.pinned) rec = this.setPinned(rec, false);
     rec.focusPart = Math.max(0, rec.parts.findIndex((lp) => lp.view === hit.object));
     rec.rayDist = hit.distance;
@@ -1107,15 +1414,30 @@ export class ObjectSystem extends createSystem({}) {
         if (!h.tracked) continue;
         if (h.pinchStarted && !input.claims[side]) {
           let rec = this.nearest(h.pinchPoint);
-          if (rec) {
+          const other = side === 'left' ? 'right' : 'left';
+          if (rec && !rec.pinned && rec.toyId && this.canAim?.(rec.toyId)) {
+            // assisted flick: pull back and let go (a direct fingertip flick is hard to aim)
+            this.startAim(rec, side, h.pinchPoint);
+          } else if (rec) {
             if (rec.pinned) rec = this.setPinned(rec, false);
             rec.focusPart = this.nearestPart(rec, h.pinchPoint);
             rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
             this.hold(rec, 'pinch', side);
-          } else this.rayGrab(side, h);
+          } else if (input.hands[other].pinching) {
+            // both hands pinching in the air = turn / resize the clay, not a distance grab;
+            // a distance grab the other hand started a moment ago gives way to it
+            const held = this.live.find((r) => r.side === other && r.mode === 'ray');
+            if (held && now - this.rayGrabAt[other] < TWO_HAND_GRACE_MS) this.release(held);
+          } else {
+            this.rayGrab(side, h);
+            if (input.claims[side] === 'object') this.rayGrabAt[side] = now;
+          }
         }
       }
     }
+
+    if (xr) this.flick(dt, now);
+    this.updateAim();
 
     if (this.contacts.length) {
       this.byHandle.clear();
@@ -1203,7 +1525,7 @@ export class ObjectSystem extends createSystem({}) {
           break;
         }
         this.carryTarget(rec, h, this.v);
-        this.teleport(rec, this.v);
+        this.follow(rec, this.v, dt);
         break;
       }
       case 'pinch': {
@@ -1213,7 +1535,7 @@ export class ObjectSystem extends createSystem({}) {
           break;
         }
         this.v.set(h.pinchPoint[0], h.pinchPoint[1], h.pinchPoint[2]).add(rec.offset);
-        this.teleport(rec, this.v);
+        this.follow(rec, this.v, dt);
         break;
       }
       case 'ray': {
@@ -1237,7 +1559,11 @@ export class ObjectSystem extends createSystem({}) {
         if (n.lengthSq() < 1e-6) n.set(0, 0, 1);
         n.normalize();
         const denom = this.ray.ray.direction.dot(n);
-        const tHit = Math.abs(denom) > 1e-4 ? this.v3.copy(this.pointerPlane).sub(this.ray.ray.origin).dot(n) / denom : this.pointerDepth;
+        let tHit = Math.abs(denom) > 1e-4 ? this.v3.copy(this.pointerPlane).sub(this.ray.ray.origin).dot(n) / denom : this.pointerDepth;
+        // Play Kit pieces slide over the table instead (a flat plane at grab height):
+        // moving the mouse up sends them away, so a quick drag throws them across the table
+        const dy = this.ray.ray.direction.y;
+        if (rec.toyId && dy < -0.05) tHit = (this.pointerPlane.y - this.ray.ray.origin.y) / dy;
         this.v.copy(this.ray.ray.direction).multiplyScalar(Math.max(0.1, Math.min(1.5, tHit))).add(this.ray.ray.origin).add(rec.offset);
         this.v.y = Math.min(this.v.y + this.pointerLift, 1.6);
         // never below the surface
@@ -1259,8 +1585,11 @@ export class ObjectSystem extends createSystem({}) {
           }
           rec.mesh.scale.setScalar(s);
         }
-        if (rec.mesh.position.y < -2) {
-          this.dispose(rec);
+        if (this.leftTheRoom(rec)) {
+          // safety volume (Update 3, Step B): never lose a creation or a Play Kit piece
+          if (rec.toyId) bus.emit('toy:lost', { toyId: rec.toyId });
+          else if (rec.creation) this.recallToTable(rec);
+          else this.dispose(rec);
           return;
         }
         if (rec.creation && !rec.pinned) this.recallIfOutOfReach(rec, now);
@@ -1268,6 +1597,12 @@ export class ObjectSystem extends createSystem({}) {
     }
     if (rec.glow > 0 && rec.mode !== 'materialize') this.glow(rec, Math.max(0, rec.glow - dt * 1.2));
     this.updateDecor(rec, now);
+  }
+
+  /** Fell through or far below the floor, flew past the walls, or broke the numbers. */
+  private leftTheRoom(rec: Live): boolean {
+    const p = rec.mesh.position;
+    return !Number.isFinite(p.x + p.y + p.z) || p.y < -0.6 || Math.hypot(p.x - surface.centerX, p.z - surface.centerZ) > 6;
   }
 
   /**
@@ -1286,12 +1621,20 @@ export class ObjectSystem extends createSystem({}) {
     }
     rec.outOfReachSince ||= now;
     if (now - rec.outOfReachSince < 1500) return;
+    this.recallToTable(rec);
+  }
+
+  /** Float a creation back onto the table beside where the clay sits. */
+  private recallToTable(rec: Live): void {
     rec.outOfReachSince = 0;
+    this.world.camera.getWorldPosition(this.v);
     // back to the table, beside where the clay sits
     nearestSurfacePoint(this.v.x, this.v.z, 0.2, this.xz);
     this.world.camera.getWorldDirection(this.v2);
     this.v3.set(-this.v2.z, 0, this.v2.x).normalize();
     rec.anchor.set(this.xz[0] + this.v3.x * 0.17, surface.topY + rec.halfH + 0.05, this.xz[1] + this.v3.z * 0.17);
+    const p = rec.mesh.position;
+    if (!Number.isFinite(p.x + p.y + p.z) || p.y < -0.1) this.teleport(rec, rec.anchor); // from under the floor: no slow glide up through it
     this.glow(rec, 0.4);
     this.hold(rec, 'hover', null);
   }
@@ -1397,37 +1740,8 @@ function recolor(view: Mesh, mesh: BakedMesh, base: string): void {
   attr.needsUpdate = true;
 }
 
-/** A piece's mesh in object-local coordinates. */
-function toBody(positions: Float32Array, f: Frame): Float32Array {
-  if (f.p.every((v) => v === 0) && f.q[3] === 1) return positions;
-  const q = new Quaternion().fromArray(f.q), v = new Vector3(), out = new Float32Array(positions.length);
-  for (let i = 0; i < positions.length; i += 3) {
-    v.set(positions[i], positions[i + 1], positions[i + 2]).applyQuaternion(q);
-    out[i] = v.x + f.p[0]; out[i + 1] = v.y + f.p[1]; out[i + 2] = v.z + f.p[2];
-  }
-  return out;
-}
 
-/** One compound child per piece: its collider and material, density scaled so the body's mass is the true mass. */
-function compoundChild(lp: LivePart, trueVolume: number): CompoundChild {
-  const c = lp.collider ?? hullOf(lp.mesh.positions);
-  const data = c.kind === 'hull' ? c.points : c.boxes;
-  const volume = c.kind === 'hull' ? hullVolume(c.points) : c.volume;
-  return {
-    kind: c.kind,
-    density: (lp.mat.density * trueVolume) / Math.max(volume, trueVolume * 0.2, 1e-9),
-    friction: lp.mat.friction * matchup(lp.mat.id, SURFACE_MATERIAL.table).friction,
-    restitution: lp.mat.restitution,
-    data,
-    frame: lp.frame,
-  };
-}
 
-function hullOf(positions: Float32Array): PartCollider {
-  const n = positions.length / 3, stride = Math.max(1, Math.floor(n / 256)), pts: number[] = [];
-  for (let i = 0; i < n; i += stride) pts.push(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-  return { kind: 'hull', points: new Float32Array(pts), volume: 0 };
-}
 
 /** The physics carrier's geometry: the compound description in a position attribute (never drawn). */
 function compoundGeometry(encoded: Float32Array): BufferGeometry {

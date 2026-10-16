@@ -38,12 +38,6 @@ export type AppEvents = {
     /** Local template ranking (best first). */
     ranking: { id: string; similarity: number }[];
   };
-  /** Toggle AI on / off. */
-  'ai:toggle': Record<string, never>;
-  /** Ask the agent to test its beliefs (Debug the Brain). */
-  'agent:check': Record<string, never>;
-  /** Show / hide the Mastery screen. */
-  'mastery:toggle': Record<string, never>;
   /** Ask the object system to cycle the focused object's material. */
   'object:cycle-material': Record<string, never>;
   /** Open / close the material picker for the piece last touched. */
@@ -74,6 +68,27 @@ export type AppEvents = {
   'scene:clear': Record<string, never>;
   /** Menu: delete the current creation (asks to confirm first). */
   'creation:delete': Record<string, never>;
+  /** Play Kit pieces: thrown or flicked, let go of by a hand, two pieces touched. */
+  'toy:shot': { toyId: string };
+  /** `v`: the release velocity (world m/s), when a hand let go of it. */
+  'toy:released': { toyId: string; v?: number[] };
+  /** Any body let go of by this player's hand (a toy or a creation), with the release velocity (world m/s). */
+  'body:released': { id: string; v: number[] };
+  /** A Play Kit piece left the room (safety volume): Play Kit puts it back. */
+  'toy:lost': { toyId: string };
+  'toy:contact': { a: string; b: string };
+  /** Open / close the Ask AI panel (optional agent backend). */
+  /** Open the game agent's panel (Play Kit -> Games -> Make a game with AI). */
+  'gameagent:open': Record<string, never>;
+  /** Multiplayer (Update 3, Step C): the panel, and the room joined / left. */
+  'multiplayer:toggle': Record<string, never>;
+  /** Play Kit: a game started, ended or was reset here (the room's host shares it). */
+  'playkit:game': { kind: 'start' | 'end' | 'reset' };
+  'room:joined': { code: string; host: boolean };
+  'room:left': { why: string };
+  /** Open / close the Play Kit panel, or add the current creation to the kit. */
+  'playkit:toggle': Record<string, never>;
+  'playkit:add': Record<string, never>;
   /** Browser tool menu shown or hidden with its round button. */
   'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;
@@ -91,16 +106,8 @@ export type AppEvents = {
    * With `part`: that part only. Without: every part the player has not set themselves.
    */
   'creation:set-material': { creationId: string; materialId: string; by: 'user' | 'ai'; confidence: number; part?: number };
-  /** The vision model described a creation (validated suggestion). */
-  'creation:described': { creationId: string; result: import('../ai/types.js').DescribeResult };
-  /** A cleaner model arrived for a creation (object-local metres, centred). */
-  'creation:model': { creationId: string; mesh: import('../objects/bake.js').BakedMesh; source: 'ai' | 'cache' };
-  /** One-line AI status for a creation's label ('' clears it). */
-  'creation:ai-status': { creationId: string; text: string };
   /** The user picked up / interacted with a creation. */
   'object:focus': { creationId: string };
-  /** Show / hide the brain. */
-  'kg:toggle': Record<string, never>;
   'object:broke': { creationId: string; materialId: string; x: number; y: number; z: number };
   'hand:pinch-start': { hand: Handedness; x: number; y: number; z: number };
   'hand:pinch-end': { hand: Handedness; x: number; y: number; z: number };

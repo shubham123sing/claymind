@@ -11,7 +11,9 @@ import { createSystem } from '@iwsdk/core';
 import { bus } from '../core/event-bus.js';
 import { settings } from '../core/settings.js';
 import { exportGlb, Licence } from '../export/glb.js';
-import { downloadFile, fileBase, ImportError, MAX_IMPORT_BYTES, projectFromJson, projectToJson } from '../export/project-file.js';
+import { downloadFile, fileBase, ImportError, MAX_KIT_BYTES, projectFromJson, projectToJson } from '../export/project-file.js';
+import { KIT_FILE_FORMAT, kitFromJson } from '../playkit/kit-store.js';
+import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { input } from '../platform/input/input-system.js';
 import type { SavedCreation } from '../storage/library.js';
 import { LibrarySystem } from './library.js';
@@ -51,9 +53,17 @@ export class DownloadSystem extends createSystem({}) {
 
   async importFile(file: File): Promise<void> {
     try {
-      if (file.size > MAX_IMPORT_BYTES) throw new ImportError('File too large (over 10 MB)');
-      if (!/\.json$/i.test(file.name)) throw new ImportError('Only ClayMind project files (.claymind.json) can be imported');
-      const item = projectFromJson(await file.text());
+      if (file.size > MAX_KIT_BYTES) throw new ImportError('File too large (over 50 MB)'); // projects are checked again: 10 MB
+      if (!/\.json$/i.test(file.name)) throw new ImportError('Only ClayMind files (.claymind.json) can be imported');
+      const text = await file.text();
+      // a Play Kit file (toys + Sets) or one Library project
+      if (text.slice(0, 200).includes(`"format":"${KIT_FILE_FORMAT}"`)) {
+        const kit = kitFromJson(text);
+        this.world.getSystem(PlayKitSystem)!.importKit(kit.items, kit.sets);
+        bus.emit('ui:toast', { text: `Imported ${kit.items.length} toy(s) and ${kit.sets.length} Set(s) into the Play Kit` });
+        return;
+      }
+      const item = projectFromJson(text);
       await this.world.getSystem(LibrarySystem)!.addItem(item);
       bus.emit('ui:toast', { text: `Imported "${item.creation.name}" into the Library` });
     } catch (e) {

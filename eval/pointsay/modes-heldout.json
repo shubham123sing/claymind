@@ -1,0 +1,71 @@
+{
+  "about": "Held-out Point + Say scenarios (same format as modes.json), written after the code was tuned on modes.json and scored once with no code change after: the honest number.",
+  "scenarios": [
+    {
+      "id": "ho-bowling-pins",
+      "items": { "B": ["Heavy ball", "kit_heavy"], "P1": ["Pin 1", "kit_pin"], "P2": ["Pin 2", "kit_pin"], "P3": ["Pin 3", "kit_pin"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["B"], "target": ["P1", "P2", "P3"] } },
+      "chat": "bowl the heavy ball at the pins, the pins are the targets",
+      "cards": [["hold", "B", 1000], ["chip", "ball", 1600], ["point", "P1", 4000], ["chip", "target", 4600], ["point", "P2", 7000], ["chip", "target", 7600], ["point", "P3", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["hold", "B", 1000], ["point", "P1", 2500], ["point", "P2", 2800], ["point", "P3", 3100]], "text": "roll this at those" }
+    },
+    {
+      "id": "ho-basket",
+      "items": { "BK": ["Basket", "kit_basket"], "S": ["Sock ball", "kit_sock"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["BK"], "ball": ["S"] } },
+      "chat": "toss the sock ball into the basket",
+      "cards": [["holdup", "S", 1000], ["chip", "ball", 1600], ["point", "BK", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["holdup", "S", 1000], ["point", "BK", 2400]], "text": "toss this into that" }
+    },
+    {
+      "id": "ho-hinglish-cup",
+      "items": { "G": ["Goli", "kit_goli"], "K": ["Katori", "kit_katori"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["G"], "goal": ["K"] } },
+      "chat": "goli ko katori mein daalo, katori goal hai",
+      "cards": [["hold", "G", 1000], ["chip", "ball", 1600], ["point", "K", 4000], ["chip", "goal", 4600]],
+      "combined": { "gestures": [["hold", "G", 1000], ["point", "K", 2400]], "text": "isko usme daalo, wo goal hai" }
+    },
+    {
+      "id": "ho-flick-coins",
+      "items": { "D": ["Big disc", "kit_bigdisc"], "C1": ["Coin A", "kit_coin"], "C2": ["Coin B", "kit_coin"], "C3": ["Coin C", "kit_coin"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "launcher": ["D"], "ball": ["C1", "C2", "C3"] } },
+      "chat": "flick the big disc as the striker to hit the coins into the pockets",
+      "cards": [["point", "D", 1000], ["chip", "launcher", 1600], ["point", "C1", 4000], ["chip", "ball", 4600], ["point", "C2", 7000], ["chip", "ball", 7600], ["point", "C3", 10000], ["chip", "ball", 10600]],
+      "combined": { "gestures": [["hold", "D", 1000], ["point", "C1", 2500], ["point", "C2", 2800], ["point", "C3", 3100]], "text": "this is the striker, and these are the coins" }
+    },
+    {
+      "id": "ho-stack",
+      "items": { "K1": ["Cube 1", "kit_cube"], "K2": ["Cube 2", "kit_cube"], "K3": ["Cube 3", "kit_cube"], "K4": ["Cube 4", "kit_cube"] },
+      "truth": { "game": "tower-balance", "roles": { "target": ["K1", "K2", "K3", "K4"] } },
+      "chat": "build a tower with the cubes without it falling",
+      "cards": [["point", "K1", 1000], ["chip", "target", 1600], ["point", "K2", 4000], ["chip", "target", 4600], ["point", "K3", 7000], ["chip", "target", 7600], ["point", "K4", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["point", "K1", 1000], ["point", "K2", 1300], ["point", "K3", 1600], ["point", "K4", 1900]], "text": "stack all of these into a tall tower" }
+    },
+    {
+      "id": "ho-marble-goal",
+      "items": { "SL": ["Slide", "kit_slide"], "M1": ["Glass marble", "kit_marble"] },
+      "marks": [{ "id": "z1", "kind": "zone", "center": [-0.05, 0, 0.12], "radius": 0.05 }],
+      "truth": { "game": "marble-run", "roles": { "launcher": ["SL"], "ball": ["M1"] }, "goal": "z1" },
+      "chat": "the slide is the ramp and the glass marble rolls down it to the finish",
+      "cards": [["point", "SL", 1000], ["chip", "launcher", 1600], ["hold", "M1", 4000], ["chip", "ball", 4600], ["zone", "z1", 7000], ["chip", "here", 7600]],
+      "combined": { "gestures": [["point", "SL", 1000], ["hold", "M1", 2500], ["zone", "z1", 4500]], "text": "drop this marble down that slide so it ends here" }
+    },
+    {
+      "id": "ho-knock-cans-zone",
+      "items": { "BL": ["Bean bag", "kit_bean"], "CN1": ["Can 1", "kit_can"], "CN2": ["Can 2", "kit_can"] },
+      "marks": [{ "id": "z1", "kind": "zone", "center": [0.1, 0, -0.1], "radius": 0.08 }],
+      "truth": { "game": "knock-down", "roles": { "ball": ["BL"], "target": ["CN1", "CN2"] }, "goal": "z1" },
+      "chat": "throw the bean bag at the cans and knock them off",
+      "cards": [["hold", "BL", 1000], ["chip", "ball", 1600], ["point", "CN1", 4000], ["chip", "target", 4600], ["point", "CN2", 7000], ["chip", "target", 7600], ["zone", "z1", 9000], ["chip", "here", 9600]],
+      "combined": { "gestures": [["hold", "BL", 1000], ["point", "CN1", 2500], ["point", "CN2", 2800], ["zone", "z1", 4500]], "text": "throw this at these, and knock them here" }
+    },
+    {
+      "id": "ho-pointing-only-no-chip",
+      "items": { "A": ["Ball", "kit_ball"], "CUP": ["Cup", "kit_cup"] },
+      "truth": { "game": null, "roles": {} },
+      "chat": "nice day",
+      "cards": [["point", "A", 1000], ["point", "CUP", 3000]],
+      "combined": { "gestures": [["point", "A", 1000], ["point", "CUP", 3000]], "text": "look at this and that" }
+    }
+  ]
+}

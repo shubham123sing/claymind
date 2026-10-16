@@ -1,5 +1,6 @@
 /**
- * Browser-mode toolbar: the same MenuItems as the wrist menu, as HTML buttons
+ * Browser-mode toolbar: the same MenuItems as the wrist menu (the categories;
+ * a category shows its actions with a Back button), as HTML buttons
  * in a compact two-column panel at the left edge (the clay stays in view), with
  * the keyboard hint as one line at the bottom. A round button at the bottom
  * left hides or shows all of it (remembered per browser), so the view can show
@@ -7,7 +8,7 @@
  */
 import { bus } from '../core/event-bus.js';
 import { onSettings, settings } from '../core/settings.js';
-import type { MenuItem } from './wrist-menu.js';
+import { itemSelected, type MenuItem } from './wrist-menu.js';
 
 export class Toolbar {
   private el: HTMLDivElement;
@@ -17,6 +18,9 @@ export class Toolbar {
   /** Tools shown (the player's choice); `immersive` hides everything but keeps the choice. */
   open = readOpen();
   private immersive = false;
+  private group: MenuItem | null = null;
+  private top: MenuItem[];
+  private back: MenuItem;
 
   constructor(items: MenuItem[], hint: string, onTick: () => void = () => {}) {
     this.el = document.createElement('div');
@@ -25,7 +29,9 @@ export class Toolbar {
       gap: '4px', padding: '6px', borderRadius: '14px', background: 'rgba(20,22,27,0.78)', backdropFilter: 'blur(8px)', zIndex: '10',
       maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', font: '500 12px system-ui, sans-serif',
     });
-    for (const item of items) {
+    this.top = items;
+    this.back = { id: 'back', label: 'Back', icon: '◀', color: 0x8fa3b8, onPress: () => this.openGroup(null) };
+    for (const item of [this.back, ...items, ...items.flatMap((g) => g.children ?? [])]) {
       const b = document.createElement('button');
       b.innerHTML = `<span style="font-size:15px;line-height:1;width:16px;text-align:center">${item.icon}</span><span>${item.label}</span>`;
       Object.assign(b.style, {
@@ -33,7 +39,8 @@ export class Toolbar {
         border: '0', borderRadius: '10px', color: '#fff', cursor: 'pointer', font: 'inherit', transition: 'background 180ms ease-out',
       });
       b.onclick = () => {
-        item.onPress();
+        if (item.children) this.openGroup(item);
+        else item.onPress();
         onTick();
       };
       this.el.appendChild(b);
@@ -61,6 +68,17 @@ export class Toolbar {
     document.body.appendChild(t);
     onSettings(() => this.refresh());
     this.apply();
+    this.openGroup(null);
+  }
+
+  /** Show a category's actions (null: the categories). */
+  openGroup(group: MenuItem | null): void {
+    this.group = group;
+    const shown = group ? [this.back, ...(group.children ?? [])] : this.top;
+    for (const { item, el } of this.buttons) {
+      el.style.display = shown.includes(item) ? 'flex' : 'none';
+      el.style.order = String(shown.indexOf(item));
+    }
     this.refresh();
   }
 
@@ -75,7 +93,7 @@ export class Toolbar {
     this.toggle.textContent = this.open ? '✕' : '☰';
     this.toggle.title = this.open ? 'Hide tools' : 'Show tools';
     for (const { item, el } of this.buttons) {
-      const sel = item.selected?.() ?? false;
+      const sel = itemSelected(item);
       const en = item.enabled?.() ?? true;
       el.style.background = sel ? `#${item.color.toString(16).padStart(6, '0')}` : hc ? '#222' : 'rgba(255,255,255,0.08)';
       el.style.color = item.danger && !sel ? '#ff8a80' : '#fff';

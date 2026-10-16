@@ -1,6 +1,8 @@
 /**
  * Palm-up wrist menu (non-dominant hand). Buttons are poked with the other
- * hand's index fingertip. Opens when the palm faces up for ~0.2 s, animates in
+ * hand's index fingertip. Two levels (Update 3): the categories (Make, Material &
+ * Colour, Paint, Physics, Place & Pin, Library, Play Kit, Multiplayer, Settings);
+ * a category opens its actions with a Back button first. Opens when the palm faces up for ~0.2 s, animates in
  * with an ease-out scale, and stays face-on to the user's head.
  * One-handed setting: `updateFixed` keeps it open beside the clay instead,
  * poked by either hand, with a small Hide / Tools button above it that folds
@@ -24,12 +26,24 @@ export interface MenuItem {
   enabled?: () => boolean;
   /** Erases something (drawn in red so it is never confused with a harmless action). */
   danger?: boolean;
+  /** A category: pressing it shows these (with Back) instead of calling onPress. */
+  children?: MenuItem[];
   onPress: () => void;
+}
+
+/** A category is shown as selected when one of its actions is (e.g. the current tool). */
+export function itemSelected(item: MenuItem): boolean {
+  return item.selected?.() ?? item.children?.some((c) => c.selected?.() ?? false) ?? false;
 }
 
 const BTN = 0.036; // 3.6 cm buttons (>= 3 cm hit targets)
 const GAP = 0.008;
-const COLS = 3;
+/** Drawn after the floating cards and pickers (21-22): the menu under your fingertip is never covered. */
+const MENU_ORDER = 25;
+/** Columns: 3 for the 9 categories (about 13 cm square), 4 for a category's actions. */
+function colsFor(n: number): number {
+  return n <= 3 ? n : n <= 9 ? 3 : 4;
+}
 const OPEN_DELAY = 0.2;
 
 interface Button {
@@ -52,25 +66,19 @@ export class WristMenu {
   private local = new Vector3();
   private head = new Vector3();
   isOpen = false;
+  /** The category whose actions are shown (null: the categories). */
+  group: MenuItem | null = null;
+  private top: MenuItem[];
+  private back: MenuItem;
   /** One-handed menu folded down to its Hide / Tools button. */
   collapsed = false;
   private toggle: Button;
 
   constructor(items: MenuItem[], private onTick: () => void) {
     this.root.add(this.panel);
-    const rows = Math.ceil(items.length / COLS);
-    items.forEach((item, i) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 192;
-      const tex = new CanvasTexture(canvas);
-      tex.colorSpace = SRGBColorSpace;
-      const mesh = new Mesh(new PlaneGeometry(BTN, BTN), new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-      const col = i % COLS, row = Math.floor(i / COLS);
-      mesh.position.set((col - (COLS - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 - row) * (BTN + GAP), 0);
-      mesh.renderOrder = 20;
-      this.panel.add(mesh);
-      this.buttons.push({ item, mesh, canvas, tex, state: '', wasFront: false });
-    });
+    this.top = items;
+    this.back = { id: 'back', label: 'Back', icon: '◀', color: 0x8fa3b8, onPress: () => this.openGroup(null) };
+    for (const item of [this.back, ...items, ...items.flatMap((g) => g.children ?? [])]) this.buttons.push(this.makeButton(item));
     const toggleItem: MenuItem = {
       id: 'tools', label: 'Hide', icon: '▾', color: 0x8fa3b8,
       onPress: () => {
@@ -80,23 +88,47 @@ export class WristMenu {
         this.toggle.state = ''; // redraw
       },
     };
+    this.toggle = this.makeButton(toggleItem);
+    this.buttons.push(this.toggle);
+    this.openGroup(null);
+    this.root.visible = false;
+  }
+
+  private makeButton(item: MenuItem): Button {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 192;
     const tex = new CanvasTexture(canvas);
     tex.colorSpace = SRGBColorSpace;
     const mesh = new Mesh(new PlaneGeometry(BTN, BTN), new MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-    mesh.position.set(-(COLS - 1) / 2 * (BTN + GAP), ((rows - 1) / 2 + 1) * (BTN + GAP) + GAP, 0); // above the top-left button
-    mesh.renderOrder = 20;
+    mesh.renderOrder = MENU_ORDER;
     mesh.visible = false;
     this.panel.add(mesh);
-    this.toggle = { item: toggleItem, mesh, canvas, tex, state: '', wasFront: false };
-    this.buttons.push(this.toggle);
-    this.root.visible = false;
+    return { item, mesh, canvas, tex, state: '', wasFront: false };
+  }
+
+  /** The items on screen now. */
+  private shown(): MenuItem[] {
+    return this.group ? [this.back, ...(this.group.children ?? [])] : this.top;
+  }
+
+  /** Show a category's actions (null: the categories), laid out as a centred grid. */
+  openGroup(group: MenuItem | null): void {
+    this.group = group;
+    const items = this.shown(), cols = colsFor(items.length), rows = Math.ceil(items.length / cols);
+    for (const b of this.buttons) b.wasFront = false;
+    items.forEach((item, i) => {
+      const b = this.buttons.find((x) => x.item === item)!;
+      const col = i % cols, row = Math.floor(i / cols);
+      b.mesh.position.set((col - (cols - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 - row) * (BTN + GAP), 0);
+    });
+    // the Hide button above the top-left button
+    this.toggle.mesh.position.set(-((cols - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 + 1) * (BTN + GAP) + GAP, 0);
   }
 
   /** Palm-up: every tool button, no Hide button. One-handed: Hide button, tools unless folded. */
   private layout(fixed: boolean): void {
-    for (const b of this.buttons) b.mesh.visible = b === this.toggle ? fixed : !(fixed && this.collapsed);
+    const shown = this.shown();
+    for (const b of this.buttons) b.mesh.visible = b === this.toggle ? fixed : shown.includes(b.item) && !(fixed && this.collapsed);
   }
 
   /**
@@ -164,7 +196,8 @@ export class WristMenu {
         hover ||= h;
         if (inside && b.wasFront && !front && this.local.z > -0.02 && enabled && now - this.lastPress > 350) {
           this.lastPress = now;
-          b.item.onPress();
+          if (b.item.children) this.openGroup(b.item);
+          else b.item.onPress();
           this.onTick();
         }
         if (inside || pokers.length === 1) b.wasFront = inside ? front : true;
@@ -174,7 +207,7 @@ export class WristMenu {
   }
 
   private draw(b: Button, hover: boolean, enabled: boolean): void {
-    const selected = b.item.selected?.() ?? false;
+    const selected = itemSelected(b.item);
     const key = `${hover}|${enabled}|${selected}|${settings.highContrast}`;
     if (key === b.state) return;
     b.state = key;

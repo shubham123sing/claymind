@@ -12,6 +12,7 @@ import { PinchDetector } from './pinch-detector.js';
 const TIPS = ['index-finger-tip', 'middle-finger-tip', 'ring-finger-tip', 'pinky-finger-tip'] as const;
 /** A teleport larger than this between frames is treated as a tracking glitch. */
 const MAX_JUMP = 0.12;
+export const HAND_BETA = 4;
 
 interface HandFilters {
   pinch: PinchDetector;
@@ -24,8 +25,10 @@ interface HandFilters {
 function filters(): HandFilters {
   return {
     pinch: new PinchDetector(),
-    pinchF: new OneEuroFilter3(1.2, 0.03),
-    tipF: new OneEuroFilter3(1.2, 0.03),
+    // beta is per m/s: 4 keeps a still hand smooth (1.2 Hz) but lets a 2-3 m/s throw or
+    // flick through (~10 Hz); 0.03 held a throwing hand back by half (Step 5)
+    pinchF: new OneEuroFilter3(1.2, HAND_BETA),
+    tipF: new OneEuroFilter3(1.2, HAND_BETA),
     out: new Float32Array(3),
     lastTip: [0, 0, 0],
   };
@@ -62,7 +65,7 @@ export class XrHandsProvider implements InputProvider {
       h.pinchEnded = tr === 'end';
       h.pinching = this.f[side].pinch.pinching;
       h.tracked = false;
-      h.pointing = h.palmOpen = false;
+      h.pointing = h.palmOpen = h.thumbsUp = false;
       h.stableFrames = 0;
       h.speed = 0;
       this.f[side].pinchF.reset();
@@ -121,6 +124,9 @@ export class XrHandsProvider implements InputProvider {
     }
     h.pointing = indexExtended && extended === 1 && !h.pinching;
     h.palmOpen = extended >= 4 && !h.pinching;
+    // thumbs-up: every finger curled, the thumb tip well above the index knuckle and away from the fingers
+    const k = idxMeta.transform.position;
+    h.thumbsUp = extended === 0 && !h.pinching && t.y - k.y > 0.045 && dist > 0.05;
 
     const m = midProx.transform.position;
     h.palmCenter[0] = (w.x + m.x) / 2; h.palmCenter[1] = (w.y + m.y) / 2; h.palmCenter[2] = (w.z + m.z) / 2;

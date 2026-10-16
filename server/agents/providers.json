@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "_note": "Groq free tier, checked 2026-10-15 with GET /openai/v1/models; qwen3.8-27b takes images (checked 2026-10-16), used by the optional vision check. maxTokens: qwen allows 1000 output tokens per minute (OTPM), so it may not ask for more. Limits are estimates (the provider's x-ratelimit headers override them). Prompts go to Groq: never send personal data.",
+  "chain": [
+    { "id": "groq-gpt-oss-120b", "model": "openai/gpt-oss-120b", "keyEnv": "GROQ_API_KEY", "limits": { "rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000 } },
+    { "id": "groq-qwen3.8-27b", "model": "qwen/qwen3.8-27b", "keyEnv": "GROQ_API_KEY", "maxTokens": 1000, "vision": true, "limits": { "rpm": 30, "tpm": 6000, "rpd": 1000, "tpd": 200000 } },
+    { "id": "groq-gpt-oss-20b", "model": "openai/gpt-oss-20b", "keyEnv": "GROQ_API_KEY", "limits": { "rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000 } }
+  ],
+  "guard": { "model": "meta-llama/llama-prompt-guard-2-86m", "keyEnv": "GROQ_API_KEY" }
+}

@@ -7,15 +7,13 @@
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
-import { devAi, devKgView } from '../core/flags.js';
 import { settings } from '../core/settings.js';
 import { Hud } from '../devtools/hud.js';
-import { estimateMaterial, getMaterial, shapePriors } from '../materials/materials.js';
+import { getMaterial } from '../materials/materials.js';
 import { Creation, CREATION_SCHEMA_VERSION, newCreationId } from '../objects/creation.js';
 import { getTemplate } from '../objects/templates.js';
 import type { HandState, Vec3 } from '../platform/input/hand-state.js';
 import { input } from '../platform/input/input-system.js';
-import { aiEnabled } from '../ai/ai-state.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { Toolbar } from '../ui/toolbar.js';
 import { hasUndo, takeUndo } from '../ui/undo-toast.js';
@@ -130,58 +128,89 @@ export class SculptSystem extends createSystem({}) {
     );
   }
 
+  /**
+   * The menu (Update 3): Make, Material & Colour, Paint, Physics, Place & Pin, Library,
+   * Play Kit, Multiplayer, Settings; each category opens its actions (wrist menu and
+   * toolbar). Hide / show is the menu's own button (one-handed menu, browser toolbar).
+   */
   private menuItems(): MenuItem[] {
-    const tools: MenuItem[] = TOOLS.map((t) => ({
-      id: t.id, label: t.label, icon: t.icon, color: t.color,
-      selected: () => this.tool === t,
-      onPress: () => {
-        this.tool = t;
-      },
-    }));
+    const tool = (id: string): MenuItem => {
+      const t = TOOLS.find((x) => x.id === id)!;
+      return { id: t.id, label: t.label, icon: t.icon, color: t.color, selected: () => this.tool === t, onPress: () => (this.tool = t) };
+    };
+    const undo = (): MenuItem => ({ id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => hasUndo() || !!this.client?.last?.canUndo, onPress: () => this.undo() });
+    const redo = (): MenuItem => ({ id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() });
+    const color = (): MenuItem => ({ id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) });
+    const group = (id: string, label: string, icon: string, c: number, children: MenuItem[]): MenuItem => ({ id, label, icon, color: c, children, onPress: () => {} });
     return [
-      { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
-      ...tools,
-      { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
-      { id: 'undo', label: 'Undo', icon: '↶', color: 0x888888, enabled: () => hasUndo() || !!this.client?.last?.canUndo, onPress: () => this.undo() },
-      { id: 'redo', label: 'Redo', icon: '↷', color: 0x888888, enabled: () => !!this.client?.last?.canRedo, onPress: () => this.client.redo() },
-      { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
-      { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
-      { id: 'color', label: 'Color', icon: '◉', color: 0xf0b429, onPress: () => bus.emit('color:toggle', {}) },
-      { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
-      { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
-      { id: 'playkit', label: 'Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:spawn', {}) },
-      { id: 'library', label: 'Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
-      { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
-      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
-      { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
-      // three different things, worded and coloured apart: take a copy off the table (blue) vs erase (red)
-      { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
-      { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
-      { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
-      ...(devKgView
-        ? [
-            { id: 'brain', label: 'Brain', icon: '✱', color: 0x3fb8af, onPress: () => bus.emit('kg:toggle', {}) },
-            { id: 'check', label: 'Check beliefs', icon: '⚗', color: 0xf0a040, onPress: () => bus.emit('agent:check', {}) },
-            { id: 'mastery', label: 'Mastery', icon: '★', color: 0xe2733b, onPress: () => bus.emit('mastery:toggle', {}) },
-          ]
-        : []),
-      ...(devAi ? [{ id: 'ai', label: 'AI', icon: '✦', color: 0xb48cf2, selected: () => aiEnabled(), onPress: () => bus.emit('ai:toggle', {}) }] : []),
-      {
-        id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
-        selected: () => performance.now() - this.resetArmed < 2500,
-        onPress: () => {
-          // two presses within 2.5 s: avoids losing work to a stray tap (still undoable)
-          if (performance.now() - this.resetArmed < 2500) {
-            this.resetArmed = 0;
-            this.client.beginAction();
-            this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
-          } else this.resetArmed = performance.now();
+      group('make', 'Make', '✋', 0xe2733b, [
+        tool('shape'), tool('add'), tool('carve'), tool('smooth'),
+        { id: 'mirror', label: 'Mirror', icon: '⇋', color: 0x9b7bd4, selected: () => this.mirror, onPress: () => (this.mirror = !this.mirror) },
+        { id: 'piece', label: 'New piece', icon: '❖', color: 0x7f9cc0, enabled: () => this.freePiece() !== null && !this.baking, onPress: () => this.newPiece() },
+        { id: 'join', label: 'Join', icon: '⊕', color: 0x5fbf72, onPress: () => bus.emit('object:join', {}) },
+        { id: 'separate', label: 'Separate', icon: '⊘', color: 0xd9534f, onPress: () => bus.emit('object:separate', {}) },
+        undo(), redo(),
+        {
+          id: 'reset', label: 'New clay', icon: '◯', color: 0xd9534f,
+          selected: () => performance.now() - this.resetArmed < 2500,
+          onPress: () => {
+            // two presses within 2.5 s: avoids losing work to a stray tap (still undoable)
+            if (performance.now() - this.resetArmed < 2500) {
+              this.resetArmed = 0;
+              this.client.beginAction();
+              this.client.push({ op: 'reset', x: 0, y: 0, z: 0, r: 0 });
+            } else this.resetArmed = performance.now();
+          },
         },
-      },
+        { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
+      ]),
+      group('matcol', 'Material & Colour', '◐', 0x5aa9e6, [
+        { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
+        color(), undo(),
+      ]),
+      group('paintg', 'Paint', '✎', 0xb07aa6, [tool('paint'), tool('erase'), color(), undo()]),
+      group('physics', 'Physics', '✦', 0xf0b429, [
+        { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
+        undo(),
+      ]),
+      group('place', 'Place & Pin', '⌖', 0xf0b429, [
+        { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
+        // worded and coloured apart from Delete: these take copies off the table (blue)
+        { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
+        { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
+      ]),
+      group('lib', 'Library', '▦', 0x7f9cc0, [
+        { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
+        { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
+      ]),
+      group('kit', 'Play Kit', '●', 0x8d8a85, [
+        { id: 'playkit', label: 'Open Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
+        { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
+      ]),
+      group('mp', 'Multiplayer', '⚇', 0x5fbf72, [
+        { id: 'room', label: 'Create or join a room', icon: '⚇', color: 0x5fbf72, onPress: () => bus.emit('multiplayer:toggle', {}) },
+      ]),
+      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
     ];
   }
 
+  /** While a Play Kit Set or game is on the table: the clay is hidden and does not react. */
+  suspended = false;
+
+  setSuspended(on: boolean): void {
+    this.suspended = on;
+    this.view.root.visible = !on;
+    this.view.ground.visible = !on;
+  }
+
   /** Undo: a just-deleted creation first (5 s offer), else the last sculpt action. */
+  /** The clay's size now (cm: width, height, depth), or null before the first mesh. */
+  claySizeCm(): [number, number, number] | null {
+    if (!this.aabb) return null;
+    const s = this.view.root.scale.x, a = this.aabb;
+    return [(a[3] - a[0]) * s * 100, (a[4] - a[1]) * s * 100, (a[5] - a[2]) * s * 100];
+  }
+
   private undo(): void {
     if (!takeUndo()) this.client.undo();
   }
@@ -200,13 +229,26 @@ export class SculptSystem extends createSystem({}) {
 
   // ---------- placement & transforms ----------
 
+  /** Multiplayer: where the shared clay sits on this player's table, and its turn (null: in front of me). */
+  private roomPlace: { x: number; z: number; rotY: number } | null = null;
+
+  setRoomPlace(place: { x: number; z: number; rotY: number } | null): void {
+    this.roomPlace = place;
+    this.surfaceVersion = -1; // placed on the next frame
+  }
+
+  /** The worker client (multiplayer routes edits through it). */
+  get sculptClient(): SculptClient {
+    return this.client;
+  }
+
   private placeClay(): void {
     this.world.camera.getWorldPosition(this.head);
     nearestSurfacePoint(this.head.x, this.head.z, 0.2, this.placeTmp);
-    const [x, z] = this.placeTmp;
+    const [x, z] = this.roomPlace ? [this.roomPlace.x, this.roomPlace.z] : this.placeTmp;
     this.view.root.position.x = x;
     this.view.root.position.z = z;
-    this.view.root.rotation.y = Math.atan2(this.head.x - x, this.head.z - z);
+    this.view.root.rotation.y = this.roomPlace ? this.roomPlace.rotY : Math.atan2(this.head.x - x, this.head.z - z);
     this.view.ground.position.set(x, surface.topY, z);
     this.snapToSurface();
   }
@@ -317,13 +359,13 @@ export class SculptSystem extends createSystem({}) {
       const h = this.hands[side];
       if (h.pinchStarted && !input.claims[side]) this.pinchOnClay[side] = this.ctx.nearClay(h.pinchPoint, 0.015);
     }
-    const transforming = xr && this.updateTwoHand();
+    const transforming = xr && !this.suspended && this.updateTwoHand();
 
     this.strokesThisFrame = 0;
     let speed = 0;
     for (const side of SIDES) {
       const h = this.hands[side];
-      const usable = h.tracked && h.stableFrames > 3 && !input.claims[side] && !transforming && !this.baking;
+      const usable = h.tracked && h.stableFrames > 3 && !input.claims[side] && !transforming && !this.baking && !this.suspended;
       if (!usable) {
         this.toolState[side].mode = 'idle';
         this.view.setCursor(side === 'left' ? 0 : 1, false);
@@ -362,12 +404,12 @@ export class SculptSystem extends createSystem({}) {
     if (this.baking) return;
     this.baking = true;
     const t0 = performance.now();
-    this.view.setStatus(devAi ? 'Looking at your sculpt…' : 'Bringing it to life…');
+    this.view.setStatus('Bringing it to life…');
     this.statusUntil = Infinity;
     this.audio.tickSound(1.2);
     const root = this.view.root;
-    // plan v4: the player's own shape, never swapped for a template (threshold above any similarity)
-    const threshold = devAi ? TEMPLATE_THRESHOLD : Infinity;
+    // the player's own shape, never swapped for a template (threshold above any similarity)
+    const threshold = Infinity;
     const res = await this.client.bake({ scale: root.scale.x, threshold, pieces: 6, seed: Math.floor(Math.random() * 1e9) });
     if (!res.ok || !res.baked || !res.descriptor) {
       this.showStatus('Shape some clay first, then bring it to life', 3000, '#d9534f');
@@ -378,11 +420,8 @@ export class SculptSystem extends createSystem({}) {
     const top = res.ranking[0];
     const tmpl = res.templateId ? getTemplate(res.templateId) : undefined;
     const best = top ? getTemplate(top.id) : undefined;
-    const sources = tmpl
-      ? [{ priors: tmpl.materialPriors, weight: 1 }, { priors: shapePriors(d), weight: 0.3 }]
-      : [{ priors: shapePriors(d), weight: 1 }, ...(best && top.similarity > 0.3 ? [{ priors: best.materialPriors, weight: top.similarity }] : [])];
-    // plan v4: every piece starts as clay; the player picks materials (no guessing)
-    const guesses = devAi ? estimateMaterial(sources) : [{ id: 'clay', prob: 1 }];
+    // every piece starts as clay; the player picks materials (no guessing)
+    const guesses = [{ id: 'clay', prob: 1 }];
     const mat = getMaterial(guesses[0].id);
     const b = res.baked;
     const creation: Creation = {
@@ -390,12 +429,12 @@ export class SculptSystem extends createSystem({}) {
       id: newCreationId(),
       createdAt: Date.now(),
       descriptor: d,
-      name: tmpl ? tmpl.name : devAi ? 'Sculpt' : 'Creation',
+      name: tmpl ? tmpl.name : 'Creation',
       category: tmpl?.category ?? 'sculpt',
       source: tmpl ? 'template' : 'sculpt-only',
       templateId: tmpl?.id ?? null,
       matchScore: top?.similarity ?? 0,
-      bestGuess: devAi && best && top.similarity > 0.25 ? { id: best.id, name: best.name, similarity: top.similarity } : null,
+      bestGuess: null,
       materialId: mat.id,
       materialConfidence: guesses[0].prob,
       materialGuesses: guesses.slice(0, 4),
@@ -565,10 +604,8 @@ export class SculptSystem extends createSystem({}) {
     if (kb.getKeyDown('KeyK')) bus.emit('object:separate', {});
     if (kb.getKeyDown('KeyT')) bus.emit('material:toggle', {});
     if (kb.getKeyDown('Enter')) void this.bringToLife();
-    if (devKgView && kb.getKeyDown('KeyG')) bus.emit('kg:toggle', {});
-    if (devKgView && kb.getKeyDown('KeyB')) bus.emit('agent:check', {});
-    if (kb.getKeyDown('KeyP')) bus.emit(devKgView ? 'mastery:toggle' : 'object:pin', {});
-    if (kb.getKeyDown('KeyO')) bus.emit('playkit:spawn', {});
+    if (kb.getKeyDown('KeyP')) bus.emit('object:pin', {});
+    if (kb.getKeyDown('KeyO')) bus.emit('playkit:toggle', {});
     if (kb.getKeyDown('KeyL')) bus.emit('library:toggle', {});
     if (kb.getKeyDown('KeyS') && !ctrl) bus.emit('settings:toggle', {});
     if (kb.getKeyDown('KeyH')) {
