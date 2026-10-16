@@ -71,6 +71,8 @@ export type AppEvents = {
   /** Play Kit pieces: thrown or flicked, let go of by a hand, two pieces touched. */
   'toy:shot': { toyId: string };
   'toy:released': { toyId: string };
+  /** A Play Kit piece left the room (safety volume): Play Kit puts it back. */
+  'toy:lost': { toyId: string };
   'toy:contact': { a: string; b: string };
   /** Open / close the Ask AI panel (optional agent backend). */
   /** Open the game agent's panel (Play Kit -> Games -> Make a game with AI). */

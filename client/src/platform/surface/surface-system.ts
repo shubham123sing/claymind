@@ -1,11 +1,18 @@
 /**
  * SurfaceProvider: the work surface everything sits on.
  * - virtual table + floor colliders (browser, emulator, or before planes arrive)
+ * - the room (Update 3, Step B): every plane the XR environment reports becomes a
+ *   static collider: walls (vertical planes), the floor, the ceiling and furniture tops;
+ *   until a wall plane arrives, invisible walls 2 m around the table keep things in.
+ *   Surfaces use real friction (table wood, floor and walls stone); their bounce is 0
+ *   because Havok combines bounce by the larger value, so the object's material decides.
  * - real horizontal planes from scene understanding -> static box colliders;
  *   the first table-height plane becomes the work surface.
  * IWSDK physics reads object3D.position in LOCAL space, so colliders are
  * root-level entities with world poses copied from the plane.
  */
+import { SURFACE_MATERIAL } from '../../materials/matchups.js';
+import { getMaterial } from '../../materials/materials.js';
 import {
   BoxGeometry, createSystem, Entity, Mesh, MeshStandardMaterial, PhysicsBody, PhysicsShape,
   PhysicsShapeType, PhysicsState, Quaternion, Vector3, VisibilityState, XRPlane,
@@ -32,6 +39,17 @@ export const VIRTUAL_TABLE = { centerX: 0, centerZ: -0.42, width: 0.8, depth: 0.
  * thin top could be skipped; nothing ever rests under a table.
  */
 const TABLE_COLLIDER_DEPTH = 0.25;
+/** Floor, wall and ceiling slabs: thick for the same reason (no fast object passes them). */
+const FLOOR_DEPTH = 0.5;
+const WALL_DEPTH = 0.3;
+/** Without room planes: invisible walls this far around the table, this tall. */
+const FALLBACK_ROOM = { half: 2, height: 2.6 };
+
+type SurfaceKind = 'table' | 'floor' | 'wall';
+/** Collider friction / restitution for a kind of surface (see the header). */
+function surfacePhysics(kind: SurfaceKind): { friction: number; restitution: number } {
+  return { friction: getMaterial(kind === 'table' ? SURFACE_MATERIAL.table : SURFACE_MATERIAL.floor).friction, restitution: 0 };
+}
 
 export const surface: WorkSurface = {
   topY: VIRTUAL_TABLE.topY,
@@ -113,20 +131,46 @@ export class SurfaceSystem extends createSystem({
     this.virtualTableCollider.addComponent(PhysicsShape, {
       // hull, not Box: IWSDK Box colliders round their edges by ~1.4 cm (objects slid off early);
       // friction combines by MIN and restitution by MAX in Havok, so the object's own material decides
-      shape: PhysicsShapeType.ConvexHull, friction: 1, restitution: 0,
+      shape: PhysicsShapeType.ConvexHull, ...surfacePhysics('table'),
     });
     this.virtualTableCollider.addComponent(PhysicsBody, { state: PhysicsState.Static });
   }
   private virtualTableCollider: Entity | null = null;
+  private fallbackWalls: Entity[] = [];
+
+  /** An invisible static box collider (centre and size in metres, world axes). */
+  private staticBox(size: [number, number, number], at: [number, number, number], kind: SurfaceKind): Entity {
+    const m = new Mesh(new BoxGeometry(...size), new MeshStandardMaterial({ visible: false }));
+    m.position.set(...at);
+    const e = this.world.createTransformEntity(m);
+    e.addComponent(PhysicsShape, { shape: PhysicsShapeType.Box, dimensions: size, ...surfacePhysics(kind) });
+    e.addComponent(PhysicsBody, { state: PhysicsState.Static });
+    return e;
+  }
+
+  /** Four invisible walls and a ceiling around the virtual table (gone once the room's own walls arrive). */
+  private createFallbackWalls(): void {
+    const t = VIRTUAL_TABLE, h = FALLBACK_ROOM.half, H = FALLBACK_ROOM.height, d = WALL_DEPTH;
+    this.fallbackWalls = [
+      this.staticBox([2 * h + 2 * d, H, d], [t.centerX, H / 2, t.centerZ - h - d / 2], 'wall'),
+      this.staticBox([2 * h + 2 * d, H, d], [t.centerX, H / 2, t.centerZ + h + d / 2], 'wall'),
+      this.staticBox([d, H, 2 * h], [t.centerX - h - d / 2, H / 2, t.centerZ], 'wall'),
+      this.staticBox([d, H, 2 * h], [t.centerX + h + d / 2, H / 2, t.centerZ], 'wall'),
+      this.staticBox([2 * h + 2 * d, d, 2 * h + 2 * d], [t.centerX, H + d / 2, t.centerZ], 'wall'), // ceiling
+    ];
+  }
+
+  /** The room has real walls now: they replace the fallback ones. */
+  private dropFallbackWalls(): void {
+    for (const e of this.fallbackWalls) e.dispose();
+    this.fallbackWalls = [];
+  }
 
   init(): void {
     this.createVirtualTable();
 
-    const floor = new Mesh(new BoxGeometry(6, 0.1, 6), new MeshStandardMaterial({ visible: false }));
-    floor.position.set(0, -0.05, 0);
-    const floorEntity = this.world.createTransformEntity(floor);
-    floorEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Box, dimensions: [6, 0.1, 6], friction: 1, restitution: 0 });
-    floorEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
+    this.staticBox([12, FLOOR_DEPTH, 12], [0, -FLOOR_DEPTH / 2, 0], 'floor');
+    this.createFallbackWalls();
 
     // In passthrough the virtual table is a translucent hint until a real one is found.
     this.cleanupFuncs.push(
@@ -197,27 +241,29 @@ export class SurfaceSystem extends createSystem({
   private onPlane(entity: Entity): void {
     const plane = entity.getValue(XRPlane, '_plane') as unknown as globalThis.XRPlane | undefined;
     const obj = entity.object3D;
-    if (!plane || !obj || plane.orientation !== 'horizontal') return;
+    if (!plane || !obj) return;
     obj.updateWorldMatrix(true, false);
     obj.getWorldPosition(this.tmpPos);
     obj.getWorldQuaternion(this.tmpQuat);
     const y = this.tmpPos.y;
-    const isTable = y > 0.4 && y < 1.2;
-    const isFloor = y < 0.2;
-    if (!isTable && !isFloor) return;
+    const wall = plane.orientation !== 'horizontal';
+    const isTable = !wall && y > 0.4 && y < 1.2;
+    const isFloor = !wall && y < 0.2;
+    if (wall) this.dropFallbackWalls();
 
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of plane.polygon) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
     }
-    const w = maxX - minX, d = maxZ - minZ, th = isTable ? TABLE_COLLIDER_DEPTH : 0.1;
+    // the slab sits behind the plane (its normal, local +Y, points into the room)
+    const w = maxX - minX, d = maxZ - minZ, th = isTable ? TABLE_COLLIDER_DEPTH : wall ? WALL_DEPTH : isFloor ? FLOOR_DEPTH : 0.2;
     const mesh = new Mesh(new BoxGeometry(w, th, d), new MeshStandardMaterial({ visible: false }));
     const local = new Vector3((minX + maxX) / 2, -th / 2, (minZ + maxZ) / 2).applyQuaternion(this.tmpQuat);
     mesh.position.copy(this.tmpPos).add(local);
     mesh.quaternion.copy(this.tmpQuat);
     const collider = this.world.createTransformEntity(mesh);
-    collider.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, friction: 1, restitution: 0 }); // see virtual table
+    collider.addComponent(PhysicsShape, { shape: PhysicsShapeType.ConvexHull, ...surfacePhysics(isTable ? 'table' : wall ? 'wall' : 'floor') }); // see virtual table
     collider.addComponent(PhysicsBody, { state: PhysicsState.Static });
     this.colliders.set(entity.index, collider);
 

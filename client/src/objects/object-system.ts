@@ -1418,8 +1418,11 @@ export class ObjectSystem extends createSystem({}) {
           }
           rec.mesh.scale.setScalar(s);
         }
-        if (rec.mesh.position.y < -2) {
-          this.dispose(rec);
+        if (this.leftTheRoom(rec)) {
+          // safety volume (Update 3, Step B): never lose a creation or a Play Kit piece
+          if (rec.toyId) bus.emit('toy:lost', { toyId: rec.toyId });
+          else if (rec.creation) this.recallToTable(rec);
+          else this.dispose(rec);
           return;
         }
         if (rec.creation && !rec.pinned) this.recallIfOutOfReach(rec, now);
@@ -1427,6 +1430,12 @@ export class ObjectSystem extends createSystem({}) {
     }
     if (rec.glow > 0 && rec.mode !== 'materialize') this.glow(rec, Math.max(0, rec.glow - dt * 1.2));
     this.updateDecor(rec, now);
+  }
+
+  /** Fell through or far below the floor, flew past the walls, or broke the numbers. */
+  private leftTheRoom(rec: Live): boolean {
+    const p = rec.mesh.position;
+    return !Number.isFinite(p.x + p.y + p.z) || p.y < -0.6 || Math.hypot(p.x - surface.centerX, p.z - surface.centerZ) > 6;
   }
 
   /**
@@ -1445,12 +1454,20 @@ export class ObjectSystem extends createSystem({}) {
     }
     rec.outOfReachSince ||= now;
     if (now - rec.outOfReachSince < 1500) return;
+    this.recallToTable(rec);
+  }
+
+  /** Float a creation back onto the table beside where the clay sits. */
+  private recallToTable(rec: Live): void {
     rec.outOfReachSince = 0;
+    this.world.camera.getWorldPosition(this.v);
     // back to the table, beside where the clay sits
     nearestSurfacePoint(this.v.x, this.v.z, 0.2, this.xz);
     this.world.camera.getWorldDirection(this.v2);
     this.v3.set(-this.v2.z, 0, this.v2.x).normalize();
     rec.anchor.set(this.xz[0] + this.v3.x * 0.17, surface.topY + rec.halfH + 0.05, this.xz[1] + this.v3.z * 0.17);
+    const p = rec.mesh.position;
+    if (!Number.isFinite(p.x + p.y + p.z) || p.y < -0.1) this.teleport(rec, rec.anchor); // from under the floor: no slow glide up through it
     this.glow(rec, 0.4);
     this.hold(rec, 'hover', null);
   }

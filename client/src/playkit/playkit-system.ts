@@ -110,6 +110,7 @@ export class PlayKitSystem extends createSystem({}) {
       bus.on('playkit:toggle', () => (this.panel.mesh.visible ? this.closePanel() : this.openPanel())),
       bus.on('playkit:add', () => void this.addCurrent()),
       bus.on('toy:shot', (e) => this.shots.push(e.toyId)),
+      bus.on('toy:lost', (e) => this.bringBack(e.toyId)),
       bus.on('toy:contact', (e) => this.contacts.push([e.a, e.b])),
       bus.on('toy:released', (e) => {
         // Edit: a piece stays where it is put
@@ -316,6 +317,15 @@ export class PlayKitSystem extends createSystem({}) {
     this.shots.length = 0;
     uiSounds.tick(2);
     this.syncHud();
+  }
+
+  /** A piece left the room (safety volume): back to where its Set or game put it. */
+  private bringBack(toyId: string): void {
+    const p = this.pieces.find((x) => x.toyId === toyId);
+    if (!p) return this.objects.removeToy(toyId);
+    this.objects.placeToy(toyId, p.start.p, p.start.q, this.mode === 'edit' || p.fixed);
+    this.objects.setToyLocked(toyId, this.mode === 'play' && p.fixed);
+    this.toast('A piece left the room: it is back at its start');
   }
 
   end(): void {
