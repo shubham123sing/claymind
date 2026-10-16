@@ -7,7 +7,7 @@
  */
 import type { GameSpec, Path, RoleSpec, Rule, Zone } from '../playkit/game-spec.js';
 import { validateSpec } from '../playkit/game-spec.js';
-import { deixis, type BindResult, type Word } from './binder.js';
+import { deixis, type BindResult, type Binding, type Word } from './binder.js';
 import type { Mark } from './marks.js';
 
 export const ROLE_WORDS = ['ball', 'target', 'goal', 'board', 'tool', 'launcher'] as const;
@@ -40,14 +40,17 @@ export interface Intent {
   paths: Mark[];
   goal?: string;
   text: string;
+  /** a game the player named (read by the Intent Resolver) */
+  game?: string;
 }
 
 /**
  * The role named next to each bound pointing word: "this is the ball", "these are the pins",
  * "yeh ball hai", "ball yeh hai". A zone bound to a goal word (or to no role word) is the goal.
  */
-export function rolesFromWords(words: Word[], r: BindResult): { roles: RoleAssignment[]; goal?: string } {
+export function rolesFromWords(words: Word[], r: BindResult): { roles: RoleAssignment[]; goal?: string; unnamed: Binding[] } {
   const roles: RoleAssignment[] = [];
+  const unnamed: Binding[] = [];
   let goal: string | undefined;
   for (const b of r.bindings) {
     let role: RoleWord | null = null;
@@ -61,8 +64,24 @@ export function rolesFromWords(words: Word[], r: BindResult): { roles: RoleAssig
       continue;
     }
     if (b.kind === 'item' && role) addRole(roles, role, b.ids);
+    else if (b.kind === 'item') unnamed.push(b);
   }
-  return { roles, goal };
+  return { roles, goal, unnamed };
+}
+
+/** Typed words with each bound pointing word replaced by tags ("roll [A] at [B C]") and what each tag is, for the Intent Resolver. */
+export function tagged(words: Word[], bindings: Binding[], name: (item: string) => string): { text: string; items: Record<string, string>; refs: Record<string, string> } {
+  const items: Record<string, string> = {}, refs: Record<string, string> = {};
+  const tagOf = (item: string) => {
+    for (const [ref, it] of Object.entries(refs)) if (it === item) return ref;
+    const ref = String.fromCharCode(65 + Object.keys(refs).length);
+    refs[ref] = item;
+    items[ref] = name(item);
+    return ref;
+  };
+  const at = new Map(bindings.filter((b) => b.kind === 'item').map((b) => [b.index, b]));
+  const text = words.map((w, i) => (at.has(i) ? `[${at.get(i)!.ids.slice(0, 6).map(tagOf).join(' ')}]` : w.text)).join(' ');
+  return { text, items, refs };
 }
 
 /** Add items to a role (an item plays one role: the latest word about it wins). */
@@ -106,7 +125,7 @@ const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split
 
 /** The built-in game that fits what was shown best (null: nothing shown or said picks one). */
 export function chooseGame(intent: Intent, games: GameSpec[]): { spec: GameSpec; score: number } | null {
-  const words = new Set(tokens(intent.text));
+  const words = new Set(tokens(`${intent.text} ${intent.game ?? ''}`));
   let best: { spec: GameSpec; score: number } | null = null;
   for (const g of games) {
     const { map, unplaced } = assignRoles(g, intent.roles.map((r) => r.role));

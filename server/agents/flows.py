@@ -24,7 +24,7 @@ from .governed_model import STATE
 from .knowledge import KitGraph, Memory, PassageIndex
 from . import rulebook
 from .referee import TEMPLATES, VOCAB, apply_adapt, closest_template, describe, referee, template
-from .schemas import DesignOut, KitDescriptor, RuleCard, Source
+from .schemas import DesignOut, IntentOut, KitDescriptor, RuleCard, Source
 from .store import Cache, Trace, current_agent, input_hash
 from .web import GUARD_THRESHOLD, injection_score, search_pages
 
@@ -266,6 +266,24 @@ class Orchestrator:
         for p in safe:
             self.passages.add(p["url"], p["title"], p["text"])
         return card
+
+    # ---------- Point + Say ----------
+
+    async def resolve_intent(self, text: str, items: dict[str, str], zones: int, paths: int) -> dict:
+        """Which role each pointed-at item plays, from typed words the client's code could not read.
+        Only the client's own tags come back; an unclear item stays unassigned (the pointing is never guessed over)."""
+        payload = {"text": text, "items": items, "zones_marked": zones, "paths_drawn": paths}
+        try:
+            out = await self.call("intent", payload, IntentOut)
+        except AgentDown as e:
+            return {"roles": [], "game": None, "goalIsMarkedZone": False, "unsure": list(items), "error": str(e)[:160]}
+        roles, seen = [], set()
+        for r in out.roles:
+            if r.ref in items and r.ref not in seen:
+                seen.add(r.ref)
+                roles.append({"ref": r.ref, "role": r.role})
+        unsure = [t for t in items if t not in seen]
+        return {"roles": roles, "game": out.game, "goalIsMarkedZone": bool(out.goal_is_marked_zone and zones), "unsure": unsure}
 
     def models(self) -> dict:
         return STATE["governor"].snapshot() if STATE["governor"] else {}

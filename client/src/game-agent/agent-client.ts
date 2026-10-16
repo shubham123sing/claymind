@@ -91,6 +91,9 @@ export const agentApi = {
     }
   },
   game: (req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean; checkProblems?: string[] }, kit: KitItem[]) => call<GameAnswer>('/v1/game', { ...req, kit: describeKit(kit) }),
+  /** Point + Say: the roles of pointed-at items, from typed words the client's code could not read. */
+  intent: (req: { text: string; items: Record<string, string>; zones: number; paths: number }) =>
+    call<{ roles: { ref: string; role: string }[]; game: string | null; goalIsMarkedZone: boolean; unsure: string[] }>('/v1/intent', req),
   trace: () => call<{ calls: Record<string, unknown>[] }>('/v1/trace'),
   forget: () => call<{ deleted: boolean }>('/v1/memory', undefined, 'DELETE'),
 };

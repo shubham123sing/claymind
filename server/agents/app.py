@@ -42,6 +42,15 @@ class GameIn(BaseModel):
     checkProblems: list[str] = Field(default_factory=list, max_length=4)
 
 
+class IntentIn(BaseModel):
+    #: the typed words, each pointing word replaced by its tags: "flick [A] at [B C]"
+    text: str = Field(min_length=1, max_length=300)
+    #: tag -> what the item is called ("your Red ball", "a built-in block")
+    items: dict[str, str] = Field(max_length=12)
+    zones: int = Field(default=0, ge=0, le=8)
+    paths: int = Field(default=0, ge=0, le=4)
+
+
 class KitIn(BaseModel):
     kit: list[KitDescriptor] = Field(default_factory=list, max_length=50)
     sets: list[dict] = Field(default_factory=list, max_length=50)
@@ -104,6 +113,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if body.rules:
             memory.update(player(x_player_id), rulesChanged=[{"game": body.name, "rules": body.rules[:200]}])
         return out
+
+    @base.post("/v1/intent")
+    async def intent(body: IntentIn):
+        items = {k[:4]: v[:60] for k, v in body.items.items()}
+        return await orch.resolve_intent(body.text, items, body.zones, body.paths)
 
     @base.post("/v1/kit/analyse")
     async def kit_analyse(body: KitIn):

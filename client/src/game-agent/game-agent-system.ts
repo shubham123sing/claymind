@@ -30,7 +30,7 @@ import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game
 import { KeypadPanel } from '../ui/keypad.js';
 import { ObjectSystem } from '../objects/object-system.js';
 import { bind, bindOrdered, type Word } from './binder.js';
-import { addRole, applyIntent, chooseGame, rolesFromWords, type Intent, type RoleWord } from './intent.js';
+import { addRole, applyIntent, chooseGame, ROLE_WORDS, rolesFromWords, tagged, type Intent, type RoleWord } from './intent.js';
 import { PointSaySystem } from './point-say.js';
 
 const IDLE_CLOSE_MS = 90000;
@@ -296,12 +296,35 @@ export class GameAgentSystem extends createSystem({}) {
   /** Typed words: pointing words bind to what was shown, in order; role words are read too. */
   private typed(text: string): void {
     const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
-    const got = rolesFromWords(words, bindOrdered(words, this.ps.attention));
+    const bound = bindOrdered(words, this.ps.attention);
+    const got = rolesFromWords(words, bound);
     for (const a of got.roles) addRole(this.intent.roles, a.role, a.items);
     if (got.goal) this.intent.goal = got.goal;
     this.intent.text = text;
     this.hint(got.roles.length || got.goal ? 'Got it' : 'Noted');
     this.understand();
+    // items pointed at but not named ("flick this so it knocks those off"): the Intent Resolver reads the words, when it is there
+    if (got.unnamed.length && this.panel.online) void this.resolve(words, bound.bindings);
+  }
+
+  private async resolve(words: Word[], bindings: Parameters<typeof tagged>[1]): Promise<void> {
+    const t = tagged(words, bindings, (k) => this.kit.itemName(k));
+    const marks = this.ps.marks;
+    this.hint('Reading your words…');
+    this.panel.invalidate();
+    try {
+      const r = await agentApi.intent({ text: t.text.slice(0, 300), items: t.items, zones: marks.filter((m) => m.kind === 'zone').length, paths: marks.filter((m) => m.kind === 'path').length });
+      // only items with no role yet: a chip or a role word the player gave wins
+      const named = new Set(this.intent.roles.flatMap((x) => x.items));
+      for (const x of r.roles) if (t.refs[x.ref] && !named.has(t.refs[x.ref]) && (ROLE_WORDS as readonly string[]).includes(x.role)) addRole(this.intent.roles, x.role as RoleWord, [t.refs[x.ref]]);
+      if (r.game) this.intent.game = r.game;
+      if (r.goalIsMarkedZone && !this.intent.goal) this.intent.goal = marks.find((m) => m.kind === 'zone')?.id;
+      this.hint(r.unsure.length ? `Not sure about ${r.unsure.map((u) => t.items[u]).join(', ')}: press a chip for it` : 'Got it', !r.unsure.length);
+    } catch {
+      this.hint('Could not read the words now: press a chip for each piece', false);
+    }
+    this.understand();
+    this.panel.invalidate();
   }
 
   private async make(): Promise<void> {
@@ -309,7 +332,7 @@ export class GameAgentSystem extends createSystem({}) {
     const shown: Intent = { ...this.intent, roles: this.intent.roles.map((r) => ({ ...r, items: [...r.items] })), zones: marks.filter((m) => m.kind === 'zone'), paths: marks.filter((m) => m.kind === 'path') };
     this.endDescribe();
     // with words, the agent reads them (when it is there); otherwise all code: instant and offline
-    if (shown.text && this.panel.online) return this.askGame({ name: shown.text.slice(0, 60), rules: this.shownInWords(shown) }, shown);
+    if (shown.text && this.panel.online) return this.askGame({ name: (shown.game ?? shown.text).slice(0, 60), rules: this.shownInWords(shown) }, shown);
     const pick = chooseGame(shown, TEMPLATES);
     if (!pick) {
       this.ps.begin();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bind, bindOrdered, type Attention, type Word } from '../../src/game-agent/binder';
-import { applyIntent, chooseGame, rolesFromWords, type Intent } from '../../src/game-agent/intent';
+import { applyIntent, chooseGame, rolesFromWords, tagged, type Intent } from '../../src/game-agent/intent';
 import type { Mark } from '../../src/game-agent/marks';
 import { validateSpec } from '../../src/playkit/game-spec';
 import { TEMPLATES } from '../../src/playkit/templates';
@@ -65,5 +65,18 @@ describe('Point + Say intent', () => {
   it('an unused role is said plainly', () => {
     const knock = TEMPLATES.find((t) => t.id === 'knock-down')!;
     expect(applyIntent(knock, intent({ roles: [{ role: 'tool', items: ['x'] }] }), () => null).notes).toEqual(['This game has no tool: that one is not used']);
+  });
+
+  it('items pointed at but not named go to the Intent Resolver as tags', () => {
+    const att: Attention[] = [{ t: 1, gesture: 'point', itemId: 'toy:a' }, { t: 2, gesture: 'point', itemId: 'toy:b' }, { t: 3, gesture: 'point', itemId: 'toy:c' }];
+    const w = say('flick this so it knocks those off');
+    const b = bindOrdered(w, att);
+    const got = rolesFromWords(w, b);
+    expect(got.roles).toEqual([]);
+    expect(got.unnamed.length).toBe(3);
+    const t = tagged(w, b.bindings, (k) => `item ${k}`);
+    expect(t.text).toBe('flick [A] so [B] knocks [C] off');
+    expect(t.items).toEqual({ A: 'item toy:a', B: 'item toy:b', C: 'item toy:c' });
+    expect(t.refs.C).toBe('toy:c');
   });
 });

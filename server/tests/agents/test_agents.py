@@ -186,3 +186,16 @@ def test_known_game_name_uses_the_builtin_card_without_web(server):
     body = httpx.post(f"{server}/v1/game", json={"name": "Kubb", "kit": KIT}, timeout=60).json()
     assert body["path"] in ("builtin", "fallback")
     assert "Kubb" in body["note"] or body["path"] == "builtin"
+
+
+def test_intent_resolver_keeps_to_the_pointed_items(server):
+    # the model names a tag the client never sent and gives an unknown role word: both are dropped
+    FAKE_ANSWERS["intent"] = answer({"roles": [{"ref": "A", "role": "ball"}, {"ref": "Z", "role": "goal"}], "game": "bowling", "goal_is_marked_zone": True})
+    body = httpx.post(f"{server}/v1/intent", json={"text": "roll [A] at [B C]", "items": {"A": "your Red ball", "B": "a block", "C": "a block"}, "zones": 0}, timeout=30).json()
+    assert body["roles"] == [{"ref": "A", "role": "ball"}]
+    assert body["unsure"] == ["B", "C"] and body["game"] == "bowling"
+    assert body["goalIsMarkedZone"] is False  # no zone was marked
+    FAKE_ANSWERS["intent"] = answer({"roles": [{"ref": "A", "role": "spaceship"}]})
+    body = httpx.post(f"{server}/v1/intent", json={"text": "fly [A]", "items": {"A": "a toy"}}, timeout=30).json()
+    assert body["roles"] == [] and body["unsure"] == ["A"]
+    assert httpx.post(f"{server}/v1/intent", json={"text": "", "items": {}}, timeout=30).status_code == 422

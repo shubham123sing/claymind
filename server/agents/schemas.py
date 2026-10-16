@@ -85,3 +85,20 @@ class DesignOut(BaseModel):
     adjustments: list[str] = Field(default_factory=list, max_length=8, description="size / mass changes that would help")
     cannot: list[str] = Field(default_factory=list, max_length=8, description="rules that cannot be expressed, with the closest alternative")
     how_to_play: list[str] = Field(default_factory=list, max_length=4)
+
+
+# ---------- Point + Say: the Intent Resolver ----------
+
+RoleWord = Literal["ball", "target", "goal", "board", "tool", "launcher"]
+
+
+class IntentRole(BaseModel):
+    ref: str = Field(max_length=4, description="a tag from the INPUT items, e.g. A")
+    role: RoleWord
+
+
+class IntentOut(BaseModel):
+    roles: list[IntentRole] = Field(default_factory=list, max_length=12)
+    game: Optional[str] = Field(default=None, max_length=60, description="the game the player names or clearly means, else null")
+    goal_is_marked_zone: bool = Field(default=False, description="the words say a marked area is where pieces must go")
+    unsure: list[str] = Field(default_factory=list, max_length=8, description="tags whose role the words do not make clear")
