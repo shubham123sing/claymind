@@ -22,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 from .analyst import analyse
 from .governed_model import STATE
 from .knowledge import KitGraph, Memory, PassageIndex
+from . import rulebook
 from .referee import TEMPLATES, VOCAB, apply_adapt, closest_template, describe, referee, template
 from .schemas import DesignOut, KitDescriptor, RuleCard, Source
 from .store import Cache, Trace, current_agent, input_hash
@@ -62,6 +63,11 @@ class Orchestrator:
         self.research_busy = False
         self.s, self.team, self.cache, self.trace, self.passages, self.memory = settings, team, cache, trace, passages, memory
         self.http = httpx.AsyncClient()
+        try:  # the built-in Rule Cards in the passage index (local embeddings): "something similar" offline
+            for c in rulebook.CARDS:
+                self.passages.add(f"builtin:{c['id']}", c["game"], rulebook.card_text(c))
+        except Exception:
+            pass
 
     # ---------- calling an agent ----------
 
@@ -139,20 +145,26 @@ class Orchestrator:
         known = self._template_named(name) if name else None
         if known and not user_rules and not rules_unknown:
             return self._template_answer(known, "template", "Using the built-in rules")
+        kit_roles = {r for rep in reports for r in rep.get("suggestedRoles", [])}
+        builtin = rulebook.find(name) if name else None
         card: RuleCard | None = None
         path, note, sources = "your_rules", "Using your rules", []
         if not user_rules or rules_unknown:
             cached = [c for c in self.cache.by_kind("rulecard") if c["game"].lower() == name.lower()]
-            if cached:
+            if builtin:
+                # priority 2: our own Rule Cards, offline, before any web search
+                card, path, note = rulebook.to_rule_card(builtin), "builtin", f"Using the built-in rules for {builtin['game']}"
+            elif cached:
                 card, path, note = RuleCard.model_validate(cached[0]), "cached", "Using rules looked up before"
             elif self.s.web and name:
                 path, note = "web", "Looking up the rules"
                 self.research_busy = False
                 card = await self.research(name, user_rules)
             if card is None and not user_rules:
-                fb = closest_template(name)
+                near = self.closest_card(name, kit_roles)
+                fb = template(near["template"])
                 why = "The free AI models are busy right now (try again in a minute)" if self.research_busy else f"I couldn't find the rules for {name}"
-                ans = self._template_answer(fb, "fallback", f"{why}: the closest built-in game is {fb['name']}")
+                ans = self._template_answer(fb, "fallback", f"{why}: the closest game I know is {near['game']}, played as {fb['name']}")
                 return ans
         if card:
             sources = [s.model_dump() for s in card.sources]
@@ -196,10 +208,22 @@ class Orchestrator:
                     "cannot": cannot, "adjustments": d.adjustments, "sources": sources, "guessed": bool(card and card.guessed), "repairs": attempt,
                 }
             self.trace.add(agent="referee", model="code", ms=0, cached=False, ok=False, error="; ".join(errors[:3]))
-        fb = closest_template(f"{name} {user_rules or ''}")
-        ans = self._template_answer(fb, "fallback", f"I couldn't make a safe game from that, so here is {fb['name']}")
+        near = builtin or self.closest_card(f"{name} {user_rules or ''}", kit_roles)
+        fb = template(near["template"])
+        ans = self._template_answer(fb, "fallback", f"I couldn't make a safe game from that, so here is {fb['name']} (closest: {near['game']})")
         ans["sources"] = sources
         return ans
+
+    def closest_card(self, text: str, kit_roles: set[str]) -> dict:
+        """The built-in Rule Card nearest to a name or description, for this kit (offline)."""
+        semantic: dict[str, float] = {}
+        try:
+            for i, p in enumerate(self.passages.search(text, 6)):
+                if p["source"].startswith("builtin:"):
+                    semantic.setdefault(p["source"][8:], 0.5 - 0.08 * i)
+        except Exception:  # no index yet: names, words and kit fit only
+            pass
+        return rulebook.closest(text, kit_roles, semantic)
 
     def _template_named(self, name: str) -> dict | None:
         n = name.lower()

@@ -163,3 +163,26 @@ def test_governor_says_how_long_until_a_busy_model_frees_up():
     assert g.wait_hint("m", 9000, now=110.0) == float("inf")  # bigger than the model's minute
     g.fail("m", now=120.0)
     assert g.wait_hint("m", 10, now=121.0) > 0
+
+
+def test_builtin_rule_cards_offline():
+    from agents import rulebook
+    assert len(rulebook.CARDS) >= 30
+    assert len({c["id"] for c in rulebook.CARDS}) == len(rulebook.CARDS)
+    from agents.referee import TEMPLATES
+    ids = {t["id"] for t in TEMPLATES}
+    for c in rulebook.CARDS:
+        assert c["template"] in ids, c["id"]
+        rulebook.to_rule_card(c)  # fits the RuleCard schema
+    assert rulebook.find("Mölkky")["id"] == "molkky"
+    assert rulebook.find("petanque")["id"] == "bocce"
+    assert rulebook.find("Crokinolee")["id"] == "crokinole"  # a typo
+    assert rulebook.find("quantum chess") is None
+    # nothing by name: the kit and the words decide
+    assert rulebook.closest("roll it down a slope", {"launcher", "piece"})["template"] == "marble-run"
+
+
+def test_known_game_name_uses_the_builtin_card_without_web(server):
+    body = httpx.post(f"{server}/v1/game", json={"name": "Kubb", "kit": KIT}, timeout=60).json()
+    assert body["path"] in ("builtin", "fallback")
+    assert "Kubb" in body["note"] or body["path"] == "builtin"
