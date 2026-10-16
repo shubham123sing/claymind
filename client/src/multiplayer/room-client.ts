@@ -141,13 +141,21 @@ export class RoomClient {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
   }
 
-  /** Simulated latency, keeping order (messages never overtake each other). */
-  private queueEnd = 0;
+  /** Simulated latency, keeping order like a real connection: one queue, released in order. */
+  private queue: { at: number; fn: () => void }[] = [];
+  private timer = 0;
   private later(fn: () => void): void {
     if (!LAG_MS) return fn();
-    const at = Math.max(this.queueEnd, performance.now() + LAG_MS * (0.8 + Math.random() * 0.4));
-    this.queueEnd = at;
-    setTimeout(fn, at - performance.now());
+    const last = this.queue[this.queue.length - 1]?.at ?? 0;
+    this.queue.push({ at: Math.max(last, performance.now() + LAG_MS * (0.8 + Math.random() * 0.4)), fn });
+    if (!this.timer) this.pump();
+  }
+
+  private pump(): void {
+    this.timer = 0;
+    const now = performance.now();
+    while (this.queue.length && this.queue[0].at <= now) this.queue.shift()!.fn();
+    if (this.queue.length) this.timer = window.setTimeout(() => this.pump(), Math.max(0, this.queue[0].at - now));
   }
 
   private reset(): void {

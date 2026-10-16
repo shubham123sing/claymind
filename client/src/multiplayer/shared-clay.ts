@@ -97,6 +97,14 @@ export class SharedClaySystem extends createSystem({}) {
   private apply(m: RoomMsg): void {
     const seq = Number(m.seq);
     if (seq <= this.lastSeq) return; // already in the snapshot
+    if (this.lastSeq && seq !== this.lastSeq + 1 && !room.isHost) {
+      // an edit went missing: never go on from a different clay, take the host's (the host's clay is the reference)
+      this.stats.resyncs++;
+      this.waiting = true;
+      this.buffered.push(m);
+      room.send('resync');
+      return;
+    }
     this.lastSeq = seq;
     const e = m.op as Edit, owner = String(m.from), c = this.sculpt.sculptClient;
     if (!e || typeof e !== 'object') return;
