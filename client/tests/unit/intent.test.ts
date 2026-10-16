@@ -72,8 +72,9 @@ describe('Point + Say intent', () => {
     const w = say('flick this so it knocks those off');
     const b = bindOrdered(w, att);
     const got = rolesFromWords(w, b);
-    expect(got.roles).toEqual([]);
-    expect(got.unnamed.length).toBe(3);
+    // "flick this": a ball; "it" and "those" are left to the Intent Resolver
+    expect(got.roles).toEqual([{ role: 'ball', items: ['toy:a'] }]);
+    expect(got.unnamed.length).toBe(2);
     const t = tagged(w, b.bindings, (k) => `item ${k}`);
     expect(t.text).toBe('flick [A] so [B] knocks [C] off');
     expect(t.items).toEqual({ A: 'item toy:a', B: 'item toy:b', C: 'item toy:c' });

@@ -660,6 +660,16 @@ export class PlayKitSystem extends createSystem({}) {
 
   private fromCreation = new Map<string, string>();
 
+  /** Every piece on the table and every live creation, with its name (Point + Say: names in typed words). */
+  tableItems(): { key: string; name: string }[] {
+    const out = this.pieces.map((p) => ({ key: `toy:${p.toyId}`, name: p.kitId ? this.kitName(p.kitId) : p.builtin?.shape ?? 'piece' }));
+    for (const id of this.objects.liveCreationIds()) {
+      const c = this.objects.creationById(id);
+      if (c && !id.includes('#exp')) out.push({ key: `c:${id}`, name: c.name });
+    }
+    return out;
+  }
+
   /** What to call an item shown by the hands ("your Red ball", "a built-in block"). */
   itemName(key: string): string {
     const id = key.slice(key.indexOf(':') + 1);

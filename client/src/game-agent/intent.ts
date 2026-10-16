@@ -44,6 +44,33 @@ export interface Intent {
   game?: string;
 }
 
+const STOP = new Set(['and', 'aur', 'but', 'then', 'phir', 'or']);
+/** "throw this", "roll it": what a verb does something to is a ball */
+const MOVE_VERBS = new Set(['throw', 'roll', 'flick', 'kick', 'toss', 'shoot', 'drop', 'push', 'fenko', 'phenko', 'maaro', 'daalo', 'gira', 'girao']);
+/** "at that": a target; "into that": a goal */
+const PREPOSITIONS: Record<string, RoleWord> = { at: 'target', into: 'goal', in: 'goal', inside: 'goal', mein: 'goal', andar: 'goal' };
+
+/** The role said about the pointing word at `index`: a role word after it in its phrase ("this is the ball"), else a cue before it ("throw this", "at that", "ball yeh"). */
+function roleNear(words: Word[], index: number): RoleWord | null {
+  const clean = (i: number) => words[i].text.toLowerCase().replace(/[^a-z]/g, '');
+  for (let i = index + 1; i < words.length && i <= index + 4; i++) {
+    const w = clean(i);
+    if (STOP.has(w) || (i > index + 1 && deixis(words, i))) break; // the next phrase or the next pointing word
+    const role = roleWordOf(w);
+    if (role) return role;
+    if (/[,.;!?]$/.test(words[i].text)) break;
+  }
+  for (let i = index - 1; i >= 0 && i >= index - 2; i--) {
+    const w = clean(i);
+    if (PREPOSITIONS[w]) return PREPOSITIONS[w];
+    if (MOVE_VERBS.has(w)) return 'ball';
+    const role = roleWordOf(w);
+    if (role) return role;
+    if (STOP.has(w) || /[,.;!?]$/.test(words[i].text)) break;
+  }
+  return null;
+}
+
 /**
  * The role named next to each bound pointing word: "this is the ball", "these are the pins",
  * "yeh ball hai", "ball yeh hai". A zone bound to a goal word (or to no role word) is the goal.
@@ -53,12 +80,7 @@ export function rolesFromWords(words: Word[], r: BindResult): { roles: RoleAssig
   const unnamed: Binding[] = [];
   let goal: string | undefined;
   for (const b of r.bindings) {
-    let role: RoleWord | null = null;
-    for (const i of [1, 2, 3, 4, -1, -2].map((d) => b.index + d)) {
-      if (i < 0 || i >= words.length) continue;
-      if (i > b.index + 1 && deixis(words, i)) break; // the next pointing word starts its own phrase
-      if ((role = roleWordOf(words[i].text))) break;
-    }
+    const role = roleNear(words, b.index);
     if (b.kind === 'zone') {
       if (role === 'goal' || role === null) goal ??= b.ids[0];
       continue;
@@ -84,6 +106,35 @@ export function tagged(words: Word[], bindings: Binding[], name: (item: string) 
   return { text, items, refs };
 }
 
+const FILLER = new Set(['is', 'are', 'the', 'a', 'an', 'my', 'our', 'hai', 'hain', 'ko', 'will', 'be', 'as']);
+const sameWord = (a: string | undefined, b: string) => !!a && (a === b || a === `${b}s` || a === `${b}es` || b === `${a}s`);
+
+/**
+ * Words only (no hands): pieces named in the words ("the Red ball is the ball", "the blocks are
+ * the targets", "cup goal hai"). A name several pieces share ("Block 1", "Block 2" -> "block")
+ * names them all. The role word comes after the name (over is / are / the / hai), else just before.
+ */
+export function rolesFromNames(text: string, items: { key: string; name: string }[]): RoleAssignment[] {
+  const words = tokens(text);
+  const names = items.map((it) => ({ ...it, w: tokens(it.name).filter((x) => !/^\d+$/.test(x)) })).filter((n) => n.w.length);
+  const out: RoleAssignment[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const hits = names.filter((n) => n.w.every((x, k) => sameWord(words[i + k], x)));
+    if (!hits.length) continue;
+    const len = Math.max(...hits.map((h) => h.w.length));
+    let role: RoleWord | null = null, end = i + len - 1;
+    for (let j = i + len; j < words.length && j < i + len + 4 && !role; j++) {
+      role = roleWordOf(words[j]);
+      if (role) end = j; // "the board is the board": the second "board" is the role, not a name
+      else if (!FILLER.has(words[j])) break;
+    }
+    for (let j = i - 1; j >= 0 && j >= i - 2 && !role; j--) role = roleWordOf(words[j]);
+    if (role) addRole(out, role, hits.filter((h) => h.w.length === len).map((h) => h.key));
+    i = end;
+  }
+  return out;
+}
+
 /** Add items to a role (an item plays one role: the latest word about it wins). */
 export function addRole(roles: RoleAssignment[], role: RoleWord, items: string[]): void {
   for (const r of roles) r.items = r.items.filter((x) => !items.includes(x));
@@ -96,8 +147,8 @@ export function addRole(roles: RoleAssignment[], role: RoleWord, items: string[]
 /** Can this game role be played by what the player called `w`? */
 export function fits(r: RoleSpec, w: RoleWord): boolean {
   switch (w) {
-    case 'ball': return !r.pinned && !r.handHeld && (['ball', 'marble', 'coin', 'disc'].includes(r.fallback) || r.tags[0] === 'piece');
-    case 'target': return !r.handHeld && (r.tags.includes('target') || (r.tags.includes('obstacle') && !r.tags.includes('board')));
+    case 'ball': return !r.pinned && !r.handHeld && (['ball', 'marble', 'coin', 'disc'].includes(r.fallback) || (r.tags[0] === 'piece' && r.fallback !== 'block'));
+    case 'target': return !r.handHeld && !r.tags.includes('container') && (r.tags.includes('target') || (r.tags.includes('obstacle') && !r.tags.includes('board')));
     case 'goal': return r.tags.includes('container') || (!!r.pinned && r.tags.includes('target'));
     case 'board': return r.tags.includes('board');
     case 'tool': return !!r.handHeld;
@@ -123,17 +174,29 @@ export function assignRoles(spec: GameSpec, words: RoleWord[]): { map: Partial<R
 
 const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean);
 
-/** The built-in game that fits what was shown best (null: nothing shown or said picks one). */
-export function chooseGame(intent: Intent, games: GameSpec[]): { spec: GameSpec; score: number } | null {
+/**
+ * The built-in game that fits what was shown best (null: nothing shown or said picks one).
+ * `nameOf`: what the pieces are called; a piece named like a game's role ("Striker", "Coin 2")
+ * breaks a tie toward that game.
+ */
+export function chooseGame(intent: Intent, games: GameSpec[], nameOf: (item: string) => string = () => ''): { spec: GameSpec; score: number } | null {
   const words = new Set(tokens(`${intent.text} ${intent.game ?? ''}`));
   let best: { spec: GameSpec; score: number } | null = null;
   for (const g of games) {
     const { map, unplaced } = assignRoles(g, intent.roles.map((r) => r.role));
-    let score = 2 * Object.keys(map).length - 2 * unplaced.length;
+    const filled = Object.keys(map).length;
+    // the roles shown, then how much of the game they fill (the most specific game wins a tie)
+    let score = 2 * filled - 2 * unplaced.length + filled / g.roles.length;
+    for (const a of intent.roles) {
+      const role = map[a.role] ? g.roles.find((r) => r.id === map[a.role]) : undefined;
+      const label = role ? tokens(`${role.label} ${role.fallback}`) : [];
+      if (a.items.some((k) => tokens(nameOf(k)).some((w) => label.some((l) => sameWord(w, l) || sameWord(l, w))))) score += 0.5;
+    }
     if (intent.zones.length && g.zones.length) score += 1;
     if (intent.paths.length && (g.paths?.length || g.roles.some((r) => r.fallback === 'marble'))) score += 1;
-    const name = tokens(`${g.name} ${g.id.replace(/-/g, ' ')}`).filter((w) => w.length > 3);
-    if (name.some((w) => words.has(w))) score += 4;
+    const text = ` ${[...words].join(' ')} `, phrase = tokens(g.name).join(' ');
+    if (text.includes(` ${phrase} `) || ` ${tokens(intent.text).join(' ')} `.includes(` ${phrase} `)) score += 4;
+    else if (tokens(g.name).some((w) => w.length > 3 && !roleWordOf(w) && words.has(w))) score += 1;
     if (!best || score > best.score) best = { spec: g, score };
   }
   return best && best.score > 0 ? best : null;

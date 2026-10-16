@@ -30,7 +30,7 @@ import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game
 import { KeypadPanel } from '../ui/keypad.js';
 import { ObjectSystem } from '../objects/object-system.js';
 import { bind, bindOrdered, type Word } from './binder.js';
-import { addRole, applyIntent, chooseGame, ROLE_WORDS, rolesFromWords, tagged, type Intent, type RoleWord } from './intent.js';
+import { addRole, applyIntent, chooseGame, ROLE_WORDS, rolesFromNames, rolesFromWords, tagged, type Intent, type RoleWord } from './intent.js';
 import { PointSaySystem } from './point-say.js';
 
 const IDLE_CLOSE_MS = 90000;
@@ -298,7 +298,10 @@ export class GameAgentSystem extends createSystem({}) {
     const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
     const bound = bindOrdered(words, this.ps.attention);
     const got = rolesFromWords(words, bound);
-    for (const a of got.roles) addRole(this.intent.roles, a.role, a.items);
+    // pieces named in the words ("the Red ball is the ball"), unless the hands already said what they are
+    const pointed = new Set(got.roles.flatMap((r) => r.items));
+    for (const a of rolesFromNames(text, this.kit.tableItems())) got.roles.push({ role: a.role, items: a.items.filter((k) => !pointed.has(k)) });
+    for (const a of got.roles) if (a.items.length) addRole(this.intent.roles, a.role, a.items);
     if (got.goal) this.intent.goal = got.goal;
     this.intent.text = text;
     this.hint(got.roles.length || got.goal ? 'Got it' : 'Noted');
@@ -333,7 +336,7 @@ export class GameAgentSystem extends createSystem({}) {
     this.endDescribe();
     // with words, the agent reads them (when it is there); otherwise all code: instant and offline
     if (shown.text && this.panel.online) return this.askGame({ name: (shown.game ?? shown.text).slice(0, 60), rules: this.shownInWords(shown) }, shown);
-    const pick = chooseGame(shown, TEMPLATES);
+    const pick = chooseGame(shown, TEMPLATES, (k) => this.kit.itemName(k));
     if (!pick) {
       this.ps.begin();
       return this.hint('Show me at least one piece and what it is, or type the name of the game', false);
