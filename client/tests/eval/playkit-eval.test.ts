@@ -1,5 +1,5 @@
 /**
- * Game agent eval (Update 3, Step D5): does the agent do what the player asks?
+ * Game agent eval (V5): does the agent do what the player asks?
  * Runs only with CLAYMIND_EVAL=1 and the backend up (server/agents, real free models):
  *   CLAYMIND_EVAL=1 npx vitest run tests/eval/playkit-eval.test.ts
  * Cases: eval/playkit/cases.json. Writes eval/playkit/results.json and docs/EVAL_REPORT.md.
@@ -33,6 +33,20 @@ async function post(path: string, body: unknown): Promise<{ ms: number; json: Re
 }
 
 /** Re-write the report from eval/playkit/results.json (CLAYMIND_EVAL=report): no backend calls. */
+/** The agent part of docs/EVAL_REPORT.md; everything from the KEEP marker on (Point + Say, the other evals) stays. */
+const KEEP = '<!-- other evals: kept when the agent eval is re-run -->';
+function writeReport(agent: string): void {
+  const url = new URL('docs/EVAL_REPORT.md', ROOT);
+  let rest = '';
+  try {
+    const old = readFileSync(url, 'utf8');
+    if (old.includes(KEEP)) rest = old.slice(old.indexOf(KEEP));
+  } catch {
+    // first run
+  }
+  writeFileSync(url, `${agent.trimEnd()}\n\n${rest || `${KEEP}\n`}`);
+}
+
 describe.skipIf(process.env.CLAYMIND_EVAL !== 'report')('game agent eval report', () => {
   it('re-scores the last results', () => {
     const data = JSON.parse(readFileSync(new URL('eval/playkit/cases.json', ROOT), 'utf8')) as { cases: Case[] };
@@ -45,7 +59,7 @@ describe.skipIf(process.env.CLAYMIND_EVAL !== 'report')('game agent eval report'
       r.ok = r.gameOk && r.referee && r.plays && (r.rulesOk ?? true) && (r.cannotOk ?? true);
     }
     writeFileSync(new URL('eval/playkit/results.json', ROOT), JSON.stringify(res, null, 1));
-    writeFileSync(new URL('docs/EVAL_REPORT.md', ROOT), report(res.rows));
+    writeReport(report(res.rows, true));
   });
 });
 
@@ -111,7 +125,7 @@ describe.skipIf(process.env.CLAYMIND_EVAL !== '1')('game agent eval', () => {
       console.log(JSON.stringify(row));
     }
     writeFileSync(new URL('eval/playkit/results.json', ROOT), JSON.stringify({ at: new Date().toISOString(), rows }, null, 1));
-    writeFileSync(new URL('docs/EVAL_REPORT.md', ROOT), report(rows));
+    writeReport(report(rows));
     expect(rows.length).toBe(data.cases.length);
   }, 60 * 60 * 1000);
 });
@@ -120,16 +134,18 @@ function pct(a: number, b: number): string {
   return b ? `${a}/${b} (${Math.round((100 * a) / b)}%)` : '-';
 }
 
-function report(rows: Record<string, unknown>[]): string {
+function report(rows: Record<string, unknown>[], rescored = false): string {
   const count = (f: (r: Record<string, unknown>) => unknown) => rows.filter(f).length;
   const has = (k: string) => rows.filter((r) => r[k] !== undefined);
   const roleHits = rows.reduce((s, r) => s + Number(r.roleHits ?? 0), 0), roleTotal = rows.reduce((s, r) => s + Number(r.roleTotal ?? 0), 0);
   const games = rows.filter((r) => r.gameOk !== undefined);
   const times = rows.map((r) => Number(r.ms ?? 0)).filter(Boolean).sort((a, b) => a - b);
   const lines = [
-    '# Game agent eval (Update 3, Step D5)',
+    '# Evals (V5)',
     '',
-    `Run ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC against the local backend with the free Groq models (real calls, paced for the free budgets). Cases: \`eval/playkit/cases.json\`; raw results: \`eval/playkit/results.json\`; re-run: \`eval/playkit/README.md\`.`,
+    '## Game agent',
+    '',
+    `${rescored ? "Re-scored" : "Run"} ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC${rescored ? " from the last run (2026-10-16, 27 cases)," : ""} against the local backend with the free Groq models (real calls, paced for the free budgets). Cases: \`eval/playkit/cases.json\`; raw results: \`eval/playkit/results.json\`; re-run: \`eval/playkit/README.md\`.`,
     '',
     '| Measure | Result |',
     '|---|---|',

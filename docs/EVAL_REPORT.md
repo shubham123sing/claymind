@@ -1,6 +1,8 @@
-# Game agent eval (Update 3, Step D5)
+# Evals (V5)
 
-Run 2026-10-16 18:18 UTC against the local backend with the free Groq models (real calls, paced for the free budgets). Cases: `eval/playkit/cases.json`; raw results: `eval/playkit/results.json`; re-run: `eval/playkit/README.md`.
+## Game agent
+
+Re-scored 2026-10-16 18:28 UTC from the last run (2026-10-16, 27 cases), against the local backend with the free Groq models (real calls, paced for the free budgets). Cases: `eval/playkit/cases.json`; raw results: `eval/playkit/results.json`; re-run: `eval/playkit/README.md`.
 
 | Measure | Result |
 |---|---|
@@ -43,3 +45,47 @@ Run 2026-10-16 18:18 UTC against the local backend with the free Groq models (re
 | rules-marble-timer | your_rules | marble-run-custom (Marble dash) |  | 1/1 |  | pass | win, 3 actions | 2.7 s | yes |
 | unknown-shuffleboard | fallback | flick-and-pocket (Flick-and-pocket) |  |  |  | pass | win, 9 actions | 21.1 s | yes |
 | known-skittles | builtin | knock-down-custom (Knock-down) |  |  |  | pass | unfinished, 1 actions | 4.5 s | yes |
+
+<!-- other evals: kept when the agent eval is re-run -->
+
+**After the run, fixed and re-checked live (not a new full run):** a win target on a points game was dropped (rules-cup-toss, rules-hinglish). Now it adds a win rule on the game's counter and keeps the pieces it needs; Cup Toss keeps 3 players, 2 shots, win at 5; the Hinglish case gets win at 5 (the template has 5 balls), and the note says why. rules-timer failed in the run because Qwen hit its 1000-output-token cap and the repair found no free budget; re-run alone it passed. known-mini-golf picked Flick-and-pocket (the case expects Target throw or Marble run; arguable).
+
+## Point + Say
+
+All offline, no AI, re-runnable: `npx vitest run tests/unit/pointsay-binding.test.ts tests/unit/pointsay-modes.test.ts` (in `client/`).
+
+### Binding pointing words to gestures (`eval/pointsay/cases.json`)
+
+| Cases fully right | Words bound right | False triggers | Confirm cards |
+|---|---|---|---|
+| 19/19 | 23/23 | 0 | 3 |
+
+### Three modes: chat only, gestures + cards only, combined
+
+The same intent given three ways: **chat** = typed words, no hands; **cards** = point / hold / tap / mark, then a chip ("This is the ball", "Here is the goal"); **combined** = the gestures, then a typed sentence with this / these / here. Scored on the built-in game chosen, every role, the goal zone / path kept, confirm cards and pieces put in a wrong role.
+
+**Tuned set** (`eval/pointsay/modes.json`, 16 scenarios; the code was fixed against these):
+
+| Mode | All right | Game right | Roles right | Marks kept | Confirm cards | Wrong roles |
+|---|---|---|---|---|---|---|
+| Chat only | 13/16 | 16/16 | 38/38 | 13/16 | 0 | 0 |
+| Gestures + cards | 16/16 | 16/16 | 38/38 | 16/16 | 1 | 0 |
+| Combined | 16/16 | 16/16 | 38/38 | 16/16 | 0 | 0 |
+
+**Held-out set** (`eval/pointsay/modes-heldout.json`, 8 scenarios written after the tuning, scored once, no code change after): **the honest number.**
+
+| Mode | All right | Game right | Roles right | Marks kept | Confirm cards | Wrong roles |
+|---|---|---|---|---|---|---|
+| Chat only | 1/8 | 4/8 | 6/21 | 6/8 | 0 | 0 |
+| Gestures + cards | 8/8 | 8/8 | 21/21 | 8/8 | 0 | 0 |
+| Combined | 5/8 | 7/8 | 19/21 | 8/8 | 0 | 2 |
+
+What it says: with the hands (gestures + cards) the game understood every held-out scenario; combined is good but ordered binding of typed words is brittle (two wrong roles, one from "look at this and that": "at" read as "the target"); chat only, offline, misses most free sentences ("toss the sock ball into the basket"): words cannot mark zones, and the name matcher only reads "X is the Y" shapes. Online, the Intent Resolver and the Designer read such sentences (below), with free-model reliability.
+
+## Intent Resolver (online, free model)
+
+4 live sentences with pointed items as tags (2026-10-16, qwen / gpt-oss chain): 3/4 right. Miss: "hit [A] with [B] past [C]" named the pebble the target (should be the ball); [C] was left unsure (correct: never guessed). Too few to be a measure; it only names items the code could not.
+
+## Vision check (online, optional)
+
+2 Play Kit toys, two rendered views in one picture each (qwen3.8-27b): a plain sphere -> "clay ball", role piece (better than the measured "obstacle"); a scooped ball with a handle -> "clay spoon" (the measured "container" is also fair). About 2.7k tokens per call with two pictures, 1.3k with one; 0.4-1.6 s. Two toys are not a measure; it only suggests, with Undo.
