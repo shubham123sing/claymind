@@ -1,11 +1,10 @@
 /**
  * The demo player's brain (code, no AI): what a person would do next in a table game,
  * using only the Game Spec's hand actions and speeds a human hand reaches. The same
- * planner drives the visible demo (ghost hand) and the headless runs (Will it work?,
- * What-if), seeded so a run can be replayed exactly.
+ * planner drives the visible demo (ghost hand) and the headless test runs, seeded so a run can be replayed exactly.
  */
-import type { GameSpec, RoleSpec } from '../playkit/game-spec.js';
-import type { V3 } from './headless-sim.js';
+import type { GameSpec, RoleSpec } from './game-spec.js';
+export type V3 = [number, number, number];
 
 /** Human limits (m/s): a gentle toss to a firm throw, and a fingertip flick. */
 export const HUMAN = { throwMax: 4, flickMin: 1.2, flickMax: 2.5 };

@@ -194,8 +194,9 @@ export class PlayKitPanel extends CanvasPanel {
       ctx.fillText('▸', W - 70, y + 37);
     });
     const by = H - 76;
-    this.btn(ctx, add, 20, by, 300, '◀ Back', 'setup:back');
-    this.btn(ctx, add, W - 420, by, 400, 'Play', 'setup:play', true, '#5fbf72');
+    this.btn(ctx, add, 20, by, 280, '◀ Back', 'setup:back');
+    this.btn(ctx, add, 316, by, 280, 'Show me how', 'setup:demo', true, '#9fd0f5');
+    this.btn(ctx, add, W - 384, by, 364, 'Play', 'setup:play', true, '#5fbf72');
   }
 }
 
@@ -209,9 +210,7 @@ export class GameHud extends CanvasPanel {
   paused = false;
   hasGame = false;
   over = false;
-  /** "Simulate it for me" results (shown instead of the score while set) */
-  note: string[] = [];
-  /** second row: Show me how / Will it work? / What if…, or the demo controls */
+  /** second row: the demo controls while the demo hand plays */
   extra: [string, string, boolean, string?][] = [];
 
   constructor() {
@@ -230,10 +229,9 @@ export class GameHud extends CanvasPanel {
     ctx.fillText(this.paused ? 'PAUSED' : this.mode === 'play' ? 'PLAY' : 'EDIT: arrange the pieces', 520, 38, 360);
     ctx.fillStyle = '#f4f1ec';
     ctx.font = '500 25px system-ui, sans-serif';
-    const body = this.note.length ? this.note : this.showRules ? this.rules : this.lines;
-    if (this.note.length) ctx.fillStyle = '#9fd0f5';
+    const body = this.showRules ? this.rules : this.lines;
     body.slice(0, 4).forEach((l, i) => ctx.fillText(l, 28, 86 + i * 34, W2 - 56));
-    if (this.message && !this.note.length) {
+    if (this.message) {
       ctx.fillStyle = this.over ? '#f0b429' : '#9fd0f5';
       ctx.font = '700 28px system-ui, sans-serif';
       ctx.fillText(this.message, 28, 230, W2 - 56);

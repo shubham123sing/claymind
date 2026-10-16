@@ -1,13 +1,12 @@
 /**
  * "Show me how to play": a translucent ghost hand plays a few turns on the real table with
  * the real physics and the live scoreboard, using the same planner as the headless runs
- * (src/sim/planner.ts: only the game's hand actions, human-range speeds). Labelled
+ * (demo-planner.ts: only the game's hand actions, human-range speeds). Labelled
  * "Demo" (never to be shown as the player's own hand use). Pause, slow motion, replay and
  * "my turn" (stop here and play on from exactly this state). At most 20 s.
  */
 import { CanvasTexture, CapsuleGeometry, Group, Mesh, MeshBasicMaterial, SphereGeometry, Sprite, SpriteMaterial, SRGBColorSpace, Vector3 } from '@iwsdk/core';
-import type { V3 } from '../sim/headless-sim.js';
-import { Planner, type Action, type PieceView } from '../sim/planner.js';
+import { Planner, type Action, type PieceView, type V3 } from './demo-planner.js';
 import type { GameSpec } from './game-spec.js';
 
 export const DEMO_MAX_S = 20;
