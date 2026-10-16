@@ -46,11 +46,18 @@ export function applyNumbers(base: GameSpec, n: RuleNumbers): { spec: GameSpec; 
   if (timers.length && n.timerSec > 0) for (const r of timers) (r.when as { seconds: number }).seconds = n.timerSec;
   else if (timers.length) g.rules = g.rules.filter((r) => r.when.type !== 'timer'); // time limit off
   else g.timerSec = n.timerSec;
+  let winRule = false;
   for (const r of g.rules) {
     if (r.when.type === 'count_reached' && r.do.some((a) => a.type === 'win')) {
+      winRule = true;
       if (n.target > 0) r.when.value = n.target;
       if (g.counter && g.counter.id === r.when.counter) g.counter.target = n.target > 0 ? n.target : r.when.value;
     }
+  }
+  if (n.target > 0 && !winRule && g.counter) {
+    // a points game with no "win at": its own counter reaching the target wins
+    g.rules.push({ when: { type: 'count_reached', counter: g.counter.id, value: n.target }, do: [{ type: 'show_message', text: `${n.target} ${g.counter.label.toLowerCase()}: you win!` }, { type: 'win' }] });
+    g.counter.target = n.target;
   }
   if (n.target === 0) {
     // "most points wins": no win-at rule, the game needs turns or a time limit to end

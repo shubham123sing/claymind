@@ -31,4 +31,12 @@ describe('rules card (Adjust)', () => {
       '2 players, 1 shot per turn, 3 turns each, first to 5 wins, 60 second time limit, bigger pocket scores more',
     );
   });
+
+  it('a win target on a points game adds a win rule on its counter', () => {
+    const t = templateById('target-throw')!;
+    const { spec, problems } = applyNumbers(t, { ...numbersOf(t), target: 5 });
+    expect(problems).toEqual([]);
+    expect(spec.rules.some((r) => r.when.type === 'count_reached' && r.when.value === 5 && r.do.some((a) => a.type === 'win'))).toBe(true);
+    expect(numbersOf(spec).target).toBe(5);
+  });
 });

@@ -253,7 +253,18 @@ def apply_adapt(t: dict, adapt: dict) -> tuple[dict, list[str]]:
                 w["seconds"] = adapt["timerSec"]
         else:
             g["timerSec"] = adapt["timerSec"]
-    for rid, n in (adapt.get("counts") or {}).items():
+    counts = dict(adapt.get("counts") or {})
+    target = adapt.get("target")
+    if target and g.get("counter"):
+        # the player's win target outranks a piece count they did not ask for: pieces that score on
+        # the win counter are kept up to the template's own number
+        cid = g["counter"]["id"]
+        for rule in g["rules"]:
+            role = rule["when"].get("role")
+            if role in counts and any(a["type"] == "add_score" and a.get("counter") == cid for a in rule["do"]):
+                full = next(r["count"] for r in g["roles"] if r["id"] == role)
+                counts[role] = max(counts[role], min(target, full))
+    for rid, n in counts.items():
         role = next((r for r in g["roles"] if r["id"] == rid), None)
         if role is None:
             cannot.append(f"no part called {rid} in {t['name']}")
@@ -269,13 +280,22 @@ def apply_adapt(t: dict, adapt: dict) -> tuple[dict, list[str]]:
                     continue
             keep.append(p)
         g["layout"], role["count"] = keep, max(1, n)
+    win_rule = False
     for rule in g["rules"]:
         w = rule["when"]
         if w["type"] == "count_reached":
+            win_rule = win_rule or any(a["type"] == "win" for a in rule["do"])
             if adapt.get("target") is not None:
                 w["value"] = adapt["target"]
             if g.get("counter", {}).get("id") == w["counter"]:
                 g["counter"]["target"] = w["value"]
+    if adapt.get("target") and not win_rule and g.get("counter"):
+        # a points game with no "win at": its own counter reaching the target wins (said plainly)
+        n, c = adapt["target"], g["counter"]
+        g["rules"].append({"when": {"type": "count_reached", "counter": c["id"], "value": n},
+                           "do": [{"type": "show_message", "text": f"{n} {c['label'].lower()}: you win!"}, {"type": "win"}]})
+        c["target"] = n
+        cannot.append(f"win at {n} counts {c['label'].lower()}, not points")
     # a counter cannot need more than there are pieces of the counted role
     for rule in g["rules"]:
         w = rule["when"]

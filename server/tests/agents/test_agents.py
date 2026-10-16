@@ -214,3 +214,22 @@ def test_vision_check_answers_strict_json_and_refuses_other_input(server):
     FAKE_ANSWERS["vision"] = answer({"looks_like": "a spaceship", "roles": ["rocket"], "confidence": 3})
     body = httpx.post(f"{server}/v1/vision", json={"name": "Ship", "sizeCm": [5, 5, 5], "massKg": 0.1, "views": [TINY]}, timeout=30).json()
     assert "error" in body
+
+
+def test_win_target_on_a_points_game_adds_a_win_rule():
+    from agents.referee import apply_adapt
+    t = next(x for x in TEMPLATES if x["id"] == "target-throw")
+    g, cannot = apply_adapt(t, {"players": 3, "shotsPerTurn": 2, "target": 5})
+    win = [r for r in g["rules"] if r["when"]["type"] == "count_reached"]
+    assert win and win[0]["when"]["value"] == 5 and any(a["type"] == "win" for a in win[0]["do"])
+    assert g["counter"]["target"] == 5 and any("not points" in c for c in cannot)
+    assert validate_spec(g) == []
+
+
+def test_win_target_keeps_the_pieces_it_needs():
+    from agents.referee import apply_adapt
+    t = next(x for x in TEMPLATES if x["id"] == "target-throw")
+    g, cannot = apply_adapt(t, {"players": 3, "shotsPerTurn": 2, "target": 5, "counts": {"ball": 2}})
+    win = next(r for r in g["rules"] if r["when"]["type"] == "count_reached")
+    assert win["when"]["value"] == 5 and next(r for r in g["roles"] if r["id"] == "ball")["count"] == 5
+    assert validate_spec(g) == []
