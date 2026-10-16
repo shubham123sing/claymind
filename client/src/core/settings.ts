@@ -15,11 +15,10 @@ export interface Settings {
   oneHanded: boolean;
   sound: boolean;
   tutorialDone: boolean;
-  samplesAdded: boolean;
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false, samplesAdded: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();

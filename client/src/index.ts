@@ -1,7 +1,6 @@
-import { CameraSystem, World } from '@iwsdk/core';
+import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { bus } from './core/event-bus.js';
-import { Hud } from './devtools/hud.js';
 import { PanelSystem } from './panel.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
 import { SurfaceSystem } from './platform/surface/surface-system.js';
@@ -18,24 +17,12 @@ import { GameAgentSystem } from './game-agent/game-agent-system.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { CoachSystem } from './ui/coach.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
-import { BallSpawnerSystem } from './spikes/ball-spawner-system.js';
-import { ImpactProbeSystem } from './spikes/impact-probe-system.js';
-import { PinchProbeSystem } from './spikes/pinch-probe-system.js';
-import { spike } from './spikes/spike-state.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
   if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
-  if (new URLSearchParams(location.search).has('spikes')) {
-    // Phase 0 feasibility probes: ball drop, pinch jitter, impacts/CCD, camera.
-    spike.hud = new Hud(world);
-    // camera feature is off by default (no permission prompt for players); the probe needs it
-    world.registerSystem(CameraSystem);
-    world.registerSystem(PinchProbeSystem);
-    world.registerSystem(BallSpawnerSystem);
-    world.registerSystem(ImpactProbeSystem);
-  } else {
+  {
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
