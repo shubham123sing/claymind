@@ -1,0 +1,25 @@
+# ClayMind game agent + multiplayer relay on Render's free web service (one Python process).
+# Render dashboard -> New -> Blueprint -> this repository. Set GROQ_API_KEY when asked (never commit it).
+# Free tier: 512 MB RAM, sleeps after 15 min idle and takes about a minute to wake; the disk is wiped on
+# every restart (cache and player memory start empty). If it runs out of memory, set CLAYMIND_EMBEDDINGS=0.
+services:
+  - type: web
+    name: claymind-agents
+    runtime: python
+    plan: free
+    rootDir: server
+    buildCommand: pip install -r requirements-agents.txt && python -m agents.prefetch
+    startCommand: python -m agents.run
+    healthCheckPath: /v1/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.1
+      - key: CLAYMIND_AGENTS_HOST
+        value: 0.0.0.0
+      - key: CLAYMIND_EMBEDDINGS
+        value: "1"
+      - key: A2A_TOKEN
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false

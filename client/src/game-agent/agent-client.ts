@@ -2,12 +2,13 @@
  * Talks to the optional game agent backend (server/agents: Kit Analyst, Researcher,
  * Game Designer, Referee). Where it is: `?agents=<url>` once
  * (remembered in localStorage), else http://127.0.0.1:8790 when the game itself runs on
- * this computer; otherwise there is none and every call answers "offline" at once.
+ * this computer, else the hosted backend (public-backend.ts).
  * The player id is a random string kept in this browser (no account, nothing personal).
  * The game never waits on this: a call gives up after 30 s and the built-in games stay.
  */
 import type { GameSpec, RoleTag } from '../playkit/game-spec.js';
 import type { KitItem } from '../playkit/kit-store.js';
+import { PUBLIC_AGENTS_URL } from './public-backend.js';
 
 const URL_KEY = 'claymind.agentsUrl';
 const PLAYER_KEY = 'claymind.playerId';
@@ -43,7 +44,7 @@ export function agentsUrl(): string | null {
   if (fromQuery) return store(URL_KEY, fromQuery.replace(/\/$/, ''));
   const saved = store(URL_KEY);
   if (saved) return saved;
-  return ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? 'http://127.0.0.1:8790' : null;
+  return ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? 'http://127.0.0.1:8790' : PUBLIC_AGENTS_URL || null;
 }
 
 function playerId(): string {

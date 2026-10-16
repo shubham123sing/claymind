@@ -84,7 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     governor, trace = Governor(s.chain), Trace()
     install(governor, trace, s)
     cache = Cache(s.data_dir / "cache.sqlite")
-    passages = PassageIndex(s.data_dir / "passages.sqlite", s.data_dir.parent / "models", use_model=not s.fake_llm)
+    passages = PassageIndex(s.data_dir / "passages.sqlite", s.models_dir, use_model=s.embeddings and not s.fake_llm)
     memory = Memory(s.data_dir / "memory")
     team = build_team()
     orch = Orchestrator(s, team, cache, trace, passages, memory)
