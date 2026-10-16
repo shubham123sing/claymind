@@ -265,3 +265,18 @@ Other findings:
 - **Emulator vs real Quest:** every hand result in this update comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate on a Quest are still to be measured (list in `docs/STEP5_XR_TEST.md`).
 - **No voice input**, by design: typing is the browser text box or the pinch keypad; the helper's voice output is optional.
 
+
+## Update 3 (focus, environment, multiplayer), 2026-10-16
+- **Removed on purpose:** the Helper, the Coach, the helper character, "Will it work?" and What-if, the brain graph / Debug the Brain / Mastery and the old AI layer (archived in `_archive/`). The game agent team stays; "Show me how" stays as an optional preview on game cards.
+- **Free LLMs are not fully reliable.** Free-tier budgets are small (about 8000 tokens per minute per model, Qwen 1000 output tokens per minute). A busy minute ends in the closest built-in game, and the player is told which. Measured accuracy: `docs/EVAL_REPORT.md`.
+- **Environment:** the room's planes (walls, floor, ceiling, furniture tops) become colliders in the XR environment; real-room mesh collision on a phone or in passthrough is not done (phone AR is paused). Fast objects are stopped by thick colliders (no continuous collision detection in the IWSDK physics).
+- **Multiplayer:**
+  - Edits are applied when they come back from the room, so your own stroke shows after one round trip (about 0.1 s on a good connection, 0.56 s at 250 ms each way).
+  - Only the clay and the Play Kit games are shared: an object made with Bring to life stays on the player's own table.
+  - Host leaves: the room carries on with a new host, but the game in progress ends (no physics hand-over).
+  - The relay keeps rooms in memory: a restarted server ends every room.
+  - Presence is head and two hands (no finger joints); the wave is the only gesture (no thumbs-up yet).
+  - Turning or resizing the shared clay with two hands is your own view only.
+  - Tested with two browser tabs, scripted players and simulated latency / loss, not with two headsets.
+- **Emulator vs Quest:** every hand result comes from the IWER emulator with perfect emulated hands; pinch reliability, throw feel, reach, fatigue and frame rate must be measured on a Quest (list in `docs/QA_REPORT.md`).
+- **No voice** by design: no microphone and no voice chat anywhere; typing is the browser text box or the pinch keypad.

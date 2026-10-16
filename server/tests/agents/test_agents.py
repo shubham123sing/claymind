@@ -152,3 +152,14 @@ def test_previews_are_written_from_the_spec_and_timers_follow_the_player():
     assert "Lose if it is not done in 30 s." in lines and "Win: Marbles home reaches 2." in lines
     two, _ = apply_adapt(template("knock-down"), {"players": 2, "maxTurns": 3, "shotsPerTurn": 1})
     assert describe(two)[1] == "2 players: 1 shot per turn, 3 turns each." and describe(two)[-1] == "Most points wins."
+
+
+def test_governor_says_how_long_until_a_busy_model_frees_up():
+    from agents.governor import Governor
+    g = Governor([{"id": "m", "limits": {"rpm": 30, "tpm": 8000, "rpd": 1000, "tpd": 200000}}])
+    assert g.try_acquire("m", 7000, now=100.0)
+    assert not g.try_acquire("m", 2000, now=110.0)  # the minute's tokens are used
+    assert abs(g.wait_hint("m", 2000, now=110.0) - 50.0) < 1e-6  # free again when the minute rolls over
+    assert g.wait_hint("m", 9000, now=110.0) == float("inf")  # bigger than the model's minute
+    g.fail("m", now=120.0)
+    assert g.wait_hint("m", 10, now=121.0) > 0

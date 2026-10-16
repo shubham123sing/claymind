@@ -1,115 +1,127 @@
-# ClayMind (working title)
+# ClayMind
 
-Sculpt, paint and build with real materials in your own room (Meta Quest 3/3S, WebXR, hands only, seated). What you make is heavy, bouncy, fragile or slippery for real: every piece has its own material, and the physics (weight, balance, friction, bounce, breaking, sound) follows it. Fully offline: no server, no account, no AI. Plan: `docs/PLAN.md`; status and limits: `docs/`.
+Make things from clay with your hands, give every piece a real material and colour, paint them, and
+they come to life with real physics: heavy, bouncy, fragile or slippery. Keep them in your Library
+(export as GLB), turn them into toys in your **Play Kit**, play table games with them (or ask the game
+agent to make a game from your own toys and your own rules), and do all of it **together**: 2-4 people
+join one room by a code, build on the same table and play the same games. Everything you make
+interacts with the room around it.
+
+Meta Quest 3 / 3S (WebXR, hands only, seated, no microphone). A desktop browser works too (mouse,
+or the built-in XR emulator). Sculpting, Library, Play Kit and the five built-in games work with no
+network and no AI.
 
 ## Play it
-Open the public link in **Quest Browser**, press **Start in mixed reality**, and follow the card above the clay. (A desktop browser works too, with the mouse.)
+Open the public link in **Quest Browser** and press **Start in mixed reality** (or **Enter XR** in a
+desktop browser for the emulator). Follow the card above the clay.
 
-## Run (development)
-1. Install Node 24, then `cd client && npm install`
-2. `npm run dev` starts an HTTPS dev server on port 8081 and opens the IWSDK emulator browser.
-3. Quest: same Wi-Fi, open `https://<your-pc-ip>:8081/` in Quest Browser, accept the certificate warning, then press **Enter XR**.
-4. Tests: `npm test` · types: `npm run typecheck`
+## The menu
+Quest: turn your left palm up and poke with your right index finger (Settings -> One-handed menu keeps it
+beside the clay, with a Hide button). Browser: the toolbar on the left; the round button hides or shows it.
+A category opens its actions, with **Back** first.
 
-## Release build and deploy
-1. `cd client && NODE_ENV=production npm run build` -> `client/dist/` (about 10 MB, static files only).
-2. GitHub Pages: push to GitHub, then Settings -> Pages -> Source: **GitHub Actions**. `.github/workflows/pages.yml` tests, builds and publishes on every push.
-3. Headset test: `docs/QUEST_TEST.md`.
+| Category | Actions |
+|---|---|
+| **Make** | Shape, Add, Carve, Smooth, Mirror, New piece, Join, Separate, Undo, Redo, New clay, Delete this creation |
+| **Material & Colour** | Material (the ring of materials for the piece you touched), Color, Undo |
+| **Paint** | Paint, Eraser, Color, Undo |
+| **Physics** | Bring to life (the sculpt becomes a real object), Undo |
+| **Place & Pin** | Pin / Unpin, Remove from scene, Clear scene |
+| **Library** | Open Library, Add to Library |
+| **Play Kit** | Open Play Kit (Kit, Sets, Games, Make a game with AI), Add to Play Kit |
+| **Multiplayer** | Create or join a room |
+| **Settings** | reduced motion, high contrast, left-handed, one-handed menu, sound, the tutorial again, reset |
 
-## Supported devices
-- **Meta Quest 3 / 3S** (Quest Browser): the full hands-only mixed-reality experience.
-- **Desktop browsers** (Chrome, Edge, Firefox, Safari): the 3D view with the mouse, plus the Library, Download and Import.
-- Phone AR is not part of this update (unchanged).
-
-## Menu
-- **Browser:** the round button at the bottom left hides or shows all tools (and the hint line and welcome card), so the view can show only your creation, the scene and that button. The choice is remembered.
-- **Quest:** turn your palm up for the menu (it hides when you lower the hand). With **Settings -> One-handed menu** the menu stays beside the clay; its small **Hide** button folds it down to one **Tools** button.
-- **Delete** removes what you are making now (the object you touched last, otherwise the clay): press it twice within 3 s, then you have 5 s to **Undo** (the toast's Undo button, the menu's Undo, or Ctrl+Z).
-
-## Library and Download
-- Nothing goes into the Library by itself. **Add to Library** (menu or the Library panel) asks a name (default "Clay 1", "Clay 2"; the headset uses the default) and saves a copy with a thumbnail.
-- **Library** shows a grid. Select an item, then: **Use** (a copy into the room; the item never changes), **Edit** (a linked copy: changes you make are saved back to the item), **Rename** (browser), **Download**, **Delete** (two taps, then 5 s to Undo). **Import** adds a `.claymind.json` file (or drop the file on the page).
-- **Remove from scene** (main menu for the object you touched last, or the button in an object's material ring) takes that copy off the table with a 5-second Undo; **Clear scene** (press twice) removes every object placed from the Library. Neither ever changes the Library, unlike **Delete from Library** (the saved item, forever) and **Delete this creation** (what you are making), which are red.
-- Pinned creations still come back to their spot after a reload (kept separately from the Library).
-- Stored in this browser only (IndexedDB); no account, no upload.
-
-## Play Kit (your own toys, Sets and table games; fully offline)
-- **Add to Play Kit** (menu, or "+ Add current" in the Play Kit panel) puts the current creation in your toy box with a role guessed from its shape (board, piece, launcher, target, obstacle, container, other) and its measured size and mass. One creation can be in the Library and the Play Kit.
-- **Play Kit** (menu or `O`) has three tabs. **Kit**: Place a toy on the table, Rename, change Role, Duplicate, Remove (Undo), Download kit / Import. **Sets**: "Save table as a Set" (positions relative to the table, which pieces are fixed, the game), Open, Rename, Delete (Undo). **Games**: Knock-down, Flick-and-pocket, Target throw, Tower balance, Marble run. Pick one, tap a part to choose which of your toys plays it (built-in shapes fill the rest), Play.
-- While a Set or game is on the table the clay steps aside. The game panel shows the score and has **Edit / Play** (Edit pins every piece where you put it; Play lets physics run, boards, ramps and cups stay fixed), **Pause**, **Reset** (back exactly to the start), **Rules**, **Save Set** and **End** (the clay comes back).
-- Hands: pinch to pick up and throw, flick a piece with a fast fingertip, push, stack. Mouse: drag a piece over the table and let go to throw it.
-- Games are **Game Specs** (versioned JSON: roles, layout, zones, turns and rules made only of fixed triggers and actions) run by a deterministic rule engine; no code is ever run from a spec. Kit files are `.claymind.json` (format `claymind-kit`, up to 50 MB) and import through the same Import button.
-
-### Simulate it for me (no AI, offline)
-The game HUD's second row: **Show me how** (a translucent ghost hand labelled "Demo" plays a few turns on the real table with the real physics and the live score, using only the game's hand actions at human speeds; **Pause**, **Slow**, **Replay** with the same seed, **My turn** to take over from exactly that state, **Stop**; at most 20 s), **Will it work?** (a headless physics test of what is on the table, a 3-second visible run, one to three sentences and a fix proven in simulation, applied with Undo) and **What if…** (the same game with 5-6 versions of one thing: a piece's material, so its mass, or the ramp's angle; the best is offered only if it really does better, and the replay with the same seed is checked identical). Headless runs use the game's own Havok runtime and bodies in a Web Worker (`client/src/sim/`), at most 60 s, with a Stop button.
-
-### The helper character
-A small clay blob made at start-up with ClayMind's own clay (the sculpting grid and mesher; no external 3D assets) sits at the side of the table. Tweens only: it breathes, nods when it talks, points at the clay or the table, hops when a step is done or a game is won, and wobbles while the AI or a simulation works. It speaks in a large bubble; reading aloud is optional (**Settings -> Helper voice**, off by default) and **Settings -> Helper character** hides it. There is no voice input anywhere.
-
-## Agents (optional, Update 2): architecture and how to run
-Everything above works with no AI and no network. The agent backend is an extra layer; when it is off the app says so in one line and the built-in games keep working.
-
-- **Client** (`client/`): sculpting, Library, Play Kit, the five built-in games (Game Specs run by the deterministic rule engine), the demo player and headless simulation (`src/sim/`), the helper character and the Ask AI panels (`src/helper/`).
-- **Backend** (`server/agents/`, Python): FastAPI + Agno AgentOS in one process.
-  - **Helper** (home agent) understands what the player asks (teach me to build X, what can I do with my kit, make a game, I'm stuck) and routes it.
-  - **Researcher** reads Wikipedia only when the player does not know the rules or names an unknown game, and writes a Rule Card in its own words with sources.
-  - **Game Designer** turns the player's rules or a Rule Card into a game: a built-in template plus changes (players, turns, pieces, win target, time), or a full Game Spec when no template fits.
-  - **Coach** writes step-by-step build guides; "check my work" is code.
-  - **Kit Analyst** and **Referee** are code: shape reports from geometry; spec validation (a port of the client's) plus "can it be won" checks, a repair loop (at most 2), else the closest built-in game.
-  - The Helper reaches the other agents through **A2A** on the same server (`A2A_MODE=local`, shared token) or directly (`A2A_MODE=inproc`).
-  - **Knowledge:** a per-player Kit knowledge graph (items, roles, games, rules, sources, sets) for GraphRAG-style local and global queries, a passage index (local `bge-small` embeddings plus keyword search), and per-player memory with **Delete my data** (`DELETE /v1/memory`).
-  - **Models:** free Groq models through a quota governor (per-minute and per-day budgets, circuit breaker, fall-through to the next model), strict JSON checked with Pydantic, answers cached by input hash, 12 s timeouts. Prompt-injection screening of web text with Groq's prompt-guard model.
-  - **Security:** keys only in `server/.env` (git-ignored), CORS locked to the game's origins, per-IP rate limit, AgentOS and A2A routes need the internal token, Agno telemetry off.
-- **Run the backend:** `cd server`, `python -m venv .venv`, `.venv/Scripts/python -m pip install -r requirements-agents.txt`, put `GROQ_API_KEY=...` in `server/.env`, then `.venv/Scripts/python -m agents.run` (http://127.0.0.1:8790; HTTPS with `CLAYMIND_TLS_CERT` / `CLAYMIND_TLS_KEY`). Tests: `.venv/Scripts/python -m pytest tests/agents` (no network, fake model).
-- **Run without it:** just the client; nothing changes.
-- **In the game: Ask AI** (menu). *Make a game from my kit*: tap a game (Carrom, Bowling, Ring toss, Jenga, Marble race), *Surprise me*, type a name, *I don't know the rules: look them up*, or *My own rules* (number cards: players, turns, shots, win target, time limit, plus your own words). The preview says which path ran ("Using your rules" / "Looking up the rules"), how to play, which of your toys play which part, what is missing or not possible, and the sources; Play, Adjust (the rules card, checked again before playing) or Cancel. *Teach me to build*: one step at a time, *Check my work* measures your creation and gives one fix. *Help: I'm stuck*: a short answer and one safe, undoable fix button. Typing: the browser's text box, or the **pinch keypad** in the headset (no voice input). The backend address: `?agents=<url>` once, or `http://127.0.0.1:8790` when the game runs on the same computer.
+## What you can do
+- **Make:** pinch the clay and pull to stretch it, point a finger into it to dent, open palm to smooth,
+  both hands to turn or resize. New piece starts another piece in its own colour.
+- **Material, colour, paint:** after Bring to life, touch a piece and pick its material: mass, balance,
+  friction, bounce and breaking follow it. Colour a whole piece or paint on the clay with your fingertip.
+- **Physics and the room:** objects rest on the table, roll off its edge, bounce off the walls and land on
+  the floor, with each surface's friction (table wood, floor and walls stone). In the XR environment the
+  room's own walls, floor, ceiling and furniture are colliders; without them, invisible walls stand 2 m
+  around the table. Nothing is ever lost: a creation that leaves the room floats back to the table, a Play
+  Kit piece goes back to its start. Pin fixes an object where it is.
+- **Library:** nothing is saved by itself; Add to Library saves a copy (named, with a thumbnail). Use, Edit,
+  Rename, Download, Delete (with Undo), Import. Stored in this browser only.
+- **Play Kit:** your toys (with a role guessed from their shape), Sets (a table arrangement, saved), and
+  five games run by a deterministic rule engine: Knock-down, Flick-and-pocket, Target throw, Tower balance,
+  Marble run. Pinch to pick up and throw, flick with a fingertip, push, stack. Edit / Play, Pause, Reset
+  (exactly back to the start), Rules, Save Set, End. **Show me how** on a game card lets a translucent
+  "Demo" hand play a few turns (Pause, Slow, Replay, My turn).
+- **Multiplayer:** see below.
 
 ## Download format (for game developers)
-**Download** asks the licence, *Keep my rights* or *Anyone may use this (CC0)*, which is written into the GLB's `asset.copyright`, then the file:
-- **`<name>.glb`**: binary glTF 2.0 for Unity, Unreal, Godot, Blender and three.js.
-  - A root node named after the creation, with one child node per piece named `piece_<n>_<materialId>` (for example `piece_1_steel`).
-  - One PBR material per piece, named after its material type, with base colour = the piece colour, plus roughness, metalness and opacity (glass uses alpha blending).
-  - Painted pieces carry the paint as vertex colours (`COLOR_0`) on a white base colour.
-  - Welded, indexed triangles; metres; Y-up; origin at the centre of the base.
-  - Physics on the root node: `extras.claymind = { schemaVersion, name, pieces: [{ id, materialId, massKg, density, friction, restitution }], totalMassKg, centerOfMass: [x, y, z] }` (kg, kg/m3, metres in the model's frame).
-- **`<name>.claymind.json`**: the full ClayMind project (pieces, paint, colliders, materials, colours) to import again; checked on import, at most 10 MB.
+**Download** asks the licence (*Keep my rights* or *CC0*, written into the GLB's `asset.copyright`), then:
+- **`<name>.glb`**: binary glTF 2.0 (Unity, Unreal, Godot, Blender, three.js): a root node named after the
+  creation, one child per piece `piece_<n>_<materialId>`, one PBR material per piece (base colour, roughness,
+  metalness, opacity; glass blends), paint as vertex colours (`COLOR_0`), welded indexed triangles, metres,
+  Y-up, origin at the centre of the base, and physics in `extras.claymind` (pieces with material, mass,
+  density, friction, restitution; total mass; centre of mass). Checked with the Khronos glTF validator in the tests.
+- **`<name>.claymind.json`**: the full project (pieces, paint, colliders, materials, colours) to import again.
 
-## Controls
-- **Quest (hands):** pinch the clay and pull to stretch it · point your index finger into it to dent · open palm on it to smooth · both hands pinching away from the clay to rotate/scale · turn your **left palm up** for the tool menu (Bring to life, Shape, Add, Carve, Smooth, Paint, Eraser, Mirror, Undo, Redo, New piece, Material, Color, Join, Pin / Unpin, Play Kit, Library, Add to Library, Settings, Separate, Delete, New clay) and poke a button with your right index finger. **Bring to life** turns the sculpt into a real object that flies onto your right palm; turn the hand over to drop it, or pinch an object to pick it up and throw it. **Material** opens a ring of materials for the piece you touched last.
-- **Browser:** drag on the clay = pull (Shape) or use the selected tool · Shift+drag = poke · drag empty space = turn · 1-4 tools · M mirror · Ctrl+Z / Ctrl+Y · **N = new piece** · **Enter = bring to life** · click a part of an object, then **Material** to change that part · drag an object to move it, **mouse wheel lifts it**, release to drop or throw · H debug HUD (`?debug`) · with `?devKgView`: G brain · B check beliefs · P mastery.
-- **Pieces:** **New piece** (`N`) starts another piece in its own clay colour: the next Add stroke lays it down (e.g. a head on a handle). After Bring to life, touch a piece and press **Material** (`T`) to pick its material from the ring; mass, balance, friction, bounce and breaking follow. **Separate** (`K`) makes the touched piece its own object; **Join** (`J`) sticks the touched object to one touching it.
-- **Colour and paint:** **Color** (`C`) opens the colour picker: pick a colour, then **Whole piece** colours the piece, or **Paint** (`5`) draws on the clay with your fingertip / mouse (**Eraser** `6`, brush size `[` `]`). Paint stays on the clay while you keep sculpting and carries over when it comes to life. Colour never changes the physics.
-- **Room:** **Pin / Unpin** (`P`) fixes an object where it is (snapped onto the table); grabbing it unpins it. **Library** (`L`): see *Library and Download* above; pinned things come back to their spot when you return. **Play Kit** (`O`): pebbles, dominoes and a glass plate to play with. In the headset, pinch at a far object to grab it with a ray.
-- **Settings** (`S`): reduced motion, high contrast, left-handed, one-handed menu, sound, the tutorial again, and Reset everything. The first time you start, a short tutorial card guides you from clay to a painted, pinned object.
+## The game agent (optional)
+Play Kit -> Games -> **Make a game with AI**: tap a game (Carrom, Bowling, Ring toss, Jenga, Marble race),
+*Surprise me*, type a name, *I don't know the rules: look them up*, or *My own rules* (number cards for
+players, turns, shots, win target, time limit, plus your own words; typed in the browser, or on the pinch
+keypad in the headset). The preview says which path ran, how to play, which of your toys play which part,
+what is missing or not possible, and the sources; **Play**, **Show me how**, **Adjust** (a rules card,
+checked again here) or **Cancel**.
 
-## Phase 0 spike pages
-- `/?spikes`: MR scene. Ball drop on the table (real plane on Quest, virtual elsewhere), pinch probe, impact/CCD probe, camera probe (`?camera=1`). Keys: B drop · F fast shot · N spawn 10 · R clear · C camera.
-- `/spikes/sdf.html`: SDF sculpt benchmark (`?res=64` for 64³).
-- `/spikes/hands.html`: MediaPipe webcam hand tracking.
+The agent team (`server/agents`, FastAPI + Agno AgentOS, one process):
+- **Kit Analyst** (code): a shape report and roles for each toy from its measured geometry.
+- **Researcher** (LLM): Wikipedia only when you do not know the rules or name an unknown game; the page with
+  the game's own name first; a Rule Card in its own words, with sources. Web text is screened for prompt
+  injection and summarised, never followed.
+- **Game Designer** (LLM): your rules or the Rule Card -> a built-in game plus changes (players, turns,
+  pieces, win target, time), or a full Game Spec when none fits. Your own rules always win over the web.
+- **Referee** (code): the Game Spec checked (only fixed triggers and actions, no code), plus "can it be won";
+  at most two repairs, else the closest built-in game, and you are told.
+- The game flow reaches the Researcher and the Designer over **A2A** on the same server. Free Groq models go
+  through a quota governor (per-minute and per-day budgets, fall-through, circuit breaker); answers are
+  cached; unsafe requests are refused without AI. Eval: `eval/playkit/` and `docs/EVAL_REPORT.md`.
+
+## Multiplayer (room code)
+Menu -> **Multiplayer** -> **Create a room** (a 5-character code of easy letters and digits) or **Join a
+room** (type the code, or poke it on the keypad). 2-4 players, a name and a colour each; the host can remove
+a player; anyone can leave; rooms disappear when empty. No accounts, no voice.
+
+- **Relay:** one WebSocket service on the same backend (`/v1/rooms`), memory only: it orders and forwards
+  messages and never runs anything a client sends. Limits: 4 players, message size caps, messages per second
+  per socket, sockets and new rooms per IP, origin check, names filtered.
+- **One table for everyone:** each player's own table is the shared table; seats around it by colour, so the
+  others sit across from you as a simple head and two hands with a name tag (about 15 updates a second,
+  interpolated). Wave with a raised hand to say hi.
+- **Building together:** the clay is shared at the table's centre. Strokes, Undo and Redo travel as edit
+  operations (never meshes) with a room sequence number and every client applies them in that order; Undo is
+  per player. A late joiner gets the host's snapshot plus the edits after it; the host sends a checksum every
+  5 s and a client that differs resyncs from the host.
+- **Playing together:** host-authoritative. The host starts a game (set to the room's players: turns, names
+  on the scoreboard; one-turn games give each player the same set-up), runs the physics and the rules, and
+  sends the moving pieces, scores and whose turn it is about 15 times a second. On your turn you grab and
+  throw with your own hands: your hand's pose goes to the host (the piece is locked to you), the release
+  sends the throw. If the host leaves, the game ends cleanly and the next player hosts the room.
+- **Game agent in a room:** anyone can make a game; a player's choice goes to the host, who decides.
+- **Shared Play Kit:** Kit -> Share sends a toy to the room; everyone gets a copy in their own Play Kit.
+
+## Run it
+- **Client:** Node 24; `cd client && npm install && npm run dev` (HTTPS on port 8081, opens the IWSDK
+  emulator browser). Quest on the same Wi-Fi: `https://<your-pc-ip>:8081/`, accept the certificate, Enter XR.
+  Tests: `npm test`; types: `npm run typecheck`. `?debug` shows the performance HUD.
+- **Backend (game agent and multiplayer):** `cd server`, `python -m venv .venv`,
+  `.venv/Scripts/python -m pip install -r requirements-agents.txt`, copy `.env.example` to `.env` and put
+  `GROQ_API_KEY=...` in it, then `.venv/Scripts/python -m agents.run` (http://127.0.0.1:8790). Tests:
+  `.venv/Scripts/python -m pytest -q` (no network). The game finds it at `http://127.0.0.1:8790` when it runs
+  on the same computer, or `?agents=<url>` once.
+- **Without the backend:** just the client. Sculpting, Library, Play Kit and the built-in games work; the game
+  agent and multiplayer say in one line that they are offline.
+- **Release:** `cd client && NODE_ENV=production npm run build` -> `client/dist/` (static). GitHub Pages:
+  `.github/workflows/pages.yml` tests, builds and publishes from `master`.
 
 ## Layout
-- `client/`: IWSDK + Vite + TypeScript app (`src/core`, `src/platform`, `src/sculpt`, `src/spikes`, `src/devtools`)
-- `docs/`: KNOWN_LIMITS, PERF, IDEAS (more per phase)
-- `server/`, `assets/`: arrive in Phases 2 and 4
-
-> **Plan v4 (`docs/PLAN.md`, from 2026-10-10): no AI, fully offline.** The brain graph, Debug the Brain, Mastery and the AI layer described below are switched off for players (`?devKgView`, `?devAi` bring them back for development). Every piece starts as clay; the player picks materials.
-
-## The brain (Phase 3)
-After **Bring to life**, the AI's reasoning graph appears above the table (toggle: **Brain** in the menu, or `G`). Each prediction comes from the graph:
-- **Cut a belief:** pinch (or mouse-drag) an edge's middle handle and pull it away.
-- **Add a belief:** pinch-drag (or mouse-drag) from one node onto another.
-- **Why?** Tap a prediction on the card; its reasoning path lights up step by step.
-- **Undo edit / Reset brain / Overview** are on the card. The card shows what each edit changed, e.g. "bounces 67% → 0%".
-- The brain is saved in the browser (IndexedDB) and survives reloads.
-
-## Debug the Brain and Mastery (Phase 5)
-- **Check beliefs** (menu, the agent panel's button, or `B`): the agent picks the belief about your object that is most worth testing, runs a real physics experiment on the table beside the clay, and shows each step. If the result contradicts a belief, the edge pulses red and the agent asks before removing it (or lowers its confidence if you keep it). The starting brain holds one deliberately wrong belief, "heavy things fall faster", so the first check shows this.
-- If the material guess is unsure, the agent asks which material you meant.
-- **Mastery** (menu or `P`): time to object, material guesses kept, beliefs fixed, experiments run and saved by memory, brain size, AI cache hits.
-
-## AI layer (Phase 4, optional)
-The game works fully offline: Bring to life always creates the object locally first. On top of that, the AI layer looks at the sculpt, names it, refines the material guess (the brain gains AI beliefs), and for raw sculpts swaps in a clean generated model, with progress on the object's label.
-
-- **No server** (static build, judges): an in-browser mock with shipped sample models.
-- **Local server:** see `server/README.md` (mock providers by default; Claude vision and fal.ai image-to-3D when keys are set). In dev the game finds it at `/api` automatically.
-- URL options: `?ai=off|mock|server|auto`, `?aiUrl=https://…`. The **AI** button in the menu turns it on and off.
+- `client/`: IWSDK + Vite + TypeScript (`src/sculpt`, `src/objects`, `src/physics`, `src/playkit`,
+  `src/game-agent`, `src/multiplayer`, `src/platform`, `src/ui`).
+- `server/agents/`: the game agent team and the room relay.
+- `eval/playkit/`: the game agent eval set.
+- `docs/`: QA_REPORT, EVAL_REPORT, KNOWN_LIMITS, CREDITS, AUDIT_UPDATE_3, plans and earlier reports.
+- `_archive/`: code removed in Update 3 (old AI layer, brain graph, spikes, old AI server), kept for reference.

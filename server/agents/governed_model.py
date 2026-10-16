@@ -25,6 +25,8 @@ STATE: dict[str, Any] = {"governor": None, "trace": None, "settings": None}
 FAKE_ANSWERS: dict[str, Callable[[str], str]] = {}
 
 RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
+#: wait at most this long for a busy free model (the game gives up after 30 s)
+MAX_WAIT_S = 12.0
 
 
 def install(governor: Governor, trace: Trace, settings: Any) -> None:
@@ -52,6 +54,26 @@ class GovernedGroq(Groq):
             trace.add(agent=label, model="fake", tokensIn=len(text) // 4, tokensOut=len(answer) // 4, ms=0, cached=False, ok=True)
             return ModelResponse(role="assistant", content=answer)
         est = len(text) // 4 + 800
+        last: Exception | None = None
+        for attempt in range(2):
+            if attempt:
+                # every free model was busy this minute: wait for the first one to free up (once, briefly)
+                wait = min(gov.wait_hint(p["id"], est) for p in s.chain)
+                if wait > MAX_WAIT_S:
+                    break
+                trace.add(agent=label, model="governor", ms=round(wait * 1000), cached=False, ok=True, error=f"waited {wait:.1f} s for a free model")
+                await asyncio.sleep(wait + 0.2)
+            resp = await self._try_chain(messages, assistant_message, response_format, tools, tool_choice, run_response, compress_tool_results, label, est, t0)
+            if isinstance(resp, ModelResponse):
+                return resp
+            last = resp or last
+        if last is None:
+            trace.add(agent=label, model="governor", ms=0, cached=False, ok=False, error="busy: no free-tier budget left this minute")
+        raise ModelProviderError(message=f"All free models are busy right now ({last or 'no budget left'})", status_code=503, model_name=self.name, model_id=self.id)
+
+    async def _try_chain(self, messages, assistant_message, response_format, tools, tool_choice, run_response, compress_tool_results, label, est, t0):
+        """One pass down the chain: the response, or the last error (None: no budget anywhere)."""
+        s, gov, trace = STATE["settings"], STATE["governor"], STATE["trace"]
         last: Exception | None = None
         for p in s.chain:
             if not gov.try_acquire(p["id"], est):
@@ -82,9 +104,7 @@ class GovernedGroq(Groq):
             gov.settle(p["id"], est, tin + tout)
             trace.add(agent=label, model=p["model"], tokensIn=tin, tokensOut=tout, ms=round((time.monotonic() - t0) * 1000), cached=False, ok=True)
             return resp
-        if last is None:
-            trace.add(agent=label, model="governor", ms=0, cached=False, ok=False, error="busy: no free-tier budget left this minute")
-        raise ModelProviderError(message=f"All free models are busy right now ({last or 'no budget left'})", status_code=503, model_name=self.name, model_id=self.id)
+        return last
 
     def invoke(self, *args, **kwargs) -> ModelResponse:  # sync path: same chain
         return asyncio.run(self.ainvoke(*args, **kwargs))

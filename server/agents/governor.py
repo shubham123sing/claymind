@@ -58,6 +58,22 @@ class Governor:
                 w.used += amount
             return True
 
+    def wait_hint(self, pid: str, est_tokens: int, now: float | None = None) -> float:
+        """Seconds until this model could take the request (its breaker closes, its minute rolls over)."""
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            b = self._b[pid]
+            wait = max(0.0, b.open_until - now)
+            for w, amount in ((b.rpm, 1), (b.tpm, est_tokens)):
+                if w.limit is not None and amount > w.limit:
+                    return float("inf")  # never fits this model
+                if w.limit is not None and w.used + amount > w.limit and now - w.start < w.seconds:
+                    wait = max(wait, w.start + w.seconds - now)
+            for w, amount in ((b.rpd, 1), (b.tpd, est_tokens)):
+                if w.limit is not None and w.used + amount > w.limit and now - w.start < w.seconds:
+                    return float("inf")  # out for the day
+            return wait
+
     def settle(self, pid: str, est_tokens: int, real_tokens: int) -> None:
         with self._lock:
             b = self._b[pid]
