@@ -61,7 +61,7 @@ class CoachPanel extends CanvasPanel {
   }
 }
 
-export class CoachSystem extends createSystem({}) {
+export class TutorialSystem extends createSystem({}) {
   private panel = new CoachPanel();
   private active = false;
   private startedAt = 0;

@@ -15,7 +15,7 @@ import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
 import { GameAgentSystem } from './game-agent/game-agent-system.js';
 import { SettingsSystem } from './ui/settings-panel.js';
-import { CoachSystem } from './ui/coach.js';
+import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
@@ -32,7 +32,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
     world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
     world.registerSystem(SettingsSystem);
-    world.registerSystem(CoachSystem);
+    world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
@@ -44,7 +44,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem),
-          coach: world.getSystem(CoachSystem), settings: world.getSystem(SettingsSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem),
         },
       });
     }
