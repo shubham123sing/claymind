@@ -3,7 +3,8 @@
  * shapes tinted with their colour) with a name tag, sitting at their seat around the
  * shared table. Head and hands are sent about 15 times a second and shown 120 ms late,
  * interpolated between the last two updates, so movement stays smooth over the network.
- * No voice (hands only): a raised, waving hand shows a wave to everyone.
+ * No voice (hands only): a raised, waving hand shows a wave to everyone, a thumbs-up held for
+ * half a second shows a thumbs-up.
  */
 import {
   CanvasTexture, createSystem, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial, Quaternion, SphereGeometry, Sprite, SpriteMaterial, SRGBColorSpace, Vector3,
@@ -30,6 +31,7 @@ interface Pose {
   headQ: number[];
   hands: (HandPose | null)[];
   wave?: boolean;
+  thumbs?: boolean;
 }
 
 interface Avatar {
@@ -49,17 +51,17 @@ const visorGeo = new SphereGeometry(0.05, 12, 8, 0, Math.PI * 2, 0, Math.PI / 3)
 const palmGeo = new SphereGeometry(0.035, 10, 8);
 const tipGeo = new SphereGeometry(0.011, 8, 6);
 
-function nameTag(name: string, color: string, wave: boolean): { tex: CanvasTexture; canvas: HTMLCanvasElement } {
+function nameTag(name: string, color: string): { tex: CanvasTexture; canvas: HTMLCanvasElement } {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
-  drawTag(canvas, name, color, wave);
+  drawTag(canvas, name, color, '');
   return { tex, canvas };
 }
 
-function drawTag(canvas: HTMLCanvasElement, name: string, color: string, wave: boolean): void {
+function drawTag(canvas: HTMLCanvasElement, name: string, color: string, sign: '' | '👋' | '👍'): void {
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, 512, 128);
   ctx.fillStyle = 'rgba(14,16,20,0.85)';
@@ -73,7 +75,7 @@ function drawTag(canvas: HTMLCanvasElement, name: string, color: string, wave: b
   ctx.fillStyle = '#f4f1ec';
   ctx.font = '700 52px system-ui, sans-serif';
   ctx.textBaseline = 'middle';
-  ctx.fillText(wave ? `${name} 👋` : name, 104, 66, 390);
+  ctx.fillText(sign ? `${name} ${sign}` : name, 104, 66, 390);
 }
 
 export class PresenceSystem extends createSystem({}) {
@@ -137,7 +139,7 @@ export class PresenceSystem extends createSystem({}) {
       root.add(g);
       return { root: g, palm, index, thumb };
     });
-    const { tex } = nameTag(player.name, player.color, false);
+    const { tex } = nameTag(player.name, player.color);
     const tag = new Sprite(new SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     tag.scale.set(0.24, 0.06, 1);
     tag.renderOrder = 20;
@@ -160,9 +162,9 @@ export class PresenceSystem extends createSystem({}) {
     if (!a || !d || !Array.isArray(d.head) || d.head.length !== 3) return;
     a.poses.push({ ...d, at: performance.now() });
     if (a.poses.length > 4) a.poses.shift();
-    if (d.wave && a.waveUntil < performance.now()) {
+    if ((d.wave || d.thumbs) && a.waveUntil < performance.now()) {
       a.waveUntil = performance.now() + 2500;
-      drawTag(a.tex.image as HTMLCanvasElement, a.player.name, a.player.color, true);
+      drawTag(a.tex.image as HTMLCanvasElement, a.player.name, a.player.color, d.thumbs ? '👍' : '👋');
       a.tex.needsUpdate = true;
     }
   }
@@ -185,8 +187,18 @@ export class PresenceSystem extends createSystem({}) {
     };
     const data: Pose = { at: 0, head: tableFrame.pointOut(this.v), headQ: tableFrame.quatOut(this.q), hands: [hand('left'), hand('right')] };
     if (this.waving(now)) data.wave = true;
+    if (this.thumbsUp(now)) data.thumbs = true;
     room.send('presence', { data });
   }
+
+  /** A thumbs-up held for half a second (either hand). */
+  private thumbsUp(now: number): boolean {
+    const up = input.xr && (input.hands.left.thumbsUp || input.hands.right.thumbsUp);
+    if (!up) this.thumbsSince = 0;
+    else if (!this.thumbsSince) this.thumbsSince = now;
+    return !!up && now - this.thumbsSince >= 500;
+  }
+  private thumbsSince = 0;
 
   /** A hand raised above the head and moved side to side twice within a second. */
   private waving(now: number): boolean {
@@ -239,7 +251,7 @@ export class PresenceSystem extends createSystem({}) {
     });
     if (a.waveUntil && now > a.waveUntil) {
       a.waveUntil = 0;
-      drawTag(a.tex.image as HTMLCanvasElement, a.player.name, a.player.color, false);
+      drawTag(a.tex.image as HTMLCanvasElement, a.player.name, a.player.color, '');
       a.tex.needsUpdate = true;
     }
   }

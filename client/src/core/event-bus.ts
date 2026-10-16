@@ -72,6 +72,8 @@ export type AppEvents = {
   'toy:shot': { toyId: string };
   /** `v`: the release velocity (world m/s), when a hand let go of it. */
   'toy:released': { toyId: string; v?: number[] };
+  /** Any body let go of by this player's hand (a toy or a creation), with the release velocity (world m/s). */
+  'body:released': { id: string; v: number[] };
   /** A Play Kit piece left the room (safety volume): Play Kit puts it back. */
   'toy:lost': { toyId: string };
   'toy:contact': { a: string; b: string };

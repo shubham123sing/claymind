@@ -65,7 +65,7 @@ export class XrHandsProvider implements InputProvider {
       h.pinchEnded = tr === 'end';
       h.pinching = this.f[side].pinch.pinching;
       h.tracked = false;
-      h.pointing = h.palmOpen = false;
+      h.pointing = h.palmOpen = h.thumbsUp = false;
       h.stableFrames = 0;
       h.speed = 0;
       this.f[side].pinchF.reset();
@@ -124,6 +124,9 @@ export class XrHandsProvider implements InputProvider {
     }
     h.pointing = indexExtended && extended === 1 && !h.pinching;
     h.palmOpen = extended >= 4 && !h.pinching;
+    // thumbs-up: every finger curled, the thumb tip well above the index knuckle and away from the fingers
+    const k = idxMeta.transform.position;
+    h.thumbsUp = extended === 0 && !h.pinching && t.y - k.y > 0.045 && dist > 0.05;
 
     const m = midProx.transform.position;
     h.palmCenter[0] = (w.x + m.x) / 2; h.palmCenter[1] = (w.y + m.y) / 2; h.palmCenter[2] = (w.z + m.z) / 2;

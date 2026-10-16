@@ -514,7 +514,7 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.toyId) {
       if (this.v.length() > 0.3) bus.emit('toy:shot', { toyId: rec.toyId });
       bus.emit('toy:released', { toyId: rec.toyId, v: [this.v.x, this.v.y, this.v.z] });
-    }
+    } else if (rec.creation) bus.emit('body:released', { id: rec.creation.id, v: [this.v.x, this.v.y, this.v.z] });
     if (this.v.lengthSq() < 1e-4) this.v.set(0, -0.01, 0);
     if (!rec.entity.hasComponent(PhysicsManipulation))
       rec.entity.addComponent(PhysicsManipulation, { linearVelocity: [this.v.x, this.v.y, this.v.z] });
@@ -783,7 +783,7 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   setToyLocked(id: string, locked: boolean): void {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     if (rec) rec.locked = locked;
   }
 
@@ -791,7 +791,7 @@ export class ObjectSystem extends createSystem({}) {
 
   /** The ghost hand takes a piece: it floats where demoMove puts it. */
   demoHold(id: string): boolean {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     if (!rec || rec.side || this.pointerHeld === rec) return false;
     if (rec.pinned) return false;
     this.hold(rec, 'demo', null);
@@ -799,13 +799,13 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   demoMove(id: string, at: Vector3): void {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     if (rec?.mode === 'demo') this.teleport(rec, at);
   }
 
   /** Position and turn a piece the demo hand (or a room's host) holds. */
   demoPose(id: string, at: Vector3, q: Quaternion): void {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     if (rec?.mode !== 'demo') return;
     rec.mesh.quaternion.copy(q);
     this.teleport(rec, at);
@@ -838,6 +838,39 @@ export class ObjectSystem extends createSystem({}) {
     return best ? { toyId: best.toyId ?? undefined, creationId: best.creation?.id } : null;
   }
 
+  // ---------------- multiplayer: living objects shared with the room ----------------
+
+  private anyRec(id: string): Live | undefined {
+    return this.byToy(id) ?? this.byCreation(id);
+  }
+
+  /** A creation another player brought to life, where they have it (false: already here). */
+  spawnShared(saved: SavedCreation, p: Vector3, q: Quaternion): boolean {
+    if (this.byCreation(saved.id)) return false;
+    const specs: PartSpec[] = saved.parts.map((sp) => ({
+      label: sp.label, mat: getMaterial(sp.materialId), mesh: sp.mesh, shards: sp.shards, collider: sp.collider, frame: sp.frame, color: sp.color,
+    }));
+    const rec = this.spawnBody(specs, p.toArray(), q.toArray(), { creation: structuredClone(saved.creation), mode: 'free', pinned: saved.pinned, velocity: [0, -0.01, 0] });
+    this.syncCreation(rec);
+    this.glow(rec, 0.6);
+    this.enforceLimits();
+    return true;
+  }
+
+  /** Where a body is now (live references: copy them). */
+  poseOf(id: string): { p: Vector3; q: Quaternion } | null {
+    const rec = this.anyRec(id);
+    return rec ? { p: rec.mesh.position, q: rec.mesh.quaternion } : null;
+  }
+
+  /** Put a resting body exactly where the room says it is. */
+  snapShared(id: string, p: Vector3, q: Quaternion): void {
+    const rec = this.anyRec(id);
+    if (!rec || rec.side || rec.mode !== 'free') return;
+    rec.mesh.quaternion.copy(q);
+    this.teleport(rec, p);
+  }
+
   /** Pictures of a creation rendered from its own model (the optional vision check; never a camera). */
   viewsOf(creationId: string): string[] {
     const rec = this.byCreation(creationId);
@@ -852,13 +885,13 @@ export class ObjectSystem extends createSystem({}) {
 
   /** Held by a hand here (pinch, pointer, ray) right now. */
   isHeld(id: string): boolean {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     return !!rec && (rec.side !== null || this.pointerHeld === rec);
   }
 
   /** Let go with exactly this velocity (the planned throw), counted as a shot when it moves. */
   demoRelease(id: string, v: [number, number, number]): void {
-    const rec = this.byToy(id);
+    const rec = this.anyRec(id);
     if (!rec || rec.mode !== 'demo') return;
     rec.mode = 'free';
     rec.lastInteract = performance.now();

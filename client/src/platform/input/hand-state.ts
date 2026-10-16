@@ -23,6 +23,8 @@ export interface HandState {
   indexTip: Vec3;
   /** Index extended, other fingers curled. */
   pointing: boolean;
+  /** A fist with the thumb up (a thumbs-up). */
+  thumbsUp: boolean;
   /** All fingers extended, not pinching. */
   palmOpen: boolean;
   palmCenter: Vec3;
@@ -45,6 +47,7 @@ export function createHandState(side: Handedness): HandState {
     aimPoint: [0, 0, 0],
     indexTip: [0, 0, 0],
     pointing: false,
+    thumbsUp: false,
     palmOpen: false,
     palmCenter: [0, 0, 0],
     palmNormal: [0, 1, 0],

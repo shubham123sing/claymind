@@ -20,6 +20,7 @@ import { room } from './multiplayer/room-client.js';
 import { PresenceSystem } from './multiplayer/presence.js';
 import { SharedClaySystem } from './multiplayer/shared-clay.js';
 import { SharedPlaySystem } from './multiplayer/shared-play.js';
+import { SharedBodiesSystem } from './multiplayer/shared-bodies.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
@@ -42,6 +43,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(PresenceSystem); // sets the table frame on joining: before the shared systems
     world.registerSystem(SharedClaySystem);
     world.registerSystem(SharedPlaySystem);
+    world.registerSystem(SharedBodiesSystem); // living objects shared with the room
     world.registerSystem(SettingsSystem);
     world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);

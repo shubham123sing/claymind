@@ -52,6 +52,17 @@ export class TableFrame {
   }
   private qtmp = new Quaternion();
 
+  /** a direction (a velocity) world -> canonical */
+  dirOut(v: { x: number; y: number; z: number }): number[] {
+    this.tmp.set(v.x, v.y, v.z).applyQuaternion(this.q);
+    return [round(this.tmp.x), round(this.tmp.y), round(this.tmp.z)];
+  }
+
+  /** a direction canonical -> world */
+  dirIn(c: ArrayLike<number>, out: Vector3): Vector3 {
+    return out.set(c[0], c[1], c[2]).applyQuaternion(this.qi);
+  }
+
   /** canonical -> world */
   pointIn(c: ArrayLike<number>, out: Vector3): Vector3 {
     return out.set(c[0], c[1], c[2]).applyQuaternion(this.qi).add(this.tmp.set(surface.centerX, surface.topY, surface.centerZ));

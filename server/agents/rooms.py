@@ -51,7 +51,7 @@ IDLE_S = 30 * 60
 JOIN_TIMEOUT_S = 15
 NAME_RE = re.compile(r"[^A-Za-z0-9 _\-]")
 BAD_NAME = re.compile(r"(fuck|shit|bitch|cunt|nigg|fag|rape|nazi|porn|sex|kill)", re.I)
-RELAY_TYPES = {"state", "presence", "input", "game", "vote", "emote", "kit", "check"}
+RELAY_TYPES = {"state", "presence", "input", "game", "vote", "emote", "kit", "check", "body"}
 TO_HOST = {"input", "vote"}
 HOST_ONLY = {"state", "game", "check"}
 
@@ -164,7 +164,7 @@ class RoomHub:
                 if not isinstance(msg, dict):
                     continue
                 kind = msg.get("t")
-                if kind not in ("snapshot", "game", "kit") and len(raw) > MAX_MSG:  # games and shared toys carry meshes
+                if kind not in ("snapshot", "game", "kit", "body") and len(raw) > MAX_MSG:  # games, shared toys and living objects carry meshes
                     await self.send(me, {"t": "error", "message": "Message too large"})
                     continue
                 if not self.rate_ok(me):
