@@ -15,7 +15,8 @@
 
 Messages are JSON objects with a type `t`:
   client -> relay: create {name} · join {code, name} · leave · kick {id} · op {op}
-                   state {data} (host) · presence {data} · input {data} (to the host) ·
+                   state {data} (host) · check {data} (host: the clay's checksum) ·
+                   presence {data} · input {data} (to the host) ·
                    game {data} (host) · vote {data} (to the host) · emote {data} ·
                    kit {data} · snapshot {to, seq, data} (host) · resync (ask the host)
   relay -> client: joined {code, you, host, players, seq} · players {players, host} ·
@@ -50,9 +51,9 @@ IDLE_S = 30 * 60
 JOIN_TIMEOUT_S = 15
 NAME_RE = re.compile(r"[^A-Za-z0-9 _\-]")
 BAD_NAME = re.compile(r"(fuck|shit|bitch|cunt|nigg|fag|rape|nazi|porn|sex|kill)", re.I)
-RELAY_TYPES = {"state", "presence", "input", "game", "vote", "emote", "kit"}
+RELAY_TYPES = {"state", "presence", "input", "game", "vote", "emote", "kit", "check"}
 TO_HOST = {"input", "vote"}
-HOST_ONLY = {"state", "game"}
+HOST_ONLY = {"state", "game", "check"}
 
 
 def clean_name(raw: object, fallback: str) -> str:

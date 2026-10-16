@@ -3,6 +3,10 @@
  * History stores strokes (not meshes). Undo restores the nearest checkpoint
  * snapshot and replays the remaining actions, then re-meshes only chunks whose
  * samples changed. Pure logic: runs in the sculpt worker and in node tests.
+ * Multiplayer (Update 3): every action has an owner, so undo / redo are per player
+ * (a player's last action is taken out wherever it is and the rest is replayed); every
+ * client applies the same actions in the same order, so they all get the same clay.
+ * export / import / checksum carry the clay to a late joiner and detect drift.
  */
 import { ChunkMesh, ChunkMesher, meshVolume } from './marching-cubes.js';
 import { BrushOp, SdfGrid } from './sdf-grid.js';
@@ -49,17 +53,37 @@ interface Snapshot {
   paint: Uint8Array;
 }
 
+export interface SculptAction {
+  key: string;
+  owner: string;
+  strokes: Stroke[];
+}
+
+/** Everything a late joiner needs: the grid, the history (for undo) and how it started. */
+export interface SculptSnapshot extends Snapshot {
+  res: number;
+  size: number;
+  lump: LumpSpec;
+  actions: SculptAction[];
+}
+
+/** The owner of single-player actions. */
+export const LOCAL = 'local';
+/** Actions searched back for a stroke's action key (strokes of one gesture arrive in batches). */
+const ACTION_LOOKBACK = 64;
+
 const CHECKPOINT_EVERY = 8;
 const MAX_CHECKPOINTS = 12;
 
 export class SculptEngine {
   grid: SdfGrid;
   private mesher: ChunkMesher;
-  private actions: Stroke[][] = [];
-  private redoStack: Stroke[][] = [];
+  private actions: SculptAction[] = [];
+  private redoStacks = new Map<string, SculptAction[]>();
+  /** Whose undo / redo the mesh update reports (this client's player). */
+  me = LOCAL;
   /** key = number of actions applied when the snapshot was taken. */
   private checkpoints = new Map<number, Snapshot>();
-  private currentAction = -1;
   private chunkVolume: Float64Array;
   private chunkBounds: Float32Array;
   private prevScratch: Float32Array;
@@ -99,19 +123,32 @@ export class SculptEngine {
     else this.grid.brush(s.op, s.x, s.y, s.z, s.r, s.dx ?? 0, s.dy ?? 0, s.dz ?? 0, s.piece);
   }
 
-  /** Apply strokes belonging to `actionId`. A new id starts a new undoable action. */
-  apply(actionId: number, strokes: Stroke[]): void {
-    if (actionId !== this.currentAction) {
-      this.currentAction = actionId;
-      const n = this.actions.length;
-      this.redoStack.length = 0;
-      for (const key of [...this.checkpoints.keys()]) if (key > n) this.checkpoints.delete(key);
-      if (n > 0 && n % CHECKPOINT_EVERY === 0 && !this.checkpoints.has(n)) this.saveCheckpoint(n);
-      this.actions.push([]);
+  /** Drop checkpoints taken after the first `n` actions (they no longer match the history). */
+  private dropCheckpointsAfter(n: number): void {
+    for (const key of [...this.checkpoints.keys()]) if (key > n) this.checkpoints.delete(key);
+  }
+
+  /** Apply strokes belonging to action `key` of `owner` (a new key starts a new undoable action). */
+  apply(key: string | number, strokes: Stroke[], owner = LOCAL): void {
+    const k = typeof key === 'number' ? `${owner}:${key}` : key;
+    let i = -1;
+    for (let j = this.actions.length - 1; j >= Math.max(0, this.actions.length - ACTION_LOOKBACK); j--) {
+      if (this.actions[j].key === k) {
+        i = j;
+        break;
+      }
     }
-    const action = this.actions[this.actions.length - 1];
+    if (i < 0) {
+      const n = this.actions.length;
+      this.redoStacks.delete(owner);
+      this.dropCheckpointsAfter(n);
+      if (n > 0 && n % CHECKPOINT_EVERY === 0 && !this.checkpoints.has(n)) this.saveCheckpoint(n);
+      this.actions.push({ key: k, owner, strokes: [] });
+      i = n;
+    } else if (i < this.actions.length - 1) this.dropCheckpointsAfter(i); // another player acted since
+    const action = this.actions[i];
     for (const s of strokes) {
-      action.push(s);
+      action.strokes.push(s);
       this.applyStroke(s);
     }
   }
@@ -125,22 +162,67 @@ export class SculptEngine {
     }
   }
 
-  undo(): boolean {
-    if (this.actions.length === 0) return false;
-    this.redoStack.push(this.actions.pop()!);
-    this.currentAction = -1;
+  /** Undo `owner`'s last action (others' later actions stay). */
+  undo(owner = LOCAL): boolean {
+    let i = -1;
+    for (let j = this.actions.length - 1; j >= 0; j--) if (this.actions[j].owner === owner) (i = j), (j = -1);
+    if (i < 0) return false;
+    const [action] = this.actions.splice(i, 1);
+    if (!this.redoStacks.has(owner)) this.redoStacks.set(owner, []);
+    this.redoStacks.get(owner)!.push(action);
+    this.dropCheckpointsAfter(i);
     this.rebuild();
     return true;
   }
 
-  redo(): boolean {
-    const action = this.redoStack.pop();
+  redo(owner = LOCAL): boolean {
+    const action = this.redoStacks.get(owner)?.pop();
     if (!action) return false;
     // brushes (and 'reset') mark their own dirty chunks while re-applying
+    this.dropCheckpointsAfter(this.actions.length);
     this.actions.push(action);
-    for (const s of action) this.applyStroke(s);
-    this.currentAction = -1;
+    for (const s of action.strokes) this.applyStroke(s);
     return true;
+  }
+
+  /** The clay and its history, for a player who joins later. */
+  exportState(): SculptSnapshot {
+    return { ...this.snapshot(), res: this.grid.res, size: this.size, lump: { ...this.lump }, actions: this.actions.map((a) => ({ ...a, strokes: [...a.strokes] })) };
+  }
+
+  /** Take over a snapshot exported by another client (same grid, same history). */
+  importState(snap: SculptSnapshot): void {
+    if (snap.res !== this.grid.res || snap.size !== this.size) {
+      this.size = snap.size;
+      this.resample(snap.res);
+    }
+    this.lump = { ...snap.lump };
+    const base = new SdfGrid(snap.res, this.size);
+    base.fillSphere(this.lump.x, this.lump.y, this.lump.z, this.lump.r);
+    this.checkpoints.clear();
+    this.checkpoints.set(0, { data: base.data, labels: base.labels, paint: base.paint });
+    this.actions = snap.actions.map((a) => ({ ...a, strokes: [...a.strokes] }));
+    this.redoStacks.clear();
+    this.grid.data.set(snap.data);
+    this.grid.labels.set(snap.labels);
+    this.grid.paint.set(snap.paint);
+    this.grid.markAllDirty();
+  }
+
+  /** A hash of the clay (shape to 0.01 mm, pieces, paint): equal on every client in sync. */
+  checksum(): number {
+    let h = 0x811c9dc5;
+    const mix = (v: number) => {
+      h ^= v & 0xffff;
+      h = Math.imul(h, 0x01000193);
+      h ^= (v >>> 16) & 0xffff;
+      h = Math.imul(h, 0x01000193);
+    };
+    const { data, labels, paint } = this.grid;
+    for (let i = 0; i < data.length; i++) mix(Math.round(data[i] * 1e5));
+    for (let i = 0; i < labels.length; i++) mix(labels[i]);
+    for (let i = 0; i < paint.length; i += 4) mix(paint[i] | (paint[i + 1] << 8) | (paint[i + 2] << 16) | (paint[i + 3] << 24));
+    return h >>> 0;
   }
 
   private rebuild(): void {
@@ -153,7 +235,7 @@ export class SculptEngine {
     this.grid.data.set(cp.data);
     this.grid.labels.set(cp.labels);
     this.grid.paint.set(cp.paint);
-    for (let a = best; a < this.actions.length; a++) for (const s of this.actions[a]) this.applyStroke(s);
+    for (let a = best; a < this.actions.length; a++) for (const s of this.actions[a].strokes) this.applyStroke(s);
     this.grid.dirty.fill(0);
     this.grid.markChangedSince(this.prevScratch, this.prevLabels, this.prevPaint);
   }
@@ -174,7 +256,6 @@ export class SculptEngine {
     this.checkpoints.clear();
     this.checkpoints.set(0, { data: base.data, labels: base.labels, paint: base.paint });
     this.checkpoints.set(this.actions.length, this.snapshot());
-    this.currentAction = -1;
   }
 
   /** Re-mesh dirty chunks and return them plus aggregate stats. */
@@ -200,8 +281,8 @@ export class SculptEngine {
       chunks,
       aabb: this.aabb(),
       volume: this.volume(),
-      canUndo: this.actions.length > 0,
-      canRedo: this.redoStack.length > 0,
+      canUndo: this.actions.some((a) => a.owner === this.me),
+      canRedo: (this.redoStacks.get(this.me)?.length ?? 0) > 0,
       res: this.grid.res,
       piecesMask: chunks.length ? (this.mask = this.grid.piecesMask()) : this.mask,
     };

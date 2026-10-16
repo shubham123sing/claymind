@@ -10,13 +10,18 @@ import { describe, ShapeDescriptor } from '../objects/descriptor.js';
 import { MatchResult, rank } from '../objects/matcher.js';
 import { TEMPLATES } from '../objects/templates.js';
 import type { Sdf } from '../objects/csg.js';
-import { LumpSpec, MeshUpdate, SculptEngine, Stroke } from './sculpt-engine.js';
+import { LumpSpec, MeshUpdate, SculptEngine, type SculptSnapshot, Stroke } from './sculpt-engine.js';
 
 export type SculptRequest =
   | { type: 'init'; id: number; res: number; size: number; lump: LumpSpec }
-  | { type: 'strokes'; id: number; action: number; strokes: Stroke[] }
-  | { type: 'undo'; id: number }
-  | { type: 'redo'; id: number }
+  | { type: 'strokes'; id: number; action: number | string; strokes: Stroke[]; owner?: string }
+  | { type: 'undo'; id: number; owner?: string }
+  | { type: 'redo'; id: number; owner?: string }
+  /** multiplayer: whose undo / redo the mesh updates report */
+  | { type: 'me'; id: number; owner: string }
+  | { type: 'export'; id: number }
+  | { type: 'import'; id: number; snap: SculptSnapshot }
+  | { type: 'checksum'; id: number }
   | { type: 'resample'; id: number; res: number }
   | { type: 'bake'; id: number; scale: number; threshold: number; pieces: number; seed: number };
 
@@ -41,7 +46,15 @@ export interface BakeResponse {
   baked: BakedObject | null;
 }
 
-export type WorkerResponse = SculptResponse | BakeResponse;
+/** Answers to export / checksum (they do not re-mesh). */
+export interface DataResponse {
+  type: 'data';
+  id: number;
+  snap?: SculptSnapshot;
+  checksum?: number;
+}
+
+export type WorkerResponse = SculptResponse | BakeResponse | DataResponse;
 
 let engine: SculptEngine | null = null;
 let templates: { id: string; descriptor: ShapeDescriptor; sdf: Sdf }[] | null = null;
@@ -115,9 +128,20 @@ self.onmessage = (e: MessageEvent<SculptRequest>) => {
   }
   if (!engine) return;
   if (m.type === 'bake') return bake(m);
-  if (m.type === 'strokes') engine.apply(m.action, m.strokes);
-  else if (m.type === 'undo') engine.undo();
-  else if (m.type === 'redo') engine.redo();
+  if (m.type === 'export') {
+    const snap = engine.exportState();
+    return post({ type: 'data', id: m.id, snap }, [snap.data.buffer as ArrayBuffer, snap.labels.buffer as ArrayBuffer, snap.paint.buffer as ArrayBuffer]);
+  }
+  if (m.type === 'checksum') return post({ type: 'data', id: m.id, checksum: engine.checksum() });
+  if (m.type === 'strokes') engine.apply(m.action, m.strokes, m.owner);
+  else if (m.type === 'undo') engine.undo(m.owner);
+  else if (m.type === 'redo') engine.redo(m.owner);
+  else if (m.type === 'me') engine.me = m.owner;
+  else if (m.type === 'import') {
+    engine.importState(m.snap);
+    send(m.id, performance.now() - t0, true);
+    return;
+  }
   else if (m.type === 'resample') {
     engine.resample(m.res);
     send(m.id, performance.now() - t0, true);

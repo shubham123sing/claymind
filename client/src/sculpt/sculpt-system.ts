@@ -229,13 +229,26 @@ export class SculptSystem extends createSystem({}) {
 
   // ---------- placement & transforms ----------
 
+  /** Multiplayer: where the shared clay sits on this player's table, and its turn (null: in front of me). */
+  private roomPlace: { x: number; z: number; rotY: number } | null = null;
+
+  setRoomPlace(place: { x: number; z: number; rotY: number } | null): void {
+    this.roomPlace = place;
+    this.surfaceVersion = -1; // placed on the next frame
+  }
+
+  /** The worker client (multiplayer routes edits through it). */
+  get sculptClient(): SculptClient {
+    return this.client;
+  }
+
   private placeClay(): void {
     this.world.camera.getWorldPosition(this.head);
     nearestSurfacePoint(this.head.x, this.head.z, 0.2, this.placeTmp);
-    const [x, z] = this.placeTmp;
+    const [x, z] = this.roomPlace ? [this.roomPlace.x, this.roomPlace.z] : this.placeTmp;
     this.view.root.position.x = x;
     this.view.root.position.z = z;
-    this.view.root.rotation.y = Math.atan2(this.head.x - x, this.head.z - z);
+    this.view.root.rotation.y = this.roomPlace ? this.roomPlace.rotY : Math.atan2(this.head.x - x, this.head.z - z);
     this.view.ground.position.set(x, surface.topY, z);
     this.snapToSurface();
   }

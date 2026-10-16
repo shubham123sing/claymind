@@ -30,6 +30,11 @@ export class TableFrame {
     this.qi.copy(this.q).invert();
   }
 
+  /** A turn around Y in the canonical frame -> the same turn in my world. */
+  yawIn(canonical: number): number {
+    return canonical + this.yaw - this.seat;
+  }
+
   /** world -> canonical (rounded to mm for the wire) */
   pointOut(p: { x: number; y: number; z: number }): number[] {
     this.tmp.set(p.x - surface.centerX, p.y - surface.topY, p.z - surface.centerZ).applyQuaternion(this.q);
