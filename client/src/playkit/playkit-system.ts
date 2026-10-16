@@ -13,7 +13,7 @@
  * meanwhile). The rule engine sees pieces in that frame.
  */
 import {
-  BufferGeometry, createSystem, DoubleSide, EdgesGeometry, Entity, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera,
+  BufferGeometry, createSystem, DoubleSide, EdgesGeometry, Entity, Line, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera,
   PhysicsSystem, PlaneGeometry, Quaternion, Raycaster, RingGeometry, Vector2, Vector3,
 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
@@ -269,6 +269,15 @@ export class PlayKitSystem extends createSystem({}) {
       obj.renderOrder = 5;
       this.toWorld(z.center[0], y, z.center[2], obj.position);
       this.zoneMarks.push({ entity: this.world.createTransformEntity(obj), geo, mat });
+    }
+    // paths: a line just above the table through their points
+    for (const path of spec.paths ?? []) {
+      const pts = path.points.map((q) => this.toWorld(q[0], Math.max(q[1], 0) + 0.003, q[2]));
+      const geo = new BufferGeometry().setFromPoints(pts);
+      const mat = new LineBasicMaterial({ color: 0x9fd0f5, transparent: true, opacity: 0.9 });
+      const line = new Line(geo, mat);
+      line.renderOrder = 5;
+      this.zoneMarks.push({ entity: this.world.createTransformEntity(line), geo, mat });
     }
   }
 
