@@ -188,7 +188,7 @@ export class SculptSystem extends createSystem({}) {
         { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
       ]),
       group('mp', 'Multiplayer', '⚇', 0x5fbf72, [
-        { id: 'room', label: 'Room', icon: '⚇', color: 0x5fbf72, enabled: () => false, onPress: () => {} },
+        { id: 'room', label: 'Create or join a room', icon: '⚇', color: 0x5fbf72, onPress: () => bus.emit('multiplayer:toggle', {}) },
       ]),
       { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
     ];

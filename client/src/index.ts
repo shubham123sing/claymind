@@ -14,6 +14,7 @@ import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
 import { GameAgentSystem } from './game-agent/game-agent-system.js';
+import { MultiplayerSystem } from './multiplayer/multiplayer-system.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
@@ -31,6 +32,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(LibrarySystem);
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
     world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
+    world.registerSystem(MultiplayerSystem); // room panel before objects too
     world.registerSystem(SettingsSystem);
     world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);
@@ -43,7 +45,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
-          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem),
+          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), multiplayer: world.getSystem(MultiplayerSystem),
           coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem),
         },
       });

@@ -18,7 +18,7 @@ import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { applyNumbers, numbersOf, rulesInWords } from './adjust.js';
 import { agentApi, OFFLINE, OfflineError, type GameAnswer } from './agent-client.js';
 import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game-agent-panel.js';
-import { KeypadPanel } from './keypad.js';
+import { KeypadPanel } from '../ui/keypad.js';
 
 const IDLE_CLOSE_MS = 90000;
 
