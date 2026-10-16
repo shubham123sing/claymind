@@ -130,15 +130,28 @@ export function bind(words: Word[], attention: Attention[], now: { pointed?: str
  * Typed text has no timing that matches the gestures (it is typed afterwards): pointing words
  * bind to the gestures in the order they were made. Object words take the items in the order
  * first shown, place words the zones and paths in order; a plural word takes the items left
- * over after the singular words that follow it have theirs.
+ * over after the singular words that follow it have theirs. With `nameOf`, a pointing word followed
+ * by a word of a shown piece's name ("this marble") takes that piece, whatever the order.
  */
-export function bindOrdered(words: Word[], attention: Attention[]): BindResult {
+export function bindOrdered(words: Word[], attention: Attention[], nameOf?: (item: string) => string): BindResult {
   const res: BindResult = { bindings: [], unresolved: [], ambiguous: [] };
   const events = [...attention].sort((a, b) => a.t - b.t);
   const firstSeen = (kinds: TargetKind[]) => [...new Map(events.filter((a) => kinds.includes(kindOf(a)) && idOf(a)).map((a) => [idOf(a), kindOf(a)] as const)).entries()];
-  const items = firstSeen(['item']).map(([id]) => id);
+  let items = firstSeen(['item']).map(([id]) => id);
   const places = firstSeen(['zone', 'path']);
   const kinds = words.map((_, i) => deixis(words, i));
+  // "this marble": the one shown piece whose name has that word is meant
+  const named = new Map<number, string>();
+  if (nameOf) {
+    const clean = (w: string) => w.toLowerCase().replace(/[^a-z]/g, '');
+    kinds.forEach((d, index) => {
+      const next = words[index + 1] && clean(words[index + 1].text);
+      if (d !== 'object' || !next || next.length < 3) return;
+      const fits = items.filter((id) => !named.has(-1) && ![...named.values()].includes(id) && nameOf(id).toLowerCase().split(/[^a-z]+/).some((w) => w === next || w === next.replace(/s$/, '')));
+      if (fits.length === 1) named.set(index, fits[0]);
+    });
+    items = items.filter((id) => ![...named.values()].includes(id));
+  }
   let ii = 0, pi = 0;
   kinds.forEach((d, index) => {
     if (!d) return;
@@ -150,6 +163,7 @@ export function bindOrdered(words: Word[], attention: Attention[]): BindResult {
       ii += ids.length;
       res.bindings.push({ index, word, kind: 'item', ids, dt: 0 });
     } else if (d === 'object') {
+      if (named.has(index)) return void res.bindings.push({ index, word, kind: 'item', ids: [named.get(index)!], dt: 0 });
       if (ii >= items.length) return void res.unresolved.push({ index, word });
       res.bindings.push({ index, word, kind: 'item', ids: [items[ii++]], dt: 0 });
     } else if (pi < places.length) {

@@ -48,7 +48,7 @@ const STOP = new Set(['and', 'aur', 'but', 'then', 'phir', 'or']);
 /** "throw this", "roll it": what a verb does something to is a ball */
 const MOVE_VERBS = new Set(['throw', 'roll', 'flick', 'kick', 'toss', 'shoot', 'drop', 'push', 'fenko', 'phenko', 'maaro', 'daalo', 'gira', 'girao']);
 /** "at that": a target; "into that": a goal */
-const PREPOSITIONS: Record<string, RoleWord> = { at: 'target', into: 'goal', in: 'goal', inside: 'goal', mein: 'goal', andar: 'goal' };
+const PREPOSITIONS: Record<string, RoleWord> = { at: 'target', into: 'goal', in: 'goal', inside: 'goal', mein: 'goal', andar: 'goal', down: 'launcher', through: 'launcher', along: 'launcher' };
 
 /** The role said about the pointing word at `index`: a role word after it in its phrase ("this is the ball"), else a cue before it ("throw this", "at that", "ball yeh"). */
 function roleNear(words: Word[], index: number): RoleWord | null {
@@ -58,10 +58,14 @@ function roleNear(words: Word[], index: number): RoleWord | null {
     if (STOP.has(w) || (i > index + 1 && deixis(words, i))) break; // the next phrase or the next pointing word
     const role = roleWordOf(w);
     if (role) return role;
+    // "this rolls", "isko usme daalo" (Hindi: the verb comes last)
+    if (MOVES.has(w) || w === 'daalo' || w === 'dalo' || w === 'fenko' || w === 'phenko') return 'ball';
     if (/[,.;!?]$/.test(words[i].text)) break;
   }
   for (let i = index - 1; i >= 0 && i >= index - 2; i--) {
     const w = clean(i);
+    // "look at this" is not aiming at it
+    if (w === 'at' && i > 0 && ['look', 'looks', 'see', 'dekho', 'stare'].includes(clean(i - 1))) break;
     if (PREPOSITIONS[w]) return PREPOSITIONS[w];
     if (MOVE_VERBS.has(w)) return 'ball';
     const role = roleWordOf(w);
@@ -106,30 +110,88 @@ export function tagged(words: Word[], bindings: Binding[], name: (item: string) 
   return { text, items, refs };
 }
 
-const FILLER = new Set(['is', 'are', 'the', 'a', 'an', 'my', 'our', 'hai', 'hain', 'ko', 'will', 'be', 'as']);
+const FILLER = new Set(['is', 'are', 'the', 'a', 'an', 'my', 'our', 'hai', 'hain', 'ko', 'will', 'be', 'as', 'all', 'of']);
 const sameWord = (a: string | undefined, b: string) => !!a && (a === b || a === `${b}s` || a === `${b}es` || b === `${a}s`);
 
+/** Cue words for typed sentences with no role word next to a piece (English and Hinglish). */
+const MOVED_BY = new Set(['throw', 'roll', 'flick', 'toss', 'bowl', 'drop', 'kick', 'shoot', 'push', 'send', 'get', 'slide', 'fenko', 'phenko', 'daalo', 'dalo']);
+const MOVES = new Set(['rolls', 'roll', 'goes', 'go', 'slides', 'falls', 'drops', 'flies', 'jayega', 'jaati', 'jaata', 'girega']);
+const KNOCK = new Set(['knock', 'topple', 'girao', 'gira', 'giraao', 'hit']);
+const BUILD = new Set(['stack', 'build', 'pile', 'banao', 'bana', 'jodo']);
+/** after a piece's name: it moves (English prepositions) or it holds (Hindi postpositions) */
+const AFTER: Record<string, RoleWord> = { into: 'ball', in: 'ball', at: 'ball', to: 'ball', onto: 'ball', toward: 'ball', towards: 'ball', down: 'ball', through: 'ball', past: 'ball', mein: 'goal', me: 'goal', andar: 'goal' };
+/** before a piece's name */
+const BEFORE: Record<string, RoleWord> = { at: 'target', into: 'goal', inside: 'goal', down: 'launcher', through: 'launcher', along: 'launcher', on: 'board', onto: 'board' };
+const JOIN = new Set(['and', 'or', 'aur', 'ya']);
+
+/** The role a sentence's cues give the piece named at words[i .. i+len-1] (null: none). */
+function cueRole(words: string[], i: number, len: number): RoleWord | null {
+  const verbs = new Set(words);
+  const has = (set: Set<string>) => [...set].some((v) => verbs.has(v));
+  // after the name
+  const next = words[i + len], next2 = words[i + len + 1];
+  if (next && AFTER[next]) return AFTER[next];
+  if (next && MOVES.has(next)) return 'ball';
+  if (next && KNOCK.has(next) && next !== 'hit') return 'target'; // "bottles girao" (Hindi: the object comes before its verb)
+  if (next === 'ko') {
+    // "goli ko katori mein daalo": what the verb at the end does to it
+    const verb = words.slice(i + len + 1).find((w) => MOVED_BY.has(w) || KNOCK.has(w) || BUILD.has(w));
+    if (verb) return MOVED_BY.has(verb) ? 'ball' : 'target';
+  }
+  if (next === 'se') return has(BUILD) ? 'target' : 'ball'; // "lakdi se tower banao" / "gend se bottles girao"
+  if (next === 'with' && next2 && KNOCK.has(next2)) return 'ball';
+  // before the name (over the / a / an)
+  let j = i - 1;
+  while (j >= 0 && ['the', 'a', 'an', 'all', 'these', 'those'].includes(words[j])) j--;
+  const prev = words[j];
+  if (prev === undefined) return null;
+  if (MOVED_BY.has(prev)) return 'ball';
+  if (KNOCK.has(prev) || BUILD.has(prev)) return 'target';
+  if (prev === 'with') return has(BUILD) ? 'target' : has(KNOCK) ? 'tool' : null;
+  return BEFORE[prev] ?? null;
+}
+
 /**
- * Words only (no hands): pieces named in the words ("the Red ball is the ball", "the blocks are
- * the targets", "cup goal hai"). A name several pieces share ("Block 1", "Block 2" -> "block")
- * names them all. The role word comes after the name (over is / are / the / hai), else just before.
+ * Words only (no hands): pieces named in the words. A role word next to the name first ("the Red
+ * ball is the ball", "the blocks are the targets", "cup goal hai"); else the sentence's cues ("toss
+ * the sock ball into the basket", "goli ko katori mein daalo", "gend se bottles girao"); pieces
+ * joined by and / or share a role ("the mug or the bowl"). A name several pieces share ("Block 1",
+ * "Block 2" -> "block") names them all.
  */
 export function rolesFromNames(text: string, items: { key: string; name: string }[]): RoleAssignment[] {
   const words = tokens(text);
-  const names = items.map((it) => ({ ...it, w: tokens(it.name).filter((x) => !/^\d+$/.test(x)) })).filter((n) => n.w.length);
+  const names = items.map((it) => ({ ...it, w: tokens(it.name).filter((x) => !/^\d+$/.test(x) && x.length > 1) })).filter((n) => n.w.length); // "Block 2", "Coin A" -> the shared word
   const out: RoleAssignment[] = [];
+  let pending: string[] = [], last: { role: RoleWord; end: number } | null = null;
   for (let i = 0; i < words.length; i++) {
     const hits = names.filter((n) => n.w.every((x, k) => sameWord(words[i + k], x)));
     if (!hits.length) continue;
     const len = Math.max(...hits.map((h) => h.w.length));
+    const keys = hits.filter((h) => h.w.length === len).map((h) => h.key);
     let role: RoleWord | null = null, end = i + len - 1;
     for (let j = i + len; j < words.length && j < i + len + 4 && !role; j++) {
       role = roleWordOf(words[j]);
       if (role) end = j; // "the board is the board": the second "board" is the role, not a name
       else if (!FILLER.has(words[j])) break;
     }
+    const named = !!role; // "X is the Y" ends its own phrase: its role is not shared over an "and"
     for (let j = i - 1; j >= 0 && j >= i - 2 && !role; j--) role = roleWordOf(words[j]);
-    if (role) addRole(out, role, hits.filter((h) => h.w.length === len).map((h) => h.key));
+    // "the mug or the bowl": the piece before the and / or gives its role
+    let k = i - 1;
+    while (k >= 0 && ['the', 'a', 'an'].includes(words[k])) k--;
+    if (!role && last && JOIN.has(words[k]) && k === last.end + 1) role = last.role;
+    role ??= cueRole(words, i, len);
+    if (role) {
+      addRole(out, role, [...pending, ...keys]);
+      pending = [];
+      last = named ? null : { role, end };
+    } else {
+      // no role yet: "the mug and the bowl are goals" gives it to both
+      let n = i + len;
+      while (words[n] && ['the', 'a', 'an'].includes(words[n])) n++;
+      pending = JOIN.has(words[n]) ? [...pending, ...keys] : [];
+      last = null;
+    }
     i = end;
   }
   return out;

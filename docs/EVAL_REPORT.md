@@ -82,6 +82,18 @@ The same intent given three ways: **chat** = typed words, no hands; **cards** = 
 
 What it says: with the hands (gestures + cards) the game understood every held-out scenario; combined is good but ordered binding of typed words is brittle (two wrong roles, one from "look at this and that": "at" read as "the target"); chat only, offline, misses most free sentences ("toss the sock ball into the basket"): words cannot mark zones, and the name matcher only reads "X is the Y" shapes. Online, the Intent Resolver and the Designer read such sentences (below), with free-model reliability.
 
+### Typed words, second round (branch `v5.1-typed-words`, 2026-10-17)
+
+Typed sentences now read cues around a piece's name when no role word is next to it (English and Hinglish: "toss the sock ball **into** the basket", "**roll** the ball **at** the pins", "goli ko katori **mein** daalo", "lakdi **se** tower banao", "the mug **or** the bowl"), and a pointing word followed by a word of a shown piece's name ("this **marble**") binds to that piece whatever the order. The first held-out set above became tuning data (after: chat 6/8, roles 21/21; combined 8/8). A **second held-out set** (`eval/pointsay/modes-heldout-2.json`) was written and committed **before** this work and scored once after it, with no change after:
+
+| Mode | All right | Game right | Roles right | Marks kept | Confirm cards | Wrong roles |
+|---|---|---|---|---|---|---|
+| Chat only | 5/8 | 7/8 | 16/21 | 8/8 | 0 | 5 |
+| Gestures + cards | 8/8 | 8/8 | 21/21 | 8/8 | 0 | 0 |
+| Combined | 7/8 | 7/8 | 18/21 | 8/8 | 0 | 0 |
+
+Chat only went from 1/8 to 5/8, but the cues now sometimes give a piece the wrong role (5 wrong roles: "gend se bottles girao", "get the bead into the mug or the bowl, the mug and the bowl are goals", "flick the flat disc to send the tokens into the pockets"); before, words only left pieces unassigned. Hands stay the reliable way: gestures + cards 8/8 with no wrong role. The same author wrote the rules and both held-out sets, so these are optimistic.
+
 ## Intent Resolver (online, free model)
 
 4 live sentences with pointed items as tags (2026-10-16, qwen / gpt-oss chain): 3/4 right. Miss: "hit [A] with [B] past [C]" named the pebble the target (should be the ball); [C] was left unsure (correct: never guessed). Too few to be a measure; it only names items the code could not.
