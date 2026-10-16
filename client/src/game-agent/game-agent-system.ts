@@ -61,6 +61,8 @@ export class GameAgentSystem extends createSystem({}) {
       (m.material as { depthTest: boolean }).depthTest = false;
       this.world.createTransformEntity(m);
     }
+    // a hosted backend may be asleep (free tier): one quiet check now wakes it while the player builds
+    void agentApi.online();
     this.cleanupFuncs.push(
       bus.on('gameagent:open', () => this.open()),
       // in a room anyone can make a game; the host decides what the room plays

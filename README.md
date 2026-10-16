@@ -135,6 +135,11 @@ a player; anyone can leave; rooms disappear when empty. No accounts, no voice.
   agent and multiplayer say in one line that they are offline.
 - **Release:** `cd client && NODE_ENV=production npm run build` -> `client/dist/` (static). GitHub Pages:
   `.github/workflows/pages.yml` tests, builds and publishes from `master`.
+- **Hosted backend:** `render.yaml` (Render, free web service): Render dashboard -> New -> Blueprint -> this
+  repository, and set `GROQ_API_KEY` when asked. The public build uses the address in
+  `client/src/game-agent/public-backend.ts`. Free tier: it sleeps after 15 minutes idle and needs about a
+  minute to wake (the game pings it on load); its disk is wiped on restart. Out of memory: set
+  `CLAYMIND_EMBEDDINGS=0`.
 
 ## Layout
 - `client/`: IWSDK + Vite + TypeScript (`src/sculpt`, `src/objects`, `src/physics`, `src/playkit`,

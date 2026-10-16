@@ -44,6 +44,9 @@ class Settings:
     web: bool = True
     chain: list[dict] = field(default_factory=list)
     guard: dict = field(default_factory=dict)
+    #: the local embedding model for "something similar" (off: word matching only, less memory)
+    embeddings: bool = True
+    models_dir: Path = SERVER / ".data" / "models"
 
     def key(self, env_name: str) -> str | None:
         return os.environ.get(env_name) or None
@@ -53,13 +56,15 @@ def load_settings() -> Settings:
     load_env_file()
     providers = json.loads((PKG / "providers.json").read_text(encoding="utf-8"))
     s = Settings(
-        port=int(os.environ.get("CLAYMIND_AGENTS_PORT", "8790")),
+        # a host's own PORT (Render, Koyeb, ...) when CLAYMIND_AGENTS_PORT is not set
+        port=int(os.environ.get("CLAYMIND_AGENTS_PORT") or os.environ.get("PORT") or "8790"),
         a2a_mode=os.environ.get("A2A_MODE", "local"),
         allowed_origins=[o.strip() for o in os.environ.get("CLAYMIND_ORIGINS", DEFAULT_ORIGINS).split(",") if o.strip()],
         rate_per_min=int(os.environ.get("CLAYMIND_RATE_PER_MIN", "30")),
         timeout_s=float(os.environ.get("CLAYMIND_LLM_TIMEOUT_S", "12")),
         fake_llm=os.environ.get("CLAYMIND_FAKE_LLM") == "1",
         web=os.environ.get("CLAYMIND_WEB", "1") == "1",
+        embeddings=os.environ.get("CLAYMIND_EMBEDDINGS", "1") == "1",
         chain=providers["chain"],
         guard=providers.get("guard", {}),
     )
@@ -67,6 +72,8 @@ def load_settings() -> Settings:
         s.a2a_token = os.environ["A2A_TOKEN"]
     if os.environ.get("CLAYMIND_DATA_DIR"):
         s.data_dir = Path(os.environ["CLAYMIND_DATA_DIR"])
+    if os.environ.get("CLAYMIND_MODELS_DIR"):
+        s.models_dir = Path(os.environ["CLAYMIND_MODELS_DIR"])
     if s.a2a_mode not in ("local", "inproc"):
         raise ValueError("A2A_MODE must be local or inproc")
     s.data_dir.mkdir(parents=True, exist_ok=True)

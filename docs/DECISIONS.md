@@ -14,4 +14,4 @@
 - **Snapshots on the wire:** gzip via the browser's CompressionStream + base64: no dependency.
 - **Point + Say:** pure-code binder (2 s window, gesture weights) and intent rules in the client; the Intent Resolver (LLM) only names roles for items the code could not, and the pointing always wins.
 - **Vision check:** Groq qwen3.8-27b (takes images, free tier) on the game's own rendered views (no camera: Quest Browser gives web apps none); off by default in Settings; one image with two views (~1.3k tokens each image, so 2-3 toys a minute).
-- **Hosting:** GitHub Pages for the static client (already set up); backend host to be chosen in Phase 7.
+- **Hosting:** GitHub Pages for the static client; the backend (agent + relay) on Render's free web service via `render.yaml` (512 MB, sleeps after 15 min idle, about a minute to wake; Hugging Face Docker Spaces now need a paid plan). The game pings it on load to wake it.
