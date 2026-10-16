@@ -20,7 +20,7 @@
  */
 import { throwVelocity } from './throw.js';
 import {
-  Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  Box3, BufferAttribute, Color, BufferGeometry, createSystem, Entity, Group, Line, LineBasicMaterial, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PerspectiveCamera, PhysicsBody, PhysicsManipulation, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem, Quaternion,
   Raycaster, Sphere, Vector2, Vector3,
 } from '@iwsdk/core';
@@ -148,6 +148,8 @@ const MATERIAL_REBUILD_DELAY = 400;
 const MAX_CREATIONS = 8;
 const MAX_PIECES = 24;
 const MAX_THROW = 6;
+/** Assisted flick: pull (m) -> speed (m/s), the same range as a fingertip flick; lift more than this to grab instead. */
+const AIM_MIN_PULL = 0.015, AIM_MAX_PULL = 0.15, FLICK_AIM_MIN = 1.2, FLICK_AIM_MAX = 2.5, AIM_LIFT = 0.05;
 /** A held tool never moves faster than this (m/s): a hard swing, not a glitch. */
 const TOOL_MAX_SPEED = 8;
 /** Play Kit pieces on the table at once. */
@@ -409,6 +411,62 @@ export class ObjectSystem extends createSystem({}) {
     if (rec.hist.length > 16) rec.hist.shift();
   }
   private qa: number[] = [0, 0, 0, 1];
+
+  // ---------------- assisted flick (pinch, pull back, release) ----------------
+
+  /** Set by Play Kit: may this piece be flicked by pulling back (play mode, a flick game, a small loose piece)? */
+  canAim: ((toyId: string) => boolean) | null = null;
+  private aim: { rec: Live; side: Handedness; start: Vector3; line: Line; geo: BufferGeometry } | null = null;
+
+  private startAim(rec: Live, side: Handedness, at: ArrayLike<number>): void {
+    const geo = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
+    const line = new Line(geo, new LineBasicMaterial({ color: 0xf0b429, transparent: true, opacity: 0.9, depthTest: false }));
+    line.renderOrder = 30;
+    this.scene.add(line);
+    this.aim = { rec, side, start: new Vector3(at[0], at[1], at[2]), line, geo };
+    input.claims[side] = 'object';
+    uiSounds.tick();
+  }
+
+  private endAim(): void {
+    const a = this.aim;
+    if (!a) return;
+    a.line.removeFromParent();
+    a.geo.dispose();
+    (a.line.material as LineBasicMaterial).dispose();
+    input.claims[a.side] = null;
+    this.aim = null;
+  }
+
+  /** The pull: from where the pinch started back to the hand, along the table. Released: the piece goes the other way. */
+  private updateAim(): void {
+    const a = this.aim;
+    if (!a) return;
+    const h = input.hands[a.side];
+    if (!this.live.includes(a.rec) || !h.tracked) return this.endAim();
+    const pull = this.tmpV.set(a.start.x - h.pinchPoint[0], 0, a.start.z - h.pinchPoint[2]);
+    const lift = h.pinchPoint[1] - a.start.y;
+    if (lift > AIM_LIFT && h.pinching) {
+      // lifted it: a normal grab after all
+      const rec = a.rec;
+      this.endAim();
+      rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
+      this.hold(rec, 'pinch', a.side);
+      return;
+    }
+    const len = Math.min(pull.length(), AIM_MAX_PULL);
+    const speed = len < AIM_MIN_PULL ? 0 : FLICK_AIM_MIN + ((len - AIM_MIN_PULL) / (AIM_MAX_PULL - AIM_MIN_PULL)) * (FLICK_AIM_MAX - FLICK_AIM_MIN);
+    // the aim line: from the piece in the direction it will go, as long as the pull
+    const p = a.rec.mesh.position, pos = a.geo.getAttribute('position') as BufferAttribute;
+    const dir = len > 0 ? pull.normalize() : pull.set(0, 0, 0);
+    pos.setXYZ(0, p.x, p.y, p.z);
+    pos.setXYZ(1, p.x + dir.x * len * 2, p.y, p.z + dir.z * len * 2);
+    pos.needsUpdate = true;
+    if (h.pinching) return;
+    const id = a.rec.toyId!;
+    this.endAim();
+    if (speed > 0) this.flickToy(id, [dir.x * speed, 0, dir.z * speed]);
+  }
 
   /** Play Kit pieces held as tools (a bat, a paddle): driven by velocity, so they hit with the hand's speed. */
   readonly tools = new Set<string>();
@@ -1285,7 +1343,10 @@ export class ObjectSystem extends createSystem({}) {
         if (h.pinchStarted && !input.claims[side]) {
           let rec = this.nearest(h.pinchPoint);
           const other = side === 'left' ? 'right' : 'left';
-          if (rec) {
+          if (rec && !rec.pinned && rec.toyId && this.canAim?.(rec.toyId)) {
+            // assisted flick: pull back and let go (a direct fingertip flick is hard to aim)
+            this.startAim(rec, side, h.pinchPoint);
+          } else if (rec) {
             if (rec.pinned) rec = this.setPinned(rec, false);
             rec.focusPart = this.nearestPart(rec, h.pinchPoint);
             rec.offset.set(rec.mesh.position.x - h.pinchPoint[0], rec.mesh.position.y - h.pinchPoint[1], rec.mesh.position.z - h.pinchPoint[2]);
@@ -1304,6 +1365,7 @@ export class ObjectSystem extends createSystem({}) {
     }
 
     if (xr) this.flick(dt, now);
+    this.updateAim();
 
     if (this.contacts.length) {
       this.byHandle.clear();

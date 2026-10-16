@@ -292,6 +292,14 @@ export class PlayKitSystem extends createSystem({}) {
 
   /** Edit: everything pinned where it is, free to move by hand. Play: physics runs, fixed pieces locked. */
   private applyMode(): void {
+    // assisted flick: in Play, a small loose piece of a game that allows flicks is aimed by pulling back
+    this.objects.canAim = (toyId) => {
+      if (this.mode !== 'play' || this.mirror || !this.spec?.allowedActions.includes('flick')) return false;
+      const p = this.pieces.find((x) => x.toyId === toyId);
+      const role = p && this.spec.roles.find((r) => r.id === p.role);
+      const s = p && this.objects.toyState(toyId, this.st);
+      return !!p && !p.fixed && !role?.handHeld && !!s && s.halfH < 0.03;
+    };
     // pieces of a hand-held role are tools: they follow the hand by velocity and hit with its speed
     this.objects.tools.clear();
     for (const p of this.pieces) if (this.spec?.roles.find((r) => r.id === p.role)?.handHeld) this.objects.tools.add(p.toyId);
