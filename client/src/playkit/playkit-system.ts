@@ -791,6 +791,9 @@ export class PlayKitSystem extends createSystem({}) {
     } else if (id.startsWith('s:')) {
       p.selectedSet = id.slice(2);
       p.armedRemove = false;
+    } else if (id === 'games:agent') {
+      this.closePanel();
+      bus.emit('gameagent:open', {});
     } else if (id.startsWith('g:')) {
       const spec = templateById(id.slice(2));
       if (spec) p.setup = { spec, roleMap: suggestRoleMap(spec, this.kit) };

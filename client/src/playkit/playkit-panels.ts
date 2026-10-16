@@ -151,22 +151,24 @@ export class PlayKitPanel extends CanvasPanel {
     ctx.font = '500 24px system-ui, sans-serif';
     ctx.fillText('Pick a game. Your toys play the parts that fit; built-in shapes fill the rest.', 32, 118, W - 64);
     this.games.forEach((g, i) => {
-      const y = 150 + i * 104, hover = this.hover === `g:${g.id}`;
+      const y = 146 + i * 90, hover = this.hover === `g:${g.id}`;
       ctx.fillStyle = hover ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)';
       ctx.beginPath();
-      ctx.roundRect(20, y, W - 40, 94, 16);
+      ctx.roundRect(20, y, W - 40, 82, 16);
       ctx.fill();
-      add(20, y, W - 40, 94, `g:${g.id}`);
+      add(20, y, W - 40, 82, `g:${g.id}`);
       ctx.fillStyle = '#f4f1ec';
       ctx.font = '700 28px system-ui, sans-serif';
-      ctx.fillText(g.name, 40, y + 32, 360);
+      ctx.fillText(g.name, 40, y + 28, 360);
       ctx.fillStyle = 'rgba(244,241,236,0.75)';
       ctx.font = '500 21px system-ui, sans-serif';
-      ctx.fillText(g.summary, 40, y + 68, W - 80);
+      ctx.fillText(g.summary, 40, y + 60, W - 80);
       ctx.fillStyle = '#f0b429';
       ctx.font = '600 20px system-ui, sans-serif';
-      ctx.fillText(g.players > 1 ? `${g.players} players` : '1 player', W - 180, y + 32);
+      ctx.fillText(g.players > 1 ? `${g.players} players` : '1 player', W - 180, y + 28);
     });
+    // the game agent (optional, needs the backend): any game, your own rules, or "look them up"
+    this.btn(ctx, add, 20, H - 80, W - 40, 'Make a game with AI: any game or your own rules', 'games:agent', true, '#e2733b');
   }
 
   private paintSetup(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {

@@ -5,7 +5,7 @@
  * the backend's apply_adapt / referee (server/agents/referee.py).
  */
 import { validateSpec, type GameSpec } from '../playkit/game-spec.js';
-import type { RuleNumbers } from './helper-panel.js';
+import type { RuleNumbers } from './game-agent-panel.js';
 
 export function numbersOf(g: GameSpec): RuleNumbers {
   const win = g.rules.find((r) => r.when.type === 'count_reached' && r.do.some((a) => a.type === 'win'));

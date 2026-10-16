@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateSpec } from '../../src/playkit/game-spec';
 import { templateById } from '../../src/playkit/templates';
-import { applyNumbers, numbersOf, playable, rulesInWords } from '../../src/helper/adjust';
+import { applyNumbers, numbersOf, playable, rulesInWords } from '../../src/game-agent/adjust';
 
 describe('rules card (Adjust)', () => {
   it('reads the numbers of a game', () => {

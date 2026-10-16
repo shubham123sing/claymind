@@ -1,36 +1,33 @@
 /**
- * "Ask AI" (Update 2, Step 3): the optional agent features inside the game.
- * - Make a game: game cards, Surprise me, a typed name, or the player's own rules (number
- *   cards + typed words); the backend's answer becomes a preview (Play / Adjust / Cancel);
- *   Adjust is a rules card checked again by the Referee here before playing.
- * - Teach me to build X: the Coach's steps one at a time; Check my work measures the
- *   current creation (or the clay) and gives one specific fix.
- * - Help: the Helper sees what the player is doing and offers one safe, undoable fix.
+ * The game agent in the game (Play Kit -> Games -> "Make a game with AI"): game cards,
+ * Surprise me, a typed name, "I don't know the rules", or the player's own rules (number
+ * cards + typed words). The backend's answer (Kit Analyst, Researcher, Game Designer,
+ * Referee) becomes a preview: Play, Show me how, Adjust (a rules card checked again by the
+ * Referee here before playing) or Cancel.
  * Typing: prompt() in the browser, the pinch keypad in the headset (no voice input).
  * Offline: one plain line, and the built-in games keep working.
  */
 import { createSystem, PerspectiveCamera, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
 import { bus } from '../core/event-bus.js';
-import { ObjectSystem } from '../objects/object-system.js';
 import { input } from '../platform/input/input-system.js';
-import { measure } from '../playkit/kit-store.js';
 import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { templateById } from '../playkit/templates.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { applyNumbers, numbersOf, rulesInWords } from './adjust.js';
-import { helperApi, OFFLINE, OfflineError, type GameAnswer } from './helper-client.js';
-import { HelperPanel, RULE_LIMITS, type RuleNumbers } from './helper-panel.js';
+import { agentApi, OFFLINE, OfflineError, type GameAnswer } from './agent-client.js';
+import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game-agent-panel.js';
 import { KeypadPanel } from './keypad.js';
 
 const IDLE_CLOSE_MS = 90000;
 
-export class HelperSystem extends createSystem({}) {
-  private panel = new HelperPanel();
+export class GameAgentSystem extends createSystem({}) {
+  private panel = new GameAgentPanel();
   private keypad = new KeypadPanel();
   private onTyped: ((text: string) => void) | null = null;
-  private history: HelperPanel['view'][] = [];
+  private typedFallback = '';
+  private history: View[] = [];
   private openedAt = 0;
   private busy = false;
   private ray = new Raycaster();
@@ -38,7 +35,6 @@ export class HelperSystem extends createSystem({}) {
   private v = new Vector3();
   private v2 = new Vector3();
   private tip = new Vector3();
-  private lastToast = '';
 
   init(): void {
     for (const [m, order] of [[this.panel.mesh, 24], [this.keypad.mesh, 26]] as const) {
@@ -47,10 +43,7 @@ export class HelperSystem extends createSystem({}) {
       (m.material as { depthTest: boolean }).depthTest = false;
       this.world.createTransformEntity(m);
     }
-    this.cleanupFuncs.push(
-      bus.on('helper:toggle', () => (this.panel.mesh.visible ? this.close() : this.open())),
-      bus.on('ui:toast', (e) => (this.lastToast = e.text)),
-    );
+    this.cleanupFuncs.push(bus.on('gameagent:open', () => this.open()));
     const onDown = (e: PointerEvent) => this.onPointer(e, true);
     const onMove = (e: PointerEvent) => this.onPointer(e, false);
     addEventListener('pointerdown', onDown, { capture: true });
@@ -67,26 +60,26 @@ export class HelperSystem extends createSystem({}) {
 
   // ---------- views ----------
 
-  private go(view: HelperPanel['view']): void {
+  private go(view: View): void {
     if (this.panel.view !== view && this.panel.view !== 'thinking') this.history.push(this.panel.view);
     this.panel.view = view;
     this.panel.invalidate();
   }
 
   private back(): void {
-    this.panel.view = this.history.pop() ?? 'home';
+    this.panel.view = this.history.pop() ?? 'games';
     this.panel.problems = [];
     this.panel.invalidate();
   }
 
   private open(): void {
     this.history = [];
-    this.panel.view = 'home';
+    this.panel.view = 'games';
     this.panel.mesh.visible = true;
     this.openedAt = performance.now();
     this.panel.online = null;
     this.panel.invalidate();
-    void helperApi.online().then((ok) => {
+    void agentApi.online().then((ok) => {
       this.panel.online = ok;
       this.panel.invalidate();
     });
@@ -114,7 +107,7 @@ export class HelperSystem extends createSystem({}) {
       return await job();
     } catch (e) {
       this.panel.online = e instanceof OfflineError && e.message === OFFLINE ? false : this.panel.online;
-      this.panel.view = this.history.pop() ?? 'home';
+      this.panel.view = this.history.pop() ?? 'games';
       this.say(e instanceof Error ? e.message : OFFLINE);
       return null;
     } finally {
@@ -150,13 +143,12 @@ export class HelperSystem extends createSystem({}) {
     const text = this.keypad.text.trim() || this.typedFallback;
     if (r === 'done' && done && text) done(text);
   }
-  private typedFallback = '';
 
   // ---------- make a game ----------
 
   private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }): Promise<void> {
     const status = req.rules ? 'Using your rules…' : req.rulesUnknown ? 'Looking up the rules…' : 'Choosing a game…';
-    const answer = await this.run(status, () => helperApi.game(req, [...this.kit.kitItems()]));
+    const answer = await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()]));
     if (!answer) return;
     this.showPreview(answer);
   }
@@ -174,9 +166,9 @@ export class HelperSystem extends createSystem({}) {
     this.panel.invalidate();
   }
 
-  private playGame(spec = this.panel.answer && this.specOf(this.panel.answer)): void {
+  private playGame(spec = this.panel.answer && this.specOf(this.panel.answer), demo = false): void {
     if (!spec) return;
-    const problems = this.kit.playSpec(spec);
+    const problems = demo ? this.kit.showMeHow(spec) : this.kit.playSpec(spec);
     if (problems.length) {
       this.panel.problems = problems;
       return this.say(`That game is not safe to play: ${problems[0]}`);
@@ -190,94 +182,6 @@ export class HelperSystem extends createSystem({}) {
     this.panel.problems = [];
   }
 
-  // ---------- teach ----------
-
-  private async teach(goal: string): Promise<void> {
-    const g = await this.run(`Planning how to build a ${goal.toLowerCase()}…`, () => helperApi.guide(goal));
-    if (!g) return;
-    if (!g.steps.length) return this.say(OFFLINE);
-    this.panel.guideTitle = g.title;
-    this.panel.steps = g.steps;
-    this.panel.stepIndex = 0;
-    this.panel.checkMessage = '';
-    this.panel.view = 'guide';
-    this.panel.invalidate();
-    this.sayStep();
-  }
-
-  /** The helper character reads the current step and points at what is being built. */
-  private sayStep(): void {
-    const p = this.panel, s = p.steps[p.stepIndex];
-    if (!s) return;
-    const at = this.world.getSystem(SculptSystem)!.clayCenterWorld(this.v2).toArray();
-  }
-
-  /** The creation being worked on: the object touched last, else the clay. */
-  private currentStats(): { sizeCm: number[]; materials: string[] } | null {
-    const objects = this.world.getSystem(ObjectSystem)!, sculpt = this.world.getSystem(SculptSystem)!;
-    const t = objects.focusTarget();
-    if (t && objects.lastObjectTouch >= sculpt.lastClayTouch) {
-      const s = objects.serialize(t.creationId);
-      if (s) {
-        const st = measure(s);
-        return { sizeCm: st.sizeCm, materials: st.materials };
-      }
-    }
-    const clay = sculpt.claySizeCm();
-    return clay ? { sizeCm: clay, materials: ['clay'] } : null;
-  }
-
-  private async check(): Promise<void> {
-    const step = this.panel.steps[this.panel.stepIndex], st = this.currentStats();
-    if (!step || !st) return;
-    try {
-      const r = await helperApi.check(step, st.sizeCm, st.materials);
-      this.panel.checkMessage = r.ok ? r.message : `${r.message}${r.fix ? ` Fix: ${r.fix}.` : ''}`;
-    } catch (e) {
-      this.panel.checkMessage = e instanceof Error ? e.message : OFFLINE;
-    }
-    this.panel.invalidate();
-  }
-
-  // ---------- help ----------
-
-  private context(): Record<string, unknown> {
-    const objects = this.world.getSystem(ObjectSystem)!, sculpt = this.world.getSystem(SculptSystem)!;
-    const t = objects.focusTarget();
-    return {
-      tool: sculpt.toolId,
-      selected: t ? { name: objects.creationById(t.creationId)?.name, material: t.materialId } : null,
-      lastMessage: this.lastToast.slice(0, 120),
-      playKit: this.kit.playMode, game: this.kit.gameName,
-      headset: input.xr,
-    };
-  }
-
-  private async help(): Promise<void> {
-    this.panel.helpReply = '';
-    this.panel.fix = 'none';
-    const a = await this.run('Looking at what you are doing…', () => helperApi.ask("I'm stuck, what should I do?", this.context(), [...this.kit.kitItems()]));
-    if (!a) return;
-    this.panel.helpReply = a.reply;
-    this.panel.fix = a.fix ?? 'none';
-    this.panel.view = 'help';
-    this.panel.invalidate();
-  }
-
-  /** Only safe, undoable actions. */
-  private doFix(): void {
-    const sculpt = this.world.getSystem(SculptSystem)!;
-    switch (this.panel.fix) {
-      case 'undo': sculpt.undoStep(); break;
-      case 'bring_to_life': void sculpt.bringToLife(); break;
-      case 'open_material': bus.emit('material:toggle', {}); break;
-      case 'open_color': bus.emit('color:toggle', {}); break;
-      case 'reset_game': this.kit.reset(); break;
-      case 'end_game': this.kit.end(); break;
-    }
-    this.close();
-  }
-
   // ---------- input ----------
 
   private press(id: string): void {
@@ -288,14 +192,11 @@ export class HelperSystem extends createSystem({}) {
     if (id === 'back') return this.back();
     if (id === 'activity') {
       p.showActivity = !p.showActivity;
-      if (p.showActivity) void helperApi.trace().then((t) => {
+      if (p.showActivity) void agentApi.trace().then((t) => {
         p.activity = t.calls.map((c) => `${c.agent} · ${c.model} · ${c.ms} ms${c.cached ? ' · cached' : ''}${c.ok ? '' : ' · failed'}`);
         p.invalidate();
       }).catch(() => (p.activity = ['(offline)']));
-    } else if (id === 'home:games') this.go('games');
-    else if (id === 'home:teach') this.go('teach');
-    else if (id === 'home:help') void this.help();
-    else if (id === 'game:Surprise me') void this.askGame({ surprise: true });
+    } else if (id === 'game:Surprise me') void this.askGame({ surprise: true });
     else if (id.startsWith('game:') && !['game:type', 'game:rules', 'game:lookup'].includes(id)) void this.askGame({ name: id.slice(5) });
     else if (id === 'game:type') this.type('Which game?', (name) => void this.askGame({ name }));
     else if (id === 'game:lookup') this.type("Which game? I'll look up the rules", (name) => void this.askGame({ name, rulesUnknown: true }));
@@ -311,6 +212,7 @@ export class HelperSystem extends createSystem({}) {
       const [, k, d] = id.split(':');
       this.step(k as keyof RuleNumbers, Number(d));
     } else if (id === 'preview:play') this.playGame();
+    else if (id === 'preview:demo') this.playGame(undefined, true);
     else if (id === 'preview:adjust' && p.answer) {
       const spec = this.specOf(p.answer);
       if (spec) {
@@ -323,15 +225,7 @@ export class HelperSystem extends createSystem({}) {
       const { spec, problems } = applyNumbers(base, p.numbers);
       p.problems = problems;
       if (!problems.length) this.playGame(spec);
-    } else if (id.startsWith('build:') && id !== 'build:type') void this.teach(id.slice(6));
-    else if (id === 'build:type') this.type('What do you want to build?', (goal) => void this.teach(goal));
-    else if (id === 'step:prev' || id === 'step:next') {
-      const before = p.stepIndex;
-      p.stepIndex = Math.max(0, Math.min(p.steps.length - 1, p.stepIndex + (id === 'step:next' ? 1 : -1)));
-      p.checkMessage = '';
-      if (p.stepIndex !== before) this.sayStep();
-    } else if (id === 'step:check') void this.check();
-    else if (id === 'help:fix') this.doFix();
+    }
     p.invalidate();
   }
 

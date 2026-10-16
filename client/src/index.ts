@@ -19,7 +19,7 @@ import { SceneActionsSystem } from './ui/scene-actions.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
-import { HelperSystem } from './helper/helper-system.js';
+import { GameAgentSystem } from './game-agent/game-agent-system.js';
 import { SettingsSystem } from './ui/settings-panel.js';
 import { CoachSystem } from './ui/coach.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
@@ -48,7 +48,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(ColorPickerSystem);
     world.registerSystem(LibrarySystem);
     world.registerSystem(PlayKitSystem); // before objects: a click on its panels never grabs what is behind
-    world.registerSystem(HelperSystem); // optional AI helper (Update 2): panels before objects too
+    world.registerSystem(GameAgentSystem); // optional game agent: its panels before objects too
     world.registerSystem(SettingsSystem);
     world.registerSystem(CoachSystem);
     world.registerSystem(KGSystem); // claims hands that grab the brain before objects / sculpting
@@ -66,7 +66,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
-          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), helper: world.getSystem(HelperSystem),
+          sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem),
           coach: world.getSystem(CoachSystem), settings: world.getSystem(SettingsSystem),
         },
       });

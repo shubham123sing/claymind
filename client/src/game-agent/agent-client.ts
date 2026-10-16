@@ -1,5 +1,6 @@
 /**
- * Talks to the optional agent backend (server/agents). Where it is: `?agents=<url>` once
+ * Talks to the optional game agent backend (server/agents: Kit Analyst, Researcher,
+ * Game Designer, Referee). Where it is: `?agents=<url>` once
  * (remembered in localStorage), else http://127.0.0.1:8790 when the game itself runs on
  * this computer; otherwise there is none and every call answers "offline" at once.
  * The player id is a random string kept in this browser (no account, nothing personal).
@@ -12,9 +13,7 @@ const URL_KEY = 'claymind.agentsUrl';
 const PLAYER_KEY = 'claymind.playerId';
 const TIMEOUT_MS = 30000;
 
-export const OFFLINE = 'AI helper is offline, built-in games still work.';
-
-export type Fix = 'none' | 'undo' | 'bring_to_life' | 'open_material' | 'open_color' | 'reset_game' | 'end_game';
+export const OFFLINE = 'The game agent is offline; the built-in games still work.';
 
 export interface GameAnswer {
   path: 'your_rules' | 'template' | 'cached' | 'web' | 'surprise' | 'fallback';
@@ -26,23 +25,6 @@ export interface GameAnswer {
   adjustments: string[];
   sources: { title: string; url: string }[];
   guessed: boolean;
-}
-
-export interface CoachStep {
-  text: string;
-  tool: string;
-  size_cm?: [number, number, number] | null;
-  material?: string | null;
-  color?: string | null;
-}
-
-export interface HelperAnswer {
-  intent: 'teach' | 'kit_ideas' | 'make_game' | 'stuck' | 'chat' | 'blocked' | 'offline';
-  reply: string;
-  fix?: Fix;
-  guide?: { title: string; steps: CoachStep[] };
-  games?: { id: string; name: string; summary: string; yourItems: string[] }[];
-  game?: GameAnswer;
 }
 
 function store(key: string, value?: string): string | null {
@@ -98,7 +80,7 @@ async function call<T>(path: string, body?: unknown, method = body === undefined
   }
 }
 
-export const helperApi = {
+export const agentApi = {
   async online(): Promise<boolean> {
     try {
       return (await call<{ ok: boolean }>('/v1/health')).ok;
@@ -106,10 +88,7 @@ export const helperApi = {
       return false;
     }
   },
-  ask: (message: string, context: Record<string, unknown>, kit: KitItem[]) => call<HelperAnswer>('/v1/helper', { message, context, kit: describeKit(kit) }),
   game: (req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }, kit: KitItem[]) => call<GameAnswer>('/v1/game', { ...req, kit: describeKit(kit) }),
-  guide: (goal: string) => call<{ title: string; steps: CoachStep[]; offline?: boolean }>('/v1/coach/guide', { goal }),
-  check: (step: CoachStep, sizeCm: number[], materials: string[]) => call<{ ok: boolean; message: string; fix?: string }>('/v1/coach/check', { step, sizeCm, materials }),
   trace: () => call<{ calls: Record<string, unknown>[] }>('/v1/trace'),
   forget: () => call<{ deleted: boolean }>('/v1/memory', undefined, 'DELETE'),
 };

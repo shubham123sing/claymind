@@ -1,14 +1,14 @@
 /**
- * The "Ask AI" panel (canvas, poke in XR, click in the browser). Views:
- * home · games (pick a game) · rules (your own rules as number cards) · thinking ·
- * preview (Play / Adjust / Cancel) · adjust (the rules card) · teach (pick a thing) ·
- * guide (one step at a time, Check my work) · help (an answer and one safe fix) · message.
+ * The game agent's panel, opened from Play Kit -> Games -> "Make a game with AI" (canvas,
+ * poke in XR, click in the browser). Views: games (pick a game, type one, your own rules,
+ * look them up) · rules (your own rules as number cards) · thinking · preview (Play / Show
+ * me how / Adjust / Cancel) · adjust (the rules card) · message.
  * Big targets; everything the agent says is shown with where it came from.
  */
 import { CanvasPanel, ui } from '../ui/canvas-panel.js';
-import type { CoachStep, Fix, GameAnswer } from './helper-client.js';
+import type { GameAnswer } from './agent-client.js';
 
-export type View = 'home' | 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'teach' | 'guide' | 'help' | 'message';
+export type View = 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'message';
 
 export interface RuleNumbers {
   players: number;
@@ -27,17 +27,10 @@ export const RULE_LIMITS: Record<keyof RuleNumbers, [number, number, number, str
 };
 
 export const GAME_CARDS = ['Carrom', 'Bowling', 'Ring toss', 'Jenga', 'Marble race', 'Surprise me'];
-export const BUILD_CARDS = ['Cup', 'Mug', 'Bowl', 'Hammer', 'Ball', 'Ramp'];
-
-const FIX_LABEL: Record<Fix, string> = {
-  none: '', undo: 'Undo the last step', bring_to_life: 'Bring it to life', open_material: 'Pick a material', open_color: 'Pick a colour',
-  reset_game: 'Reset the game', end_game: 'End the game',
-};
-
 const W = 1000, H = 700;
 
-export class HelperPanel extends CanvasPanel {
-  view: View = 'home';
+export class GameAgentPanel extends CanvasPanel {
+  view: View = 'games';
   online: boolean | null = null;
   status = '';
   answer: GameAnswer | null = null;
@@ -45,12 +38,6 @@ export class HelperPanel extends CanvasPanel {
   numbers: RuleNumbers = { players: 1, maxTurns: 3, shotsPerTurn: 1, target: 0, timerSec: 0 };
   ruleText = '';
   problems: string[] = [];
-  guideTitle = '';
-  steps: CoachStep[] = [];
-  stepIndex = 0;
-  checkMessage = '';
-  helpReply = '';
-  fix: Fix = 'none';
   message = '';
   activity: string[] = [];
   showActivity = false;
@@ -84,28 +71,22 @@ export class HelperPanel extends CanvasPanel {
     this.add = add;
     ui.panel(ctx, W, H);
     ctx.textBaseline = 'middle';
-    this.text('Ask AI', 32, 46, 36, '#f4f1ec', 700);
+    this.text('Make a game', 32, 46, 36, '#f4f1ec', 700);
     const dot = this.online === null ? 'checking…' : this.online ? 'online' : 'offline';
-    this.text(dot, 180, 48, 22, this.online ? '#5fbf72' : '#f0b429', 600, 200);
-    if (this.view !== 'home') this.btn(W - 250, 18, 150, 56, '◀ Back', 'back');
+    this.text(dot, 270, 48, 22, this.online ? '#5fbf72' : '#f0b429', 600, 200);
+    if (this.view !== 'games') this.btn(W - 250, 18, 150, 56, '◀ Back', 'back');
     this.btn(W - 86, 18, 64, 56, '×', 'close');
     const by = H - 76;
     switch (this.view) {
-      case 'home': {
-        this.btn(40, 110, W - 80, 110, 'Make a game from my kit', 'home:games', true, '#e2733b');
-        this.btn(40, 236, W - 80, 110, 'Teach me to build something', 'home:teach', true, '#5aa9e6');
-        this.btn(40, 362, W - 80, 110, "Help: I'm stuck", 'home:help', true, '#5fbf72');
-        if (this.showActivity) this.activity.slice(-4).forEach((l, i) => this.text(l, 40, 500 + i * 30, 18, 'rgba(244,241,236,0.7)', 500));
-        else if (this.online === false) this.wrapped('The AI helper is offline. The Play Kit and its five games work without it.', 510, 2);
-        this.btn(40, by, 330, 56, this.showActivity ? 'Hide activity' : 'Agent activity', 'activity');
-        break;
-      }
       case 'games': {
         this.text('Pick a game, or tell me your own rules.', 40, 110, 25, 'rgba(244,241,236,0.8)');
         GAME_CARDS.forEach((g, i) => this.btn(40 + (i % 3) * 312, 150 + Math.floor(i / 3) * 96, 296, 82, g, `game:${g}`, true, g === 'Surprise me' ? '#b48cf2' : undefined));
         this.btn(40, 360, 450, 82, 'Type a game name', 'game:type');
         this.btn(510, 360, 450, 82, 'My own rules', 'game:rules', true, '#e2733b');
         this.btn(40, 460, W - 80, 82, "I don't know the rules: look them up", 'game:lookup');
+        if (this.showActivity) this.activity.slice(-3).forEach((l, i) => this.text(l, 40, 570 + i * 26, 18, 'rgba(244,241,236,0.7)', 500));
+        else if (this.online === false) this.wrapped('The game agent is offline. The Play Kit and its five games work without it.', 565, 2, 22);
+        this.btn(40, by, 330, 56, this.showActivity ? 'Hide activity' : 'Agent activity', 'activity');
         break;
       }
       case 'rules':
@@ -149,32 +130,10 @@ export class HelperPanel extends CanvasPanel {
         for (const l of extra.slice(0, 3)) y = this.wrapped(l, y, 1, 20, '#f0b429') + 2;
         if (a.sources.length) y = this.wrapped(`Sources: ${a.sources.map((s) => s.title).join(', ')} (Wikipedia)`, y + 4, 1, 19, 'rgba(159,208,245,0.9)');
         if (a.guessed) this.wrapped('Some of these rules are a guess: no source described them.', y + 4, 1, 19, '#d9534f');
-        this.btn(40, by, 280, 56, 'Play', 'preview:play', true, '#5fbf72');
-        this.btn(336, by, 280, 56, 'Adjust', 'preview:adjust');
-        this.btn(632, by, 328, 56, 'Cancel', 'back');
-        break;
-      }
-      case 'teach': {
-        this.text('What would you like to build?', 40, 110, 25, 'rgba(244,241,236,0.8)');
-        BUILD_CARDS.forEach((g, i) => this.btn(40 + (i % 3) * 312, 150 + Math.floor(i / 3) * 96, 296, 82, g, `build:${g}`));
-        this.btn(40, 360, W - 80, 82, 'Type something else', 'build:type');
-        break;
-      }
-      case 'guide': {
-        const s = this.steps[this.stepIndex];
-        this.text(`${this.guideTitle} · step ${this.stepIndex + 1} of ${this.steps.length}`, 40, 108, 26, '#f0b429', 700);
-        let y = this.wrapped(s?.text ?? '', 160, 4, 30, '#f4f1ec');
-        const detail = [s?.size_cm ? `about ${s.size_cm.map((v) => Math.round(v)).join(' × ')} cm` : '', s?.material ?? '', s?.color ?? ''].filter(Boolean).join(' · ');
-        if (detail) y = this.wrapped(detail, y + 10, 1, 23, '#9fd0f5');
-        if (this.checkMessage) this.wrapped(this.checkMessage, y + 20, 3, 25, this.checkMessage.startsWith('Looks good') ? '#5fbf72' : '#f0b429');
-        this.btn(40, by, 160, 56, '◀', 'step:prev', this.stepIndex > 0);
-        this.btn(216, by, 160, 56, '▶', 'step:next', this.stepIndex < this.steps.length - 1);
-        this.btn(W - 400, by, 360, 56, 'Check my work', 'step:check', !!s, '#5aa9e6');
-        break;
-      }
-      case 'help': {
-        this.wrapped(this.helpReply || 'Looking at what you are doing…', 140, 6, 28, '#f4f1ec');
-        if (this.fix !== 'none') this.btn(40, by, 520, 56, FIX_LABEL[this.fix], 'help:fix', true, '#5fbf72');
+        this.btn(40, by, 220, 56, 'Play', 'preview:play', true, '#5fbf72');
+        this.btn(272, by, 250, 56, 'Show me how', 'preview:demo', true, '#9fd0f5');
+        this.btn(534, by, 200, 56, 'Adjust', 'preview:adjust');
+        this.btn(746, by, 214, 56, 'Cancel', 'back');
         break;
       }
       case 'message': {
