@@ -20,13 +20,13 @@
       "port": 5191
     },
     {
-      "name": "claymind-ai-server",
+      "name": "claymind-agents",
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "cd server && .venv\\Scripts\\python -m uvicorn app.main:app --port 8787"
+        "cd server && .venv\\Scripts\\python -m agents.run"
       ],
-      "port": 8787
+      "port": 8790
     }
   ]
 }
