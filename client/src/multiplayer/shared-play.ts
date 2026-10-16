@@ -13,6 +13,7 @@
 import { createSystem, Quaternion, Vector3 } from '@iwsdk/core';
 import { bus } from '../core/event-bus.js';
 import { ObjectSystem } from '../objects/object-system.js';
+import { LibrarySystem } from '../ui/library.js';
 import { validateSpec, type GameSpec } from '../playkit/game-spec.js';
 import type { KitItem } from '../playkit/kit-store.js';
 import { PlayKitSystem, type RoomPiece } from '../playkit/playkit-system.js';
@@ -183,8 +184,10 @@ export class SharedPlaySystem extends createSystem({}) {
     const item = (await unpackDeep(m.data)) as KitItem;
     if (!item?.data?.parts?.length || typeof item.name !== 'string') return;
     this.kit.importKit([item], []);
+    // kept after the room too: a copy in the Library as well
+    await this.world.getSystem(LibrarySystem)?.addItem(item.data);
     const who = room.players.find((p) => p.id === m.from)?.name ?? 'Someone';
-    bus.emit('ui:toast', { text: `${who} shared "${item.name.slice(0, 40)}": a copy is in your Play Kit` });
+    bus.emit('ui:toast', { text: `${who} shared "${item.name.slice(0, 40)}": a copy is in your Play Kit and your Library` });
   }
 
   private leaveGame(why: string): void {
