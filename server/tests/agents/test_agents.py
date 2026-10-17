@@ -233,3 +233,10 @@ def test_win_target_keeps_the_pieces_it_needs():
     win = next(r for r in g["rules"] if r["when"]["type"] == "count_reached")
     assert win["when"]["value"] == 5 and next(r for r in g["roles"] if r["id"] == "ball")["count"] == 5
     assert validate_spec(g) == []
+
+
+def test_a_null_from_the_model_takes_the_field_default():
+    from agents.schemas import DesignOut
+    d = DesignOut.model_validate({"template_id": "target-throw", "adapt": {"players": 2, "counts": None, "target": 4}, "missing": None, "cannot": None})
+    assert d.adapt.counts == {} and d.adapt.players == 2 and d.missing == [] and d.cannot == []
+    assert DesignOut.model_validate({"template_id": None, "adapt": None}).adapt is None  # optional fields keep their null

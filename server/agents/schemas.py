@@ -4,7 +4,20 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+class ModelAnswer(BaseModel):
+    """An answer a language model fills. Free models often send null for "nothing": a null for a field
+    that has a default (a list, a dict, a flag) takes the default instead of failing the whole answer."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _null_means_default(cls, data):
+        if isinstance(data, dict):
+            fields = cls.model_fields
+            return {k: v for k, v in data.items() if not (v is None and k in fields and fields[k].default is not None)}
+        return data
 
 RoleTag = Literal["board", "piece", "launcher", "target", "obstacle", "container", "other"]
 
@@ -50,7 +63,7 @@ class Source(BaseModel):
     url: str = Field(max_length=300)
 
 
-class RuleCard(BaseModel):
+class RuleCard(ModelAnswer):
     game: str = Field(max_length=60)
     goal: str = Field(max_length=300)
     pieces: list[str] = Field(max_length=12)
@@ -67,7 +80,7 @@ class RuleCard(BaseModel):
 
 # ---------- Game Designer ----------
 
-class Adapt(BaseModel):
+class Adapt(ModelAnswer):
     """Changes to a built-in template (applied by code): the reliable way to play the player's rules."""
 
     players: Optional[int] = Field(default=None, ge=1, le=4)
@@ -79,7 +92,7 @@ class Adapt(BaseModel):
     name: Optional[str] = Field(default=None, max_length=40)
 
 
-class DesignOut(BaseModel):
+class DesignOut(ModelAnswer):
     template_id: Optional[str] = Field(default=None, description="a built-in template id when one fits")
     adapt: Optional[Adapt] = Field(default=None, description="changes to that template that apply the player's rules")
     spec: Optional[dict] = Field(default=None, description="a full Game Spec when no template fits")
@@ -94,12 +107,12 @@ class DesignOut(BaseModel):
 RoleWord = Literal["ball", "target", "goal", "board", "tool", "launcher"]
 
 
-class IntentRole(BaseModel):
+class IntentRole(ModelAnswer):
     ref: str = Field(max_length=4, description="a tag from the INPUT items, e.g. A")
     role: RoleWord
 
 
-class IntentOut(BaseModel):
+class IntentOut(ModelAnswer):
     roles: list[IntentRole] = Field(default_factory=list, max_length=12)
     game: Optional[str] = Field(default=None, max_length=60, description="the game the player names or clearly means, else null")
     goal_is_marked_zone: bool = Field(default=False, description="the words say a marked area is where pieces must go")
