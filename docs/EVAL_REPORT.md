@@ -94,6 +94,22 @@ Typed sentences now read cues around a piece's name when no role word is next to
 
 Chat only went from 1/8 to 5/8, but the cues now sometimes give a piece the wrong role (5 wrong roles: "gend se bottles girao", "get the bead into the mug or the bowl, the mug and the bowl are goals", "flick the flat disc to send the tokens into the pockets"); before, words only left pieces unassigned. Hands stay the reliable way: gestures + cards 8/8 with no wrong role. The same author wrote the rules and both held-out sets, so these are optimistic.
 
+### Typed words, third and fourth rounds (branch `fix-words-throws`, 2026-10-17)
+
+Two more rounds, each with a fresh held-out set written and committed before the code change and scored once after:
+
+- **Round 3** (fixes from held-out 2): a word that is part of another piece's name is never a cue for the next piece ("gend se bottles girao": "gend" names the ball, "bottles girao" makes them targets; "the bowl, the mug": "bowl" is not the verb); plural role words ("goals"); "flick / use X to send / push / hit …" makes X the launcher. **Held-out 3, scored once:** chat 6/8 (roles 15/20, 2 wrong), cards 8/8, combined 5/8 (roles 12/20, 1 wrong).
+- **Round 4** (fixes from held-out 3): Hinglish "X se jayegi" (the way it goes = launcher) and "goli ramp se": the first piece moves; "knock over / down the X"; "isse ye sab gira do" ("with this" knocks, "ye sab gira do" are knocked); a group word before a single "this" takes the pointed pieces ("knock these over with this"); a role word in a piece's own name over a guessed "tool". After it, every tuned set (modes, held-out 1, 2 and 3) is clean: every role right, no wrong role.
+  **Held-out 4, scored once (the honest number):**
+
+| Mode | All right | Game right | Roles right | Marks kept | Confirm cards | Wrong roles |
+|---|---|---|---|---|---|---|
+| Chat only | 5/8 | 7/8 | 14/21 | 8/8 | 0 | 1 |
+| Gestures + cards | 8/8 | 8/8 | 21/21 | 8/8 | 0 | 0 |
+| Combined | 3/8 | 7/8 | 10/21 | 8/8 | 0 | 7 |
+
+Typed words alone went from 1/8 (first held-out) to 5/8 here with one wrong role; hands + chips stay 8/8. **Combined stays weak (3/8, 7 wrong roles):** held-out 4 shows pieces in a different order than it names them ("throw this into those" after pointing at the cups first, then picking up the ball), and typed words bind in the order things were shown. Not tuned away. The fix in the game is the player's own idea: **typing with a piece in the other hand, "this" / "yeh" / "isse" means that piece** (unit-tested; this eval does not model holding while typing). Also: a role given with a chip or the confirm card is no longer changed by typed words ("knock them down" no longer turns the ball into a target).
+
 ## Intent Resolver (online, free model)
 
 4 live sentences with pointed items as tags (2026-10-16, qwen / gpt-oss chain): 3/4 right. Miss: "hit [A] with [B] past [C]" named the pebble the target (should be the ball); [C] was left unsure (correct: never guessed). Too few to be a measure; it only names items the code could not.

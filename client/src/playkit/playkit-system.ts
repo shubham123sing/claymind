@@ -303,7 +303,11 @@ export class PlayKitSystem extends createSystem({}) {
   }
 
   /** Living creations that stood on the table when the Play Kit took it (put away like the clay, back afterwards). */
-  private putAway: SavedCreation[] = [];
+  private putAway: { saved: SavedCreation; shared: boolean }[] = [];
+  /** Set by the room: is this creation shared with the room? */
+  roomShared: ((id: string) => boolean) | null = null;
+  /** Set by the room: a shared creation is back on this table (share it again). */
+  roomRestored: ((id: string) => void) | null = null;
 
   private onTable(p: { x: number; y: number; z: number }): boolean {
     const dx = p.x - surface.centerX, dz = p.z - surface.centerZ, c = Math.cos(-surface.yaw), s = Math.sin(-surface.yaw);
@@ -311,22 +315,28 @@ export class PlayKitSystem extends createSystem({}) {
     return Math.abs(lx) <= surface.halfW && Math.abs(lz) <= surface.halfD && p.y > surface.topY - 0.02 && p.y < surface.topY + 0.6;
   }
 
-  /** Creations on the table would stand in the game's way (a thrown ball hits them): saved where they are and taken off. In a room they are shared with the others, so they stay. */
+  /**
+   * Creations on the table would stand in the game's way (a thrown ball hits them): saved where they are and
+   * taken off. In a room only the host takes the table (the others mirror the game): shared ones go for
+   * everyone and come back for everyone afterwards.
+   */
   private putAwayCreations(): void {
-    if (this.roomNames?.().length) return;
+    if (this.roomNames?.().length && this.roomCanStart?.()) return;
     for (const id of this.objects.liveCreationIds()) {
       const at = this.objects.poseOf(id)?.p;
       if (!at || !this.onTable(at)) continue;
+      const shared = this.roomShared?.(id) ?? false;
       const saved = this.objects.deleteCreation(id);
-      if (saved) this.putAway.push(saved);
+      if (saved) this.putAway.push({ saved, shared });
     }
     if (this.putAway.length) this.toast(`${this.putAway.length} of your creations moved off the table while you play; they come back after`);
   }
 
   private bringCreationsBack(): void {
-    for (const saved of this.putAway) {
+    for (const { saved, shared } of this.putAway) {
       this.objects.restore(saved, 'saved');
       if (saved.pinned) bus.emit('creation:changed', { creationId: saved.id }); // pin kept, as after a reload
+      if (shared) this.roomRestored?.(saved.id);
     }
     if (this.putAway.length) this.toast('Your creations are back on the table');
     this.putAway = [];
@@ -557,8 +567,15 @@ export class PlayKitSystem extends createSystem({}) {
     if (!this.spec) lines.push(this.mode === 'edit' ? 'Move pieces by hand; Play lets physics run.' : 'Throw, flick, push, stack: Reset puts it back.');
     if (lines.join() !== h.lines.join()) h.lines = lines;
     h.extra = this.simButtons();
-    h.invalidate();
+    // repaint only when something shown changed: this runs every frame while a game is on, and a repaint
+    // uploads the whole HUD texture again (it cost a third of the frame rate)
+    const shown = JSON.stringify([h.title, h.mode, h.paused, h.hasGame, h.lines, h.message, h.over, h.extra, h.showRules, h.rules]);
+    if (shown !== this.hudShown) {
+      this.hudShown = shown;
+      h.invalidate();
+    }
   }
+  private hudShown = '';
 
   // ---------- "Show me how" (demo play: a small optional preview, no AI) ----------
 

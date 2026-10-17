@@ -58,6 +58,8 @@ const STRENGTH: Record<GestureKind, number> = { holdup: 500, hold: 400, tap: 150
 const OBJECT_WORDS = new Set(['this', 'that', 'it', 'yeh', 'ye', 'yah', 'woh', 'wo', 'vo', 'iska', 'isko', 'isse', 'uska', 'usko', 'is', 'us']);
 const PLACE_WORDS = new Set(['here', 'there', 'idhar', 'udhar', 'yahan', 'yaha', 'wahan', 'waha', 'idar', 'udar']);
 const PLURAL_WORDS = new Set(['these', 'those', 'them']);
+/** "this" / "yeh" / "isse": the piece at hand */
+const PROXIMAL = new Set(['this', 'it', 'yeh', 'ye', 'yah', 'is', 'isse', 'isko', 'iska', 'isme']);
 const AMOUNT_WORDS = new Set(['itna', 'utna', 'itni', 'utni']);
 
 /** Which deixis word is it (null: not one)? Plural also for "ye sab" / "these ones". */
@@ -131,9 +133,10 @@ export function bind(words: Word[], attention: Attention[], now: { pointed?: str
  * bind to the gestures in the order they were made. Object words take the items in the order
  * first shown, place words the zones and paths in order; a plural word takes the items left
  * over after the singular words that follow it have theirs. With `nameOf`, a pointing word followed
- * by a word of a shown piece's name ("this marble") takes that piece, whatever the order.
+ * by a word of a shown piece's name ("this marble") takes that piece, whatever the order. With
+ * `holding` (the one piece in a hand while the player types), "this" / "yeh" / "isse" is that piece.
  */
-export function bindOrdered(words: Word[], attention: Attention[], nameOf?: (item: string) => string): BindResult {
+export function bindOrdered(words: Word[], attention: Attention[], nameOf?: (item: string) => string, holding?: string | null): BindResult {
   const res: BindResult = { bindings: [], unresolved: [], ambiguous: [] };
   const events = [...attention].sort((a, b) => a.t - b.t);
   const firstSeen = (kinds: TargetKind[]) => [...new Map(events.filter((a) => kinds.includes(kindOf(a)) && idOf(a)).map((a) => [idOf(a), kindOf(a)] as const)).entries()];
@@ -152,25 +155,48 @@ export function bindOrdered(words: Word[], attention: Attention[], nameOf?: (ite
     });
     items = items.filter((id) => ![...named.values()].includes(id));
   }
-  let ii = 0, pi = 0;
+  // the order things were shown in; a group ("these") before a single "this" takes the pointed pieces
+  const held = new Set(events.filter((a) => (a.gesture === 'hold' || a.gesture === 'holdup') && a.itemId).map((a) => a.itemId!));
+  const both = items.some((id) => held.has(id)) && items.some((id) => !held.has(id));
+  const used = new Set<string>();
+  const take = (pref: (id: string) => boolean): string | null => {
+    const id = items.find((x) => !used.has(x) && pref(x)) ?? items.find((x) => !used.has(x)) ?? null;
+    if (id) used.add(id);
+    return id;
+  };
+  let pi = 0;
   kinds.forEach((d, index) => {
     if (!d) return;
     const word = words[index].text;
     if (d === 'plural') {
-      const later = kinds.slice(index + 1).filter((k) => k === 'object').length;
-      const ids = items.slice(ii, Math.max(ii + 1, items.length - later));
+      const free = items.filter((x) => !used.has(x));
+      let ids: string[];
+      const laterOne = kinds.slice(index + 1).some((k) => k === 'object');
+      // "knock these over with this": the group is what was pointed at, the one in the hand comes after
+      if (both && laterOne && free.some((x) => !held.has(x))) ids = free.filter((x) => !held.has(x));
+      else {
+        const later = kinds.slice(index + 1).filter((k) => k === 'object').length;
+        ids = free.slice(0, Math.max(1, free.length - later));
+      }
       if (!ids.length) return void res.unresolved.push({ index, word });
-      ii += ids.length;
+      ids.forEach((x) => used.add(x));
       res.bindings.push({ index, word, kind: 'item', ids, dt: 0 });
     } else if (d === 'object') {
       if (named.has(index)) return void res.bindings.push({ index, word, kind: 'item', ids: [named.get(index)!], dt: 0 });
-      if (ii >= items.length) return void res.unresolved.push({ index, word });
-      res.bindings.push({ index, word, kind: 'item', ids: [items[ii++]], dt: 0 });
+      // typing with a piece in the other hand: "this" is that piece
+      const near = PROXIMAL.has(word.toLowerCase().replace(/[^a-z]/g, ''));
+      if (near && holding && !used.has(holding)) {
+        used.add(holding);
+        return void res.bindings.push({ index, word, kind: 'item', ids: [holding], dt: 0 });
+      }
+      const id = take(() => true);
+      if (!id) return void res.unresolved.push({ index, word });
+      res.bindings.push({ index, word, kind: 'item', ids: [id], dt: 0 });
     } else if (pi < places.length) {
       // place / amount: the next mark; "here" with no mark left falls back to an item
       const [id, kind] = places[pi++];
       res.bindings.push({ index, word, kind, ids: [id], dt: 0 });
-    } else if (d === 'place' && ii < items.length) res.bindings.push({ index, word, kind: 'item', ids: [items[ii++]], dt: 0 });
+    } else if (d === 'place' && items.some((x) => !used.has(x))) res.bindings.push({ index, word, kind: 'item', ids: [take(() => true)!], dt: 0 });
     else res.unresolved.push({ index, word });
   });
   return res;

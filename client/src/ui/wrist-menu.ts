@@ -62,6 +62,8 @@ export class WristMenu {
   private openTime = 0;
   private openAmount = 0;
   private lastPress = 0;
+  /** after a press, nothing is pressed again until the fingertip has left every button (one push, one press) */
+  private held = false;
   private tmp = new Vector3();
   private local = new Vector3();
   private head = new Vector3();
@@ -177,6 +179,7 @@ export class WristMenu {
   }
 
   private pokeButtons(pokers: HandState[], now: number): void {
+    let touching = false;
     for (const b of this.buttons) {
       if (!b.mesh.visible) {
         b.wasFront = false;
@@ -194,8 +197,11 @@ export class WristMenu {
         // press = fingertip crosses the button plane from the front
         const h = inside && this.local.z < 0.03 && this.local.z > -0.02;
         hover ||= h;
-        if (inside && b.wasFront && !front && this.local.z > -0.02 && enabled && now - this.lastPress > 350) {
+        touching ||= inside && this.local.z < 0.03;
+        // the layout changes after a press (a category opens, Back): the same push must not press what moved under it
+        if (inside && b.wasFront && !front && this.local.z > -0.02 && enabled && !this.held && now - this.lastPress > 350) {
           this.lastPress = now;
+          this.held = true;
           if (b.item.children) this.openGroup(b.item);
           else b.item.onPress();
           this.onTick();
@@ -204,6 +210,7 @@ export class WristMenu {
       }
       this.draw(b, hover, enabled);
     }
+    if (!touching) this.held = false;
   }
 
   private draw(b: Button, hover: boolean, enabled: boolean): void {

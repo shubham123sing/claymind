@@ -12,7 +12,7 @@
 
   function obj(id) {
     const r = sys().objects.byCreation(id) ?? sys().objects.byToy(id);
-    return r ? { p: r.mesh.position.toArray(), r: r.radius, held: !!r.side, mode: r.mode, mat: r.parts[0]?.mat?.id } : null;
+    return r ? { p: r.mesh.position.toArray(), r: r.radius, h: r.halfH ?? r.radius, held: !!r.side, mode: r.mode, mat: r.parts[0]?.mat?.id } : null;
   }
 
   /** Pinch an object on its top and keep holding it. */
@@ -34,19 +34,32 @@
     return obj(id)?.held ?? false;
   }
 
-  /** Move the hand's pinch point in a straight line, `perFrame` m each frame; open the hand at `releaseAt` (0..1) of the way. */
-  async function swing(side, to, perFrame, releaseAt = 2) {
+  /**
+   * Move the hand's pinch point in a straight line. `speed` above 0.3 is metres per second (each frame's
+   * step follows the real frame time, at most 11 cm: a bigger jump reads as a tracking glitch); below,
+   * metres per frame. Opens the hand at `releaseAt` (0..1) of the way: a throw.
+   */
+  async function swing(side, to, speed, releaseAt = 2) {
     const h = dev().hands[side];
-    const from = [h.position.x, h.position.y, h.position.z];
-    const off = qa.point(side, 'pinch').map((v, i) => v - from[i]);
+    const off = qa.point(side, 'pinch').map((v, i) => v - [h.position.x, h.position.y, h.position.z][i]);
     const dest = to.map((v, i) => v - off[i]);
-    const n = Math.max(1, Math.ceil(Math.hypot(dest[0] - from[0], dest[1] - from[1], dest[2] - from[2]) / perFrame));
-    for (let i = 1; i <= n; i++) {
-      h.position.set(from[0] + ((dest[0] - from[0]) * i) / n, from[1] + ((dest[1] - from[1]) * i) / n, from[2] + ((dest[2] - from[2]) * i) / n);
-      if (i / n >= releaseAt) h.setPinchValueImmediate?.(0); // let go mid-swing: a throw
+    const start = [h.position.x, h.position.y, h.position.z];
+    const total = Math.hypot(dest[0] - start[0], dest[1] - start[1], dest[2] - start[2]);
+    let done = 0, last = performance.now(), released = false;
+    while (done < total - 1e-6) {
+      const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000) || 1 / 60;
+      last = now;
+      const step = speed > 0.3 ? Math.min(speed * dt, 0.11) : speed;
+      done = Math.min(total, done + step);
+      const k = total ? done / total : 1;
+      h.position.set(start[0] + (dest[0] - start[0]) * k, start[1] + (dest[1] - start[1]) * k, start[2] + (dest[2] - start[2]) * k);
+      if (!released && k >= releaseAt) {
+        h.setPinchValueImmediate?.(0); // let go mid-swing: a throw
+        released = true;
+      }
       await qa.frames(1);
     }
-    if (releaseAt <= 1) h.setPinchValueImmediate?.(0);
+    if (releaseAt <= 1 && !released) h.setPinchValueImmediate?.(0);
     await qa.frames(3);
   }
 
@@ -87,8 +100,8 @@
     for (let i = 0; i < 240; i++) {
       await qa.frames(1);
       const o = obj(id);
-      if (o && o.p[1] - o.r < minY) {
-        minY = o.p[1] - o.r;
+      if (o && o.p[1] - o.h < minY) {
+        minY = o.p[1] - o.h;
         landed = o.p;
       }
     }
@@ -146,8 +159,10 @@
         for (const d of [[0, 1, 0], [0.4, 1, 0], [-0.4, 1, 0], [0, 1, 0.4]]) await F.stroke(d, [0, -0.02, 0]);
         await F.menuPath('make', 'shape');
       } else for (const [d, mv] of strokes) await F.stroke(d, mv);
+      const n0 = sys().objects.liveCreationIds().length;
       let id = await bringToLife();
-      if (!id) id = await bringToLife(); // once more if the first press did not make one
+      // a slow bake: wait for it rather than pressing again (a second press makes a second creation)
+      if (!id && (await waitFor(() => sys().objects.liveCreationIds().length > n0, 600))) id = sys().objects.liveCreationIds().at(-1);
       made.push(`${label}: ${id ? 'made' : 'not made'}`);
       if (!id) continue;
       if (label === 'long') {
@@ -300,17 +315,34 @@
 
   // ---------- f. playing ----------
 
+  /** What the game counts as scoring: the score, blocks down, balls in (summed). */
+  function scoreOf(lines) {
+    return [...lines.join(' | ').matchAll(/(?:Score|Player \d|down|in): (\d+)/g)].reduce((s, m) => s + Number(m[1]), 0);
+  }
+
   function hud() {
     const h = sys().playkit.hud;
     return { lines: [...(h.lines ?? [])], message: h.message ?? '', rules: (h.rules ?? []).length, over: !!h.over };
   }
 
-  async function throwAt(ball, aim) {
+  /** Throw a piece at `aim`: straight and fast at things to knock over, a lob (up and over) into a cup. */
+  async function throwAt(ball, aim, lob = false, speed = 2.5) {
     if (!(await grab(ball))) return false;
     const o = obj(ball);
-    // lift, draw back toward the body, then throw at the targets (about 2 m/s) and let go
-    await swing('right', [o.p[0], o.p[1] + 0.1, o.p[2] + 0.06], 0.015);
-    await swing('right', [aim[0], aim[1] + 0.06, aim[2]], 0.05, 0.45);
+    await swing('right', [o.p[0], o.p[1] + 0.1, o.p[2] + 0.1], 0.015);
+    if (lob) {
+      // a 45-degree lob into the cup: the speed from the distance and the drop, the hand moving that way at that
+      // speed and letting go at the release point (the game takes the throw from the hand's movement)
+      const R = obj(ball).p; // release point: where the ball is now (lifted)
+      const dx = aim[0] - R[0], dz = aim[2] - R[2], d = Math.hypot(dx, dz);
+      const dy = aim[1] + 0.06 - R[1], th = Math.PI / 4, g = 9.81;
+      const s = Math.sqrt((g * d * d) / (2 * Math.cos(th) ** 2 * Math.max(0.02, d * Math.tan(th) - dy))) * speed;
+      const u = [(Math.cos(th) * dx) / d, Math.sin(th), (Math.cos(th) * dz) / d];
+      // draw back along the throw, pause (the game measures the last 150 ms of the hand), then swing through
+      await swing('right', R.map((v, i) => v - u[i] * 0.2), 0.012);
+      await qa.sleep(250);
+      await swing('right', R.map((v, i) => v + u[i] * 0.1), s, 0.2 / 0.3);
+    } else await swing('right', [aim[0], aim[1] + 0.05, aim[2]], speed, 0.6);
     await qa.rest('right');
     return true;
   }
@@ -333,14 +365,18 @@
     const targets = pk.pieces.filter((p) => !movers.has(p.role)).map((p) => obj(p.toyId)?.p).filter(Boolean);
     const aim = targets.length ? [0, 1, 2].map((i) => targets.reduce((s, t) => s + t[i], 0) / targets.length) : [0, 0.78, -0.55];
     let thrown = 0;
-    for (const b of balls.slice(0, 3)) {
-      if (!(await throwAt(b, aim))) continue;
+    // cups (containers) need a lob; try a few strengths, as a player would
+    const lob = (spec?.roles ?? []).some((r) => r.tags.includes('container'));
+    // lob: a factor on the computed speed (a real player corrects after each throw too)
+    const speeds = lob ? [1.3, 1.2, 1.4, 1.25, 1.35] : [2.5, 2.8, 2.2];
+    for (const [k, b] of balls.slice(0, speeds.length).entries()) {
+      if (!(await throwAt(b, aim, lob, speeds[k]))) continue;
       thrown++;
       await qa.frames(150);
-      if (hud().lines.join() !== h0.lines.join()) break;
+      if (scoreOf(hud().lines) > scoreOf(h0.lines)) break;
     }
     const h1 = hud();
-    out.push({ name: 'throw at the targets by hand: score / count changes', pass: thrown > 0 && h1.lines.join() !== h0.lines.join(), detail: `${thrown} throw(s) of ${balls.length} pieces; before: ${h0.lines.join(' | ')}; after: ${h1.lines.join(' | ')} ${h1.message ? `"${h1.message}"` : ''}` });
+    out.push({ name: 'throw at the targets by hand: it scores', pass: thrown > 0 && scoreOf(h1.lines) > scoreOf(h0.lines), detail: `${thrown} throw(s) of ${balls.length} pieces; before: ${h0.lines.join(' | ')}; after: ${h1.lines.join(' | ')} ${h1.message ? `"${h1.message}"` : ''}` });
     const r = await qa.panelPress('hud:reset');
     await qa.frames(80);
     const h2 = hud();
@@ -388,5 +424,5 @@
     return ok;
   }
 
-  Object.assign(F, { openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne });
+  Object.assign(F, { throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne });
 })();

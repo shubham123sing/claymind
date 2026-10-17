@@ -2,13 +2,13 @@
  "summary": {
   "chat": {
    "scenarios": 8,
-   "allRight": 5,
-   "gameRight": 7,
-   "rolesRight": 16,
+   "allRight": 8,
+   "gameRight": 8,
+   "rolesRight": 21,
    "rolesTotal": 21,
    "marksKept": 8,
    "confirmCards": 0,
-   "wrongRoles": 5,
+   "wrongRoles": 0,
    "invalidSpecs": 0
   },
   "cards": {
@@ -24,9 +24,9 @@
   },
   "combined": {
    "scenarios": 8,
-   "allRight": 7,
-   "gameRight": 7,
-   "rolesRight": 18,
+   "allRight": 8,
+   "gameRight": 8,
+   "rolesRight": 21,
    "rolesTotal": 21,
    "marksKept": 8,
    "confirmCards": 0,
@@ -118,14 +118,14 @@
    "chat": {
     "game": "knock-down",
     "gameOk": true,
-    "rolesRight": 1,
+    "rolesRight": 3,
     "rolesTotal": 3,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
-    "wrong": 2,
+    "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "knock-down",
@@ -140,16 +140,16 @@
     "ok": true
    },
    "combined": {
-    "game": null,
-    "gameOk": false,
-    "rolesRight": 0,
+    "game": "knock-down",
+    "gameOk": true,
+    "rolesRight": 3,
     "rolesTotal": 3,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
     "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    }
   },
   {
@@ -157,14 +157,14 @@
    "chat": {
     "game": "flick-and-pocket",
     "gameOk": true,
-    "rolesRight": 3,
+    "rolesRight": 4,
     "rolesTotal": 4,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
-    "wrong": 1,
+    "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "flick-and-pocket",
@@ -272,16 +272,16 @@
   {
    "id": "h2-two-cups",
    "chat": {
-    "game": "knock-down",
-    "gameOk": false,
-    "rolesRight": 1,
+    "game": "target-throw",
+    "gameOk": true,
+    "rolesRight": 3,
     "rolesTotal": 3,
-    "rolesOk": false,
+    "rolesOk": true,
     "marksOk": true,
     "confirms": 0,
-    "wrong": 2,
+    "wrong": 0,
     "valid": true,
-    "ok": false
+    "ok": true
    },
    "cards": {
     "game": "target-throw",

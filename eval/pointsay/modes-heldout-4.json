@@ -1,0 +1,69 @@
+{
+  "about": "Fourth held-out Point + Say set (same format as modes.json), written on 2026-10-17 BEFORE the third typed-words fix (held / pointed preference, Hinglish path cue, knock over, a role word in a piece's own name) and scored once after it, with no code change after. modes-heldout-3.json became tuning data for that fix.",
+  "scenarios": [
+    {
+      "id": "h4-throw-at-cups",
+      "items": { "S": ["Sponge ball", "kit_sponge"], "C1": ["Paper cup 1", "kit_pc"], "C2": ["Paper cup 2", "kit_pc"] },
+      "truth": { "game": "target-throw", "roles": { "ball": ["S"], "goal": ["C1", "C2"] } },
+      "chat": "throw the sponge ball into the paper cups",
+      "cards": [["hold", "S", 1000], ["chip", "ball", 1600], ["point", "C1", 4000], ["chip", "goal", 4600], ["point", "C2", 7000], ["chip", "goal", 7600]],
+      "combined": { "gestures": [["point", "C1", 1000], ["point", "C2", 1300], ["hold", "S", 2800]], "text": "throw this into those" }
+    },
+    {
+      "id": "h4-hinglish-knock",
+      "items": { "P": ["Patthar", "kit_stone"], "D1": ["Dibba 1", "kit_box"], "D2": ["Dibba 2", "kit_box"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["P"], "target": ["D1", "D2"] } },
+      "chat": "patthar se dibbe giraao",
+      "cards": [["hold", "P", 1000], ["chip", "ball", 1600], ["point", "D1", 4000], ["chip", "target", 4600], ["point", "D2", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["point", "D1", 1000], ["point", "D2", 1300], ["hold", "P", 2800]], "text": "isse ye sab giraao" }
+    },
+    {
+      "id": "h4-coins-board",
+      "items": { "B": ["Big board", "kit_bigboard"], "S": ["Striker disc", "kit_sd"], "C1": ["Coin 1", "kit_coin"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "board": ["B"], "launcher": ["S"], "ball": ["C1"] } },
+      "chat": "on the big board flick the striker disc to hit the coin into a pocket",
+      "cards": [["point", "B", 1000], ["chip", "board", 1600], ["hold", "S", 4000], ["chip", "launcher", 4600], ["point", "C1", 7000], ["chip", "ball", 7600]],
+      "combined": { "gestures": [["point", "B", 1000], ["hold", "S", 2500], ["point", "C1", 4000]], "text": "this is the board, flick this at that coin" }
+    },
+    {
+      "id": "h4-stack-hinglish",
+      "items": { "T1": ["Tukda 1", "kit_piece"], "T2": ["Tukda 2", "kit_piece"], "T3": ["Tukda 3", "kit_piece"], "T4": ["Tukda 4", "kit_piece"] },
+      "truth": { "game": "tower-balance", "roles": { "target": ["T1", "T2", "T3", "T4"] } },
+      "chat": "tukdon se ek tower banao",
+      "cards": [["point", "T1", 1000], ["chip", "target", 1600], ["point", "T2", 4000], ["chip", "target", 4600], ["point", "T3", 7000], ["chip", "target", 7600], ["point", "T4", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["point", "T1", 1000], ["point", "T2", 1300], ["point", "T3", 1600], ["point", "T4", 1900]], "text": "in sab ka tower banao" }
+    },
+    {
+      "id": "h4-marble-slide",
+      "items": { "SL": ["Slide", "kit_slide"], "M": ["Glass marble", "kit_gm"] },
+      "truth": { "game": "marble-run", "roles": { "launcher": ["SL"], "ball": ["M"] } },
+      "chat": "the glass marble rolls down the slide",
+      "cards": [["point", "SL", 1000], ["chip", "launcher", 1600], ["hold", "M", 4000], ["chip", "ball", 4600]],
+      "combined": { "gestures": [["point", "SL", 1000], ["hold", "M", 2500]], "text": "this rolls down that" }
+    },
+    {
+      "id": "h4-bucket-goal",
+      "items": { "BK": ["Bucket", "kit_bucket"], "R": ["Rag ball", "kit_rag"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["BK"], "ball": ["R"] } },
+      "chat": "the bucket is the goal, the rag ball is what you throw",
+      "cards": [["point", "BK", 1000], ["chip", "goal", 1600], ["hold", "R", 4000], ["chip", "ball", 4600]],
+      "combined": { "gestures": [["point", "BK", 1000], ["holdup", "R", 2500]], "text": "that is the goal and this is the ball" }
+    },
+    {
+      "id": "h4-pins-with-ball",
+      "items": { "B": ["Bowling ball", "kit_bb"], "P1": ["Skittle 1", "kit_sk"], "P2": ["Skittle 2", "kit_sk"], "P3": ["Skittle 3", "kit_sk"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["B"], "target": ["P1", "P2", "P3"] } },
+      "chat": "knock down all the skittles with the bowling ball",
+      "cards": [["hold", "B", 1000], ["chip", "ball", 1600], ["point", "P1", 4000], ["chip", "target", 4600], ["point", "P2", 7000], ["chip", "target", 7600], ["point", "P3", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["point", "P1", 1000], ["point", "P2", 1300], ["point", "P3", 1600], ["hold", "B", 3000]], "text": "knock these down with this" }
+    },
+    {
+      "id": "h4-nothing",
+      "items": { "A": ["Clay frog", "kit_frog"] },
+      "truth": { "game": null, "roles": {} },
+      "chat": "my clay frog is green and cute",
+      "cards": [["hold", "A", 1000]],
+      "combined": { "gestures": [["hold", "A", 1000]], "text": "look at this frog" }
+    }
+  ]
+}

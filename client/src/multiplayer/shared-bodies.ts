@@ -10,6 +10,7 @@
 import { createSystem, Quaternion, Vector3 } from '@iwsdk/core';
 import { bus } from '../core/event-bus.js';
 import { ObjectSystem } from '../objects/object-system.js';
+import { PlayKitSystem } from '../playkit/playkit-system.js';
 import type { SavedCreation } from '../storage/library.js';
 import { packDeep, unpackDeep } from './codec.js';
 import { room, type RoomMsg } from './room-client.js';
@@ -48,6 +49,14 @@ export class SharedBodiesSystem extends createSystem({}) {
 
   init(): void {
     snapshotParts.set('bodies', { save: () => this.snapshot(), load: (d) => this.loadSnapshot(d) });
+    // the host's Play Kit puts shared creations away for a game and back after it: back for everyone
+    const kit = this.world.getSystem(PlayKitSystem);
+    if (kit) {
+      kit.roomShared = (id) => room.connected && this.shared.has(id);
+      kit.roomRestored = (id) => {
+        if (room.connected) void this.announce(id);
+      };
+    }
     this.cleanupFuncs.push(
       bus.on('creation:baked', (e) => {
         if (room.connected) setTimeout(() => void this.announce(e.creation.id), 0);

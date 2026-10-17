@@ -37,6 +37,8 @@ describe('Point + Say intent', () => {
     expect(chooseGame(intent({ roles: [{ role: 'launcher', items: ['s'] }, { role: 'ball', items: ['a'] }, { role: 'board', items: ['b'] }] }), TEMPLATES)?.spec.id).toBe('flick-and-pocket');
     expect(chooseGame(intent({ roles: [{ role: 'ball', items: ['a'] }, { role: 'target', items: ['p'] }] }), TEMPLATES)?.spec.id).toBe('knock-down');
     expect(chooseGame(intent({ text: 'marble run please' }), TEMPLATES)?.spec.id).toBe('marble-run');
+    // the e2e case: a ball chip, a target chip, "knock them down" (sent to the agent as the game's name)
+    expect(chooseGame(intent({ text: 'knock them down', roles: [{ role: 'ball', items: ['a'] }, { role: 'target', items: ['p'] }] }), TEMPLATES)?.spec.name).toBe('Knock-down');
     expect(chooseGame(intent({}), TEMPLATES)).toBeNull();
   });
 
@@ -79,5 +81,12 @@ describe('Point + Say intent', () => {
     expect(t.text).toBe('flick [A] so [B] knocks [C] off');
     expect(t.items).toEqual({ A: 'item toy:a', B: 'item toy:b', C: 'item toy:c' });
     expect(t.refs.C).toBe('toy:c');
+  });
+
+  it('typing with a piece in the hand: "this" is that piece, whatever was shown first', () => {
+    const att: Attention[] = [{ t: 1, gesture: 'point', itemId: 'cup1' }, { t: 2, gesture: 'point', itemId: 'cup2' }, { t: 3, gesture: 'hold', itemId: 'ball' }];
+    const w = say('throw this into those');
+    expect(bindOrdered(w, att).bindings.map((b) => b.ids)).toEqual([['cup1'], ['cup2', 'ball']]);
+    expect(bindOrdered(w, att, undefined, 'ball').bindings.map((b) => b.ids)).toEqual([['ball'], ['cup1', 'cup2']]);
   });
 });
