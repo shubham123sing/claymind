@@ -1,2 +1,5 @@
 node_modules/
 .claude/settings.local.json
+qa/recordings/
+qa/test-results/
+qa/e2e/test-results/

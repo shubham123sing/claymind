@@ -3,7 +3,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import { bus } from './core/event-bus.js';
 import { PanelSystem } from './panel.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
-import { SurfaceSystem } from './platform/surface/surface-system.js';
+import { surface, SurfaceSystem } from './platform/surface/surface-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
 import { SculptSystem } from './sculpt/sculpt-system.js';
@@ -26,7 +26,7 @@ import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
   {

@@ -133,7 +133,7 @@ export const XR_TEXT_SCALE = 1.25;
 /** Shared drawing helpers (design tokens: one radius, glass panel, accent). High contrast: opaque, white outlines. */
 export const ui = {
   panel(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    ctx.fillStyle = settings.highContrast ? '#000000' : 'rgba(14,16,20,0.88)';
+    ctx.fillStyle = settings.highContrast ? '#000000' : 'rgba(14,16,20,0.96)';
     ctx.beginPath();
     ctx.roundRect(0, 0, w, h, 36);
     ctx.fill();
@@ -167,12 +167,17 @@ export const ui = {
     let line = '', lines = 0;
     for (const w of words) {
       const test = line ? `${line} ${w}` : w;
-      if (ctx.measureText(test).width > maxW && line) {
+      // the last allowed line keeps every remaining word (shortened with an ellipsis below)
+      if (ctx.measureText(test).width > maxW && line && lines < maxLines - 1) {
         ctx.fillText(line, x, y);
         y += lineH;
         line = w;
-        if (++lines >= maxLines - 1) break;
+        lines++;
       } else line = test;
+    }
+    if (line && ctx.measureText(line).width > maxW) {
+      while (line.length > 1 && ctx.measureText(`${line}…`).width > maxW) line = line.slice(0, -1);
+      line = `${line.trimEnd()}…`;
     }
     if (line) {
       ctx.fillText(line, x, y);
