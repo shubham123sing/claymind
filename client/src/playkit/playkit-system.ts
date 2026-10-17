@@ -23,7 +23,7 @@ import { ObjectSystem } from '../objects/object-system.js';
 import { input } from '../platform/input/input-system.js';
 import { nearestSurfacePoint, surface } from '../platform/surface/surface-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
-import { copySaved, fromSurfaceFrame, toSurfaceFrame, type SavedPart } from '../storage/library.js';
+import { copySaved, fromSurfaceFrame, toSurfaceFrame, type SavedCreation, type SavedPart } from '../storage/library.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { offerUndo } from '../ui/undo-toast.js';
 import { settings } from '../core/settings.js';
@@ -298,7 +298,38 @@ export class PlayKitSystem extends createSystem({}) {
     if (this.mode === 'off') {
       this.computeFrame();
       this.sculpt.setSuspended(true);
+      this.putAwayCreations();
     }
+  }
+
+  /** Living creations that stood on the table when the Play Kit took it (put away like the clay, back afterwards). */
+  private putAway: SavedCreation[] = [];
+
+  private onTable(p: { x: number; y: number; z: number }): boolean {
+    const dx = p.x - surface.centerX, dz = p.z - surface.centerZ, c = Math.cos(-surface.yaw), s = Math.sin(-surface.yaw);
+    const lx = dx * c - dz * s, lz = dx * s + dz * c;
+    return Math.abs(lx) <= surface.halfW && Math.abs(lz) <= surface.halfD && p.y > surface.topY - 0.02 && p.y < surface.topY + 0.6;
+  }
+
+  /** Creations on the table would stand in the game's way (a thrown ball hits them): saved where they are and taken off. In a room they are shared with the others, so they stay. */
+  private putAwayCreations(): void {
+    if (this.roomNames?.().length) return;
+    for (const id of this.objects.liveCreationIds()) {
+      const at = this.objects.poseOf(id)?.p;
+      if (!at || !this.onTable(at)) continue;
+      const saved = this.objects.deleteCreation(id);
+      if (saved) this.putAway.push(saved);
+    }
+    if (this.putAway.length) this.toast(`${this.putAway.length} of your creations moved off the table while you play; they come back after`);
+  }
+
+  private bringCreationsBack(): void {
+    for (const saved of this.putAway) {
+      this.objects.restore(saved, 'saved');
+      if (saved.pinned) bus.emit('creation:changed', { creationId: saved.id }); // pin kept, as after a reload
+    }
+    if (this.putAway.length) this.toast('Your creations are back on the table');
+    this.putAway = [];
   }
 
   // ---------- modes ----------
@@ -379,6 +410,7 @@ export class PlayKitSystem extends createSystem({}) {
     this.engine = null;
     this.hud.mesh.visible = false;
     this.sculpt.setSuspended(false);
+    this.bringCreationsBack();
     this.refreshPanel();
   }
 
