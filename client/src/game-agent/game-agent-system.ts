@@ -51,6 +51,8 @@ export class GameAgentSystem extends createSystem({}) {
   /** Point + Say: what has been shown and said so far */
   private intent: Intent = { roles: [], zones: [], paths: [], text: '' };
   private pending: RoleWord | null = null;
+  /** pieces given a role with a chip or the confirm card: typed words do not change them */
+  private chipped = new Set<string>();
   /** the roles the player chose for the game being previewed (game role -> kit item) */
   private chosen: Record<string, string> = {};
 
@@ -228,6 +230,7 @@ export class GameAgentSystem extends createSystem({}) {
 
   private startDescribe(): void {
     this.intent = { roles: [], zones: [], paths: [], text: '' };
+    this.chipped.clear();
     this.ps.clearMarks();
     this.ps.begin();
     this.ps.marking = null;
@@ -283,7 +286,10 @@ export class GameAgentSystem extends createSystem({}) {
       this.intent.goal = got.goal;
       this.hint('Got it: that zone is the goal');
     } else if (got.roles.length) {
-      for (const a of got.roles) addRole(this.intent.roles, a.role, a.items);
+      for (const a of got.roles) {
+        addRole(this.intent.roles, a.role, a.items);
+        a.items.forEach((k) => this.chipped.add(k));
+      }
       this.hint(`Got it: ${got.roles[0].items.map((k) => this.kit.itemName(k)).join(', ')} = the ${got.roles[0].role}`);
     } else if (role === 'here') this.hint('Mark a zone first: press Mark a zone, then pinch and draw a loop on the table', false);
     else this.hint('Point at it or hold it up first, then press within 2 seconds', false);
@@ -291,7 +297,10 @@ export class GameAgentSystem extends createSystem({}) {
   }
 
   private picked(item: string): void {
-    if (item && this.pending) addRole(this.intent.roles, this.pending, [item]);
+    if (item && this.pending) {
+      addRole(this.intent.roles, this.pending, [item]);
+      this.chipped.add(item);
+    }
     this.hint(item ? `Got it: ${this.kit.itemName(item)} = the ${this.pending}` : 'Point at it again, a little longer', !!item);
     this.pending = null;
     this.understand();
@@ -301,12 +310,18 @@ export class GameAgentSystem extends createSystem({}) {
   /** Typed words: pointing words bind to what was shown, in order; role words are read too. */
   private typed(text: string): void {
     const words: Word[] = text.split(/\s+/).filter(Boolean).map((w, k) => ({ text: w, t: k }));
-    const bound = bindOrdered(words, this.ps.attention, (k) => this.kit.itemName(k));
+    // the piece in a hand while typing ("hold it in one hand, type with the other"): "this" means it
+    const held = this.ps.now().held;
+    const bound = bindOrdered(words, this.ps.attention, (k) => this.kit.itemName(k), held.length === 1 ? held[0] : null);
     const got = rolesFromWords(words, bound);
     // pieces named in the words ("the Red ball is the ball"), unless the hands already said what they are
     const pointed = new Set(got.roles.flatMap((r) => r.items));
     for (const a of rolesFromNames(text, this.kit.tableItems())) got.roles.push({ role: a.role, items: a.items.filter((k) => !pointed.has(k)) });
-    for (const a of got.roles) if (a.items.length) addRole(this.intent.roles, a.role, a.items);
+    // what the hands and chips said wins: typed words only give roles to pieces without one ("knock them down")
+    for (const a of got.roles) {
+      const free = a.items.filter((k) => !this.chipped.has(k));
+      if (free.length) addRole(this.intent.roles, a.role, free);
+    }
     if (got.goal) this.intent.goal = got.goal;
     this.intent.text = text;
     this.hint(got.roles.length || got.goal ? 'Got it' : 'Noted');
@@ -339,9 +354,11 @@ export class GameAgentSystem extends createSystem({}) {
     const marks = this.ps.marks;
     const shown: Intent = { ...this.intent, roles: this.intent.roles.map((r) => ({ ...r, items: [...r.items] })), zones: marks.filter((m) => m.kind === 'zone'), paths: marks.filter((m) => m.kind === 'path') };
     this.endDescribe();
-    // with words, the agent reads them (when it is there); otherwise all code: instant and offline
-    if (shown.text && this.panel.online) return this.askGame({ name: (shown.game ?? shown.text).slice(0, 60), rules: this.shownInWords(shown) }, shown);
     const pick = chooseGame(shown, TEMPLATES, (k) => this.kit.itemName(k));
+    // with words, the agent reads them (when it is there), told the game the code chose from the chips
+    // and words (a free model alone made "knock them down" + a target chip a Target throw); otherwise
+    // all code: instant and offline
+    if (shown.text && this.panel.online) return this.askGame({ name: (shown.game ?? pick?.spec.name ?? shown.text).slice(0, 60), rules: this.shownInWords(shown) }, shown);
     if (!pick) {
       this.ps.begin();
       return this.hint('Show me at least one piece and what it is, or type the name of the game', false);

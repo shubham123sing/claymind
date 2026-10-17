@@ -134,4 +134,14 @@ describe('Point + Say: chat only vs gestures + cards vs combined', () => {
     const { summary } = run('modes-heldout-2');
     for (const m of modes) expect(summary[m].invalidSpecs, m).toBe(0);
   });
+
+  it('third held-out set (written before the second typed-words fix, scored once after it)', () => {
+    const { summary } = run('modes-heldout-3');
+    for (const m of modes) expect(summary[m].invalidSpecs, m).toBe(0);
+  });
+
+  it('fourth held-out set (written before the third typed-words fix, scored once after it)', () => {
+    const { summary } = run('modes-heldout-4');
+    for (const m of modes) expect(summary[m].invalidSpecs, m).toBe(0);
+  });
 });

@@ -121,10 +121,15 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
     await shot(B, 'B', 'g-joined');
     // build one shared piece: A pulls the shared clay, B must see the same clay
     const before = await B.evaluate(() => (window as any).qa.clay().rawVolume);
-    await A.evaluate(async () => {
-      await (window as any).qaFlows.menuPath('make', 'shape');
-      await (window as any).qaFlows.stroke([1, 0.3, 0.3], [0.04, 0.01, 0]);
+    const pull = await A.evaluate(async () => {
+      const w = window as any, sc = w.__sys.sculpt;
+      await w.qaFlows.menuPath('make', 'shape');
+      const seq0 = w.__claySync?.lastSeq ?? 0;
+      await w.qaFlows.stroke([1, 0.3, 0.3], [0.04, 0.01, 0]);
+      await w.qa.frames(30);
+      return { tool: sc.tool?.id, mirror: sc.mirror, suspended: sc.suspended, playMode: w.__sys.playkit.playMode, edits: (w.__claySync?.lastSeq ?? 0) - seq0 };
     });
+    console.log('A pull:', JSON.stringify(pull));
     await B.evaluate(() => (window as any).qa.frames(90));
     const [va, vb] = await Promise.all([A.evaluate(() => (window as any).qa.clay()), B.evaluate(() => (window as any).qa.clay())]);
     // the same edits in the same order and the same clay (the room's own check: sequence + checksum)
@@ -140,8 +145,8 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
     const thrown = await A.evaluate(() => (window as any).qaFlows.throwOne());
     await B.evaluate(() => (window as any).qa.frames(60));
     const [ha, hb] = await Promise.all([A.evaluate(() => (window as any).qaFlows.hud()), B.evaluate(() => (window as any).qaFlows.hud())]);
-    const moved = !/Blocks down: 0 \//.test(ha.lines.join(' ')) || /Shots: [1-9]/.test(ha.lines.join(' '));
-    record('B', 'g', 'one turn played: the shot counts, both see the same score', thrown && moved && ha.lines.join() === hb.lines.join(), `A: ${ha.lines.join(' | ')}; B: ${hb.lines.join(' | ')}`);
+    const moved = !/Blocks down: 0 \//.test(ha.lines.join(' '));
+    record('B', 'g', 'one turn played: blocks go down, both see the same score', thrown && moved && ha.lines.join() === hb.lines.join(), `A: ${ha.lines.join(' | ')}; B: ${hb.lines.join(' | ')}`);
     await shot(A, 'A', 'g-turn');
     await shot(B, 'B', 'g-turn');
   }

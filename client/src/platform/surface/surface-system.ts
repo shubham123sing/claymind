@@ -117,6 +117,8 @@ export class SurfaceSystem extends createSystem({
   private tmpPos = new Vector3();
   private tmpQuat = new Quaternion();
   private tmpEuler = new Vector3();
+  private tmpNormal = new Vector3();
+  private tmpHead = new Vector3();
 
   private createVirtualTable(): void {
     const t = VIRTUAL_TABLE;
@@ -256,10 +258,14 @@ export class SurfaceSystem extends createSystem({
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
     }
-    // the slab sits behind the plane (its normal, local +Y, points into the room)
+    // the slab sits behind the plane, out of the room: on the side away from the player's head (a plane's own
+    // +Y is not always the room side: an emulated floor's points down, which put a 50 cm slab on top of the floor)
     const w = maxX - minX, d = maxZ - minZ, th = isTable ? TABLE_COLLIDER_DEPTH : wall ? WALL_DEPTH : isFloor ? FLOOR_DEPTH : 0.2;
     const mesh = new Mesh(new BoxGeometry(w, th, d), new MeshStandardMaterial({ visible: false }));
-    const local = new Vector3((minX + maxX) / 2, -th / 2, (minZ + maxZ) / 2).applyQuaternion(this.tmpQuat);
+    const normal = this.tmpNormal.set(0, 1, 0).applyQuaternion(this.tmpQuat);
+    const head = this.world.camera.getWorldPosition(this.tmpHead);
+    const roomSide = normal.dot(head.sub(this.tmpPos)) >= 0 ? 1 : -1;
+    const local = new Vector3((minX + maxX) / 2, (-th / 2) * roomSide, (minZ + maxZ) / 2).applyQuaternion(this.tmpQuat);
     mesh.position.copy(this.tmpPos).add(local);
     mesh.quaternion.copy(this.tmpQuat);
     const collider = this.world.createTransformEntity(mesh);

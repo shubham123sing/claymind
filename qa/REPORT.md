@@ -40,8 +40,8 @@ Moves are at most 1.5-5 cm per frame (the app treats bigger jumps as tracking gl
 | b | bring to life | PASS | PASS |
 | b | material for the object | PASS (clay -> steel) | PASS |
 | c | grab the object | PASS | PASS |
-| c | let go past the edge: lands below the table | FAIL | **FAIL**: lands on the sofa seat (0.43 m), see below |
-| c | no tunnelling | PASS | PASS (lowest bottom 0.43 m) |
+| c | let go past the edge: lands below the table | FAIL | PASS (lands on the floor, bottom -0.002 m) |
+| c | no tunnelling | PASS | PASS (lowest bottom -0.002 m) |
 | c | reset | FAIL (test) | PASS (Remove from scene) |
 | d | one creation to the Library | PASS | PASS |
 | d | three different creations to the Play Kit | FAIL (test) | PASS (14x9x10, 10x16x10, 10x9x10 cm) |
@@ -51,21 +51,24 @@ Moves are at most 1.5-5 cm per frame (the app treats bigger jumps as tracking gl
 | e | point at a toy + "ball" chip | PASS* | PASS (Toy 1 = the ball) |
 | e | point at a toy + "target" chip | PASS* (wrong toy) | PASS (Toy 2 = the target) |
 | e | words on the keypad ("knock them down") | PASS | PASS |
-| e | Make it | PASS | PASS (Target throw, your Toy 1 as the ball) |
+| e | Make it | PASS | PASS* (Target throw, your Toy 1 as the ball; see 8 below) |
 | e | backend off: the offline line | PASS | PASS |
 | f | game starts with its rules shown | PASS | PASS |
-| f | throw by hand: the shot counts | FAIL | PASS (shot counted, turn ended; **no ball in**) |
+| f | throw by hand: it scores (stricter) | FAIL | **FAIL** (2 lobs counted, no ball in a cup) |
 | f | reset (HUD Reset) | PASS | PASS |
 | g | create a room | PASS | PASS |
 | g | join by code on the keypad | PASS | PASS |
-| g | shared clay: same clay for both | FAIL (test) | PASS (19 edits each, checksums equal) |
+| g | shared clay: same clay for both | FAIL (test) | PASS (20 edits each, checksums equal) |
 | g | host starts a game, the other mirrors it | PASS | PASS |
-| g | one turn: the shot counts for both | FAIL | PASS (Shots 1/3 on both; **no block down**) |
-| | **Total** | **25 / 32** | **32 / 33** |
+| g | one turn: blocks go down, same score for both (stricter) | FAIL | **FAIL** (Shots 1/3 on both, lane clear, 0 blocks down) |
+| | **Total** | **25 / 32** | **31 / 33** |
 
 \* the first run's "target" chip bound the same toy as "ball": the pointing ray passed through the first toy.
 (The first run's checks were looser; the last run's checks are stricter, e.g. Make it must come from the Describe
 view and the shared clay must have equal checksums.)
+
+Last run: `recordings/after-2026-10-17-18-42` (branch `fix-words-throws`). The two throw checks are now strict
+(a ball must go in, a block must fall); an earlier run passed them on "the shot was counted" alone.
 
 ## What is visibly wrong (from the frames)
 
@@ -83,16 +86,27 @@ the menus are readable; no object passes through the table or the floor.
    pyramid): living creations stayed on the table when a Play Kit game started, and the thrown ball hit them.
    **Fixed for one player** (last run `steps/08-A-f-playGame.png`: the lane is clear; they come back when the
    game ends). **Not in a room** (last run `steps/14-A-g-turn.png`): there they are shared with the others, so
-   they stay, and they still block the throw.
+   they stay, and they still block the throw. **Fixed in a room too:** the host puts them away and back (shared, so
+   the others see it); the last run's lane is clear.
 5. **Pushed off the table, it comes back by itself** (last run `contact-landing.png`, head turned to watch): the
    object falls past the edge onto the room's sofa (0.43 m) and about 1 s later the out-of-reach rescue floats it
-   back beside the clay. Physics is right (it falls, lands, does not tunnel); the floor is not reached here only
-   because the emulated living room has a sofa beside the table. The quick return may surprise a player who
+   back beside the clay. Physics is right (it falls, lands, does not tunnel). **The "sofa" was an app bug:** a
+   detected room plane's physics slab sat on the wrong side of the plane, an invisible floor about 0.45 m up.
+   **Fixed:** the slab goes on the side away from the head; the last run lands on the floor (bottom -0.002 m). The quick return may surprise a player who
    pushed it off on purpose: worth a decision.
 6. **The scripted throws never score** (`f`: Target throw, 1 throw, 0 in; `g`: Knock-down, 0 blocks down): the
    shot is counted and the turn passes on both players, but the scripted swing (about 2 m/s, released midway)
    misses. Not proven to be an app bug; aim and release timing need real hands.
-7. **Not app bugs, found and fixed in the test harness** (they cost most of the time and are written down so the
+   **Since then:** one player alone, a straight scripted throw knocks 5 of 6 Knock-down blocks over (probe). A
+   scripted 45-degree lob into the Target-throw cups never went in (about 15 tries at 5 strengths: the release speed
+   from the emulated hand is uneven at about 40 fps). In the room the lane is now clear (`steps/14-A-g-turn.png`)
+   and the ball reaches the pyramid, but with two pages on one GPU (about 9 fps) it does not knock a block down.
+   Both stay FAIL; real throws need a Quest.
+7. **"Make it" chose Target throw for "knock them down" + a target chip** (online, a free model): the code's own
+   choice from the chips and words is Knock-down (unit test), but only the words were sent. **Fixed in code:** the
+   code's choice now goes to the agent as the game's name (the words still go as the player's rules). Not measured
+   live: the free models had no budget left when it was tried, and the fallback is then the built-in Knock-down.
+8. **Not app bugs, found and fixed in the test harness** (they cost most of the time and are written down so the
    next run does not repeat them):
    - the emulator jumps between hand poses: closing the hand moves the pinch point 7-8 cm in one frame, so a
      pinch "on the clay" started far from it and the Shape tool sent drags from 4 cm outside the surface (pull
@@ -113,10 +127,12 @@ fps sampled at the end of each step (headless Chromium, stereo XR rendering on a
 | | a | b | c | d | e | f | with a 2nd player open |
 |---|---|---|---|---|---|---|---|
 | first run | 56.5 | 28.0 | 28.2 | 22.2 | 42.6 | 28.1 | 10.9 |
-| last run | 57.9 | 56.7 | 45.3 | 39.8 | 34.9 | 14.3 | 9.4 |
+| run 4 | 57.9 | 56.7 | 45.3 | 39.8 | 34.9 | 14.3 | 9.4 |
+| last run | 55.8 | 56.0 | 48.8 | 48.9 | 18.8 | 34.7 | about 9 |
 
-The two-player numbers have both pages rendering on the same GPU. The low f (14 fps, Target throw with the
-player's own toy) is worth a look on a Quest; these numbers are not Quest numbers.
+The two-player numbers have both pages rendering on the same GPU. f went from 14 to 35 fps after the Play Kit HUD
+stopped repainting every frame (it repaints only when its text changes); e is sampled while waiting for the agent.
+These are not Quest numbers.
 
 ## Fixes made (app)
 
@@ -127,6 +143,13 @@ player's own toy) is worth a look on a Quest; these numbers are not Quest number
    standing on it are saved with their pose and taken off, like the clay is hidden; they come back when the table
    is left (not in a room, where they are shared).
 4. `client/src/index.ts`: `?debug` also exposes the table surface (`__surface`) for tests.
+5. `client/src/platform/surface/surface-system.ts`: a room plane's physics slab goes on the side away from the
+   player's head (it made an invisible floor about 0.45 m up).
+6. `client/src/playkit/playkit-system.ts` + `multiplayer/shared-bodies.ts`: in a room the host puts creations away
+   for a game and back after; the HUD repaints only when its text changes.
+7. `client/src/ui/wrist-menu.ts`: after a press nothing else is pressed until the fingertip leaves every button.
+8. `client/src/game-agent/game-agent-system.ts`: "Make it" sends the code's game choice with the words; typed
+   words never change a role given with a chip; "this" typed while holding one piece is that piece.
 
 ## Still needs a real Quest
 
