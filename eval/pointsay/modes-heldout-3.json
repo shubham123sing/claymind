@@ -1,0 +1,69 @@
+{
+  "about": "Third held-out Point + Say set (same format as modes.json), written on 2026-10-17 BEFORE the second typed-words fix (branch fix-words-throws) and scored once after it, with no code change after. modes-heldout-2.json became tuning data for that fix.",
+  "scenarios": [
+    {
+      "id": "h3-cans-hinglish",
+      "items": { "BL": ["Rubber ball", "kit_rubber"], "C1": ["Tin 1", "kit_tin"], "C2": ["Tin 2", "kit_tin"], "C3": ["Tin 3", "kit_tin"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["BL"], "target": ["C1", "C2", "C3"] } },
+      "chat": "rubber ball se saare tin gira do",
+      "cards": [["hold", "BL", 1000], ["chip", "ball", 1600], ["point", "C1", 4000], ["chip", "target", 4600], ["point", "C2", 7000], ["chip", "target", 7600], ["point", "C3", 10000], ["chip", "target", 10600]],
+      "combined": { "gestures": [["hold", "BL", 1000], ["point", "C1", 2500], ["point", "C2", 2800], ["point", "C3", 3100]], "text": "isse ye sab gira do" }
+    },
+    {
+      "id": "h3-two-baskets",
+      "items": { "B1": ["Red basket", "kit_rb"], "B2": ["Blue basket", "kit_bb"], "P": ["Pom pom", "kit_pom"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["B1", "B2"], "ball": ["P"] } },
+      "chat": "toss the pom pom into the red basket or the blue basket",
+      "cards": [["hold", "P", 1000], ["chip", "ball", 1600], ["point", "B1", 4000], ["chip", "goal", 4600], ["point", "B2", 7000], ["chip", "goal", 7600]],
+      "combined": { "gestures": [["hold", "P", 1000], ["point", "B1", 2500], ["point", "B2", 2800]], "text": "toss this into these" }
+    },
+    {
+      "id": "h3-striker-words",
+      "items": { "S": ["Round puck", "kit_puck"], "M1": ["Small coin 1", "kit_sc"], "M2": ["Small coin 2", "kit_sc"] },
+      "truth": { "game": "flick-and-pocket", "roles": { "launcher": ["S"], "ball": ["M1", "M2"] } },
+      "chat": "use the round puck as the striker to push the small coins into the pockets",
+      "cards": [["hold", "S", 1000], ["chip", "launcher", 1600], ["point", "M1", 4000], ["chip", "ball", 4600], ["point", "M2", 7000], ["chip", "ball", 7600]],
+      "combined": { "gestures": [["hold", "S", 1000], ["point", "M1", 2500], ["point", "M2", 2800]], "text": "this is the striker and these are the coins" }
+    },
+    {
+      "id": "h3-blocks-tower",
+      "items": { "K1": ["Brick 1", "kit_brick"], "K2": ["Brick 2", "kit_brick"], "K3": ["Brick 3", "kit_brick"] },
+      "truth": { "game": "tower-balance", "roles": { "target": ["K1", "K2", "K3"] } },
+      "chat": "pile the bricks up as high as you can",
+      "cards": [["point", "K1", 1000], ["chip", "target", 1600], ["point", "K2", 4000], ["chip", "target", 4600], ["point", "K3", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["point", "K1", 1000], ["point", "K2", 1300], ["point", "K3", 1600]], "text": "stack these into a tower" }
+    },
+    {
+      "id": "h3-marble-hinglish",
+      "items": { "R": ["Ramp", "kit_ramp"], "G": ["Goli", "kit_goli"] },
+      "truth": { "game": "marble-run", "roles": { "launcher": ["R"], "ball": ["G"] } },
+      "chat": "goli ramp se neeche jayegi",
+      "cards": [["point", "R", 1000], ["chip", "launcher", 1600], ["hold", "G", 4000], ["chip", "ball", 4600]],
+      "combined": { "gestures": [["hold", "G", 1000], ["point", "R", 2500]], "text": "ye goli us ramp se jayegi" }
+    },
+    {
+      "id": "h3-bowl-and-bead",
+      "items": { "BW": ["Bowl", "kit_bowl"], "BD": ["Bead", "kit_bead"] },
+      "truth": { "game": "target-throw", "roles": { "goal": ["BW"], "ball": ["BD"] } },
+      "chat": "the bowl is the goal and you throw the bead",
+      "cards": [["point", "BW", 1000], ["chip", "goal", 1600], ["hold", "BD", 4000], ["chip", "ball", 4600]],
+      "combined": { "gestures": [["point", "BW", 1000], ["hold", "BD", 2500]], "text": "that is the goal and you throw this" }
+    },
+    {
+      "id": "h3-knock-pins-words",
+      "items": { "HB": ["Heavy ball", "kit_hb"], "P1": ["Pin 1", "kit_pin"], "P2": ["Pin 2", "kit_pin"] },
+      "truth": { "game": "knock-down", "roles": { "ball": ["HB"], "target": ["P1", "P2"] } },
+      "chat": "knock over the pins with the heavy ball",
+      "cards": [["hold", "HB", 1000], ["chip", "ball", 1600], ["point", "P1", 4000], ["chip", "target", 4600], ["point", "P2", 7000], ["chip", "target", 7600]],
+      "combined": { "gestures": [["hold", "HB", 1000], ["point", "P1", 2500], ["point", "P2", 2800]], "text": "knock these over with this" }
+    },
+    {
+      "id": "h3-only-talk",
+      "items": { "A": ["Blue ball", "kit_blue"], "B": ["Cup", "kit_cup"] },
+      "truth": { "game": null, "roles": {} },
+      "chat": "the blue ball looks nice next to the cup",
+      "cards": [["point", "A", 1000]],
+      "combined": { "gestures": [["point", "A", 1000]], "text": "I made this today" }
+    }
+  ]
+}
