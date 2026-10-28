@@ -297,3 +297,9 @@ Other findings:
 - **Wrist menu:** after a press nothing else can be pressed until the fingertip leaves every button (a rare Back -> Mirror double press, seen once, not reproduced).
 - **Scripted throws:** a straight throw knocks the Knock-down blocks over; a scripted lob into the Target-throw cups still misses (release speed from the emulated hand is uneven at about 40 fps). Whether real players score needs a Quest.
 - **Not tested on a real Quest** (nothing on this branch was).
+
+## V6 Stage A (2026-10-28)
+- **Backend until 11 Dec:** one Render free web service (agent + room relay). A GitHub Actions job pings its health check every 10 minutes so it stays awake (744 of the 750 free hours a month); GitHub can delay scheduled runs and pauses them after 60 days without commits. The game never waits on it: game cards fall back to their built-in rules at once, the agent panel says "waking up" (4 s health checks, retried with growing gaps). Free model quotas (about 1,000 requests a day per model) are spent only after the built-in Rule Cards and the answer cache.
+- **No emulator in the release build:** the XR emulator and its unpkg room file are gone from the production build; tests add the emulator themselves (`qa/e2e/iwer.ts`). The desktop page is a mouse preview; there is no "try in an emulator" mode for judges without a headset.
+- **Hand models still load from jsdelivr** (IWSDK's generic hand models) until they are self-hosted.
+- **Brand names:** the game shows generic names only (Block tower, Roll-ball ramp, Throwing pins); branded requests are understood through aliases and answered with the generic game; a server filter rewrites brand names in agent output; tests scan every built-in text.

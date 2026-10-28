@@ -27,10 +27,26 @@ function claymindPhysicsRuntime(): Plugin {
   };
 }
 
+/**
+ * UIKitML imports the whole Lucide icon set to register every icon; ClayMind's panels use two.
+ * That one import (from @drawcall/uikitml) gets src/ui/lucide-subset.ts instead (V6, R3: cold start).
+ */
+function lucideSubset(): Plugin {
+  const subset = fileURLToPath(new URL('./src/ui/lucide-subset.ts', import.meta.url));
+  return {
+    name: 'claymind-lucide-subset',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (source === '@pmndrs/uikit-lucide' && importer && /[\\/]@drawcall[\\/]uikitml[\\/]/.test(importer)) return subset;
+      return null;
+    },
+  };
+}
+
 export default defineConfig({
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
-  plugins: [claymindPhysicsRuntime(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
+  plugins: [claymindPhysicsRuntime(), lucideSubset(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
   server: {
     host: '0.0.0.0',
     port: 8081,

@@ -29,7 +29,7 @@ export const RULE_LIMITS: Record<keyof RuleNumbers, [number, number, number, str
   timerSec: [0, 180, 15, 'Time limit, s (0 = none)'],
 };
 
-export const GAME_CARDS = ['Carrom', 'Bowling', 'Ring toss', 'Jenga', 'Marble race', 'Surprise me'];
+export const GAME_CARDS = ['Carrom', 'Bowling', 'Ring toss', 'Block tower', 'Marble race', 'Surprise me'];
 const W = 1000, H = 700;
 
 export class GameAgentPanel extends CanvasPanel {
@@ -84,7 +84,7 @@ export class GameAgentPanel extends CanvasPanel {
     ui.panel(ctx, W, H);
     ctx.textBaseline = 'middle';
     this.text('Make a game', 32, 46, 36, '#f4f1ec', 700);
-    const dot = this.online === null ? 'checking…' : this.online ? 'online' : 'offline';
+    const dot = this.online === null ? 'waking up…' : this.online ? 'online' : 'offline';
     this.text(dot, 270, 48, 22, this.online ? '#5fbf72' : '#f0b429', 600, 200);
     if (this.view !== 'games') this.btn(W - 250, 18, 150, 56, '◀ Back', 'back');
     this.btn(W - 86, 18, 64, 56, '×', 'close');
@@ -99,6 +99,7 @@ export class GameAgentPanel extends CanvasPanel {
         this.btn(510, 460, 450, 82, 'Show me with my hands', 'game:describe', true, '#9fd0f5');
         if (this.showActivity) this.activity.slice(-3).forEach((l, i) => this.text(l, 40, 570 + i * 26, 18, 'rgba(244,241,236,0.7)', 500));
         else if (this.online === false) this.wrapped('The game agent is offline. The Play Kit and its five games work without it.', 565, 2, 22);
+        else if (this.online === null) this.wrapped('The game agent is waking up (a free server, about a minute). Keep sculpting: the built-in games and "Show me with my hands" work now.', 565, 2, 22);
         this.btn(40, by, 330, 56, this.showActivity ? 'Hide activity' : 'Agent activity', 'activity');
         break;
       }

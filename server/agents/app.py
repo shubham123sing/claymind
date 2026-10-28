@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from . import brand
 from .analyst import analyse
 from .config import Settings, load_settings
 from .flows import Orchestrator
@@ -121,7 +122,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         out = await orch.make_game(body.name, body.rules, body.rulesUnknown, body.surprise, body.kit, player(x_player_id), [p[:160] for p in body.checkProblems])
         if body.rules:
             memory.update(player(x_player_id), rulesChanged=[{"game": body.name, "rules": body.rules[:200]}])
-        return out
+        # no brand names in what the game shows (sources keep their real titles and links)
+        return {**brand.scrub({k: v for k, v in out.items() if k != "sources"}), "sources": out.get("sources", [])}
 
     @base.post("/v1/intent")
     async def intent(body: IntentIn):

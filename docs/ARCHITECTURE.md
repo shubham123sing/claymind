@@ -96,3 +96,22 @@ server/ (Python, FastAPI)
 **Brain loop:** `creation:baked` → `Brain.addCreation` (is_a concept by shape match, made_of material by estimate, features and heaviness by measurement) → reasoner → predictions + paths → `focusGraph` → `layoutGraph` → `KGView`. User edits (cut / connect / material change via `object:material-set`) go through `Brain` as user-sourced, undoable changes. The card shows the before → after effect on the predictions. Autosave writes the snapshot to IndexedDB.
 
 **AI loop (optional layer):** `creation:baked` (local object already exists) → `AiSystem`: cache hit → apply instantly; otherwise render the sculpt → `describe` → `creation:described` (KG gains `vlm` beliefs: is_a, made_of) + merged material estimate → `creation:set-material` (by `ai`) → for raw sculpts / weak matches: `refine` → `generate` with progress (`creation:ai-status`) → `creation:model` → `ObjectSystem` rebuilds the body with the new geometry. Provider: server if `/health` answers, else the in-browser mock (`?ai=` overrides). Failures keep the local result.
+
+## What is ClayMind's own, and the "take it away" test (V6, 2026-10-28)
+
+ClayMind is not a wrapper around an AI service. Its own parts, all in this repository and running in
+the browser with no server:
+- the hands-only clay engine (signed-distance grid in a web worker, marching cubes, pieces, paint, mirror);
+- bringing a sculpt to life: compound Havok bodies with one child per piece, mass and centre of mass from
+  the closed meshes, per-piece materials, matchups, breaking, collision sound;
+- the Play Kit: a validated, fixed-vocabulary Game Spec, a deterministic rule engine, five built-in games,
+  Sets, the Referee's dry run of any game in the same physics;
+- Point + Say: binding pointing words to what the hands showed (code, no AI);
+- multiplayer room sync (shared clay, shared toys, host-run game), the Library, export to .glb.
+
+The AI (free hosted models behind `server/agents`) only fills the Game Spec format, reads typed words
+the code could not, and looks up rules of games it does not know. **Take it away and the app still
+works:** sculpting, physics, Library, Play Kit and its built-in games, game cards (they fall back to
+their built-in rules at once), "Show me with my hands" (code path) and the Point + Say chips. The game
+says "the game agent is waking up / offline" and never waits on it. Multiplayer needs the relay (the
+same server); without it the room panel says so.

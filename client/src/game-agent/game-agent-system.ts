@@ -25,13 +25,16 @@ import { room, type RoomMsg } from '../multiplayer/room-client.js';
 import { validateSpec } from '../playkit/game-spec.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { applyNumbers, numbersOf, rulesInWords } from './adjust.js';
-import { agentApi, OFFLINE, OfflineError, type GameAnswer } from './agent-client.js';
+import { agentApi, agentStatus, agentsUrl, OFFLINE, OfflineError, warmUp, type GameAnswer } from './agent-client.js';
 import { GameAgentPanel, RULE_LIMITS, type RuleNumbers, type View } from './game-agent-panel.js';
 import { KeypadPanel } from '../ui/keypad.js';
 import { ObjectSystem } from '../objects/object-system.js';
 import { bind, bindOrdered, type Word } from './binder.js';
 import { addRole, applyIntent, chooseGame, ROLE_WORDS, rolesFromNames, rolesFromWords, tagged, type Intent, type RoleWord } from './intent.js';
 import { PointSaySystem } from './point-say.js';
+
+/** The game cards' built-in games, for when the agent is not there (same as the server's Rule Cards). */
+const CARD_TEMPLATES: Record<string, string> = { Carrom: 'flick-and-pocket', Bowling: 'knock-down', 'Ring toss': 'target-throw', 'Block tower': 'tower-balance', 'Marble race': 'marble-run' };
 
 const IDLE_CLOSE_MS = 90000;
 
@@ -63,8 +66,12 @@ export class GameAgentSystem extends createSystem({}) {
       (m.material as { depthTest: boolean }).depthTest = false;
       this.world.createTransformEntity(m);
     }
-    // a hosted backend may be asleep (free tier): one quiet check now wakes it while the player builds
-    void agentApi.online();
+    // a hosted backend may be asleep (free tier): wake it now, in the background, while the player builds
+    void warmUp();
+    this.cleanupFuncs.push(agentStatus.on((st) => {
+      this.panel.online = st === 'waking' ? null : st === 'online';
+      this.panel.invalidate();
+    }));
     this.cleanupFuncs.push(
       bus.on('gameagent:open', () => this.open()),
       // in a room anyone can make a game; the host decides what the room plays
@@ -108,12 +115,13 @@ export class GameAgentSystem extends createSystem({}) {
     this.panel.view = 'games';
     this.panel.mesh.visible = true;
     this.openedAt = performance.now();
-    this.panel.online = null;
+    // never wait on the backend: show what is known, wake it again if it was not answering
+    const st = agentStatus.value;
+    this.panel.online = st === 'online' ? true : st === 'offline' && !agentsUrl() ? false : null;
     this.panel.invalidate();
-    void agentApi.online().then((ok) => {
-      this.panel.online = ok;
-      this.panel.invalidate();
-    });
+    if (st !== 'online') void warmUp();
+    // it said online before: one quick check that it still is (a free server sleeps when idle)
+    else void agentApi.online().then((ok) => ok || (agentStatus.set('waking'), void warmUp()));
     uiSounds.tick();
   }
 
@@ -138,7 +146,11 @@ export class GameAgentSystem extends createSystem({}) {
     try {
       return await job();
     } catch (e) {
-      this.panel.online = e instanceof OfflineError && e.message === OFFLINE ? false : this.panel.online;
+      // not reachable: it may have gone to sleep; wake it in the background (the panel says so)
+      if (e instanceof OfflineError && e.message === OFFLINE) {
+        agentStatus.set('waking');
+        void warmUp();
+      }
       this.panel.view = this.history.pop() ?? 'games';
       this.say(e instanceof Error ? e.message : OFFLINE);
       return null;
@@ -184,6 +196,8 @@ export class GameAgentSystem extends createSystem({}) {
     const withShown = (a: GameAnswer): GameAnswer => (shown && kitOf ? this.withIntent(a, shown, kitOf) : a);
     this.chosen = {};
     let answer: GameAnswer | null = local ?? (await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()])));
+    // a game card whose agent call failed still plays: its built-in game
+    if (!answer && !local && req.name && !req.rules && !req.rulesUnknown && !shown) answer = this.cardOffline(req.name);
     if (!answer) return;
     answer = withShown(answer);
     // the Referee's dry run: a designed game (not a tested built-in one) is played in the real physics first
@@ -370,6 +384,17 @@ export class GameAgentSystem extends createSystem({}) {
     return this.askGame({}, shown, local);
   }
 
+  /** A game card's built-in game, played from the code alone (no backend). */
+  private cardOffline(card: string): GameAnswer | null {
+    const id = CARD_TEMPLATES[card] ?? (card === 'Surprise me' ? chooseGame({ text: '', roles: [], zones: [], paths: [] } as unknown as Intent, TEMPLATES, (k) => this.kit.itemName(k))?.spec.id ?? 'knock-down' : null);
+    const spec = TEMPLATES.find((t) => t.id === id);
+    if (!spec) return null;
+    return {
+      path: 'template', note: `Built-in rules (the game agent is ${agentStatus.value === 'waking' ? 'waking up' : 'offline'})`, templateId: spec.id, spec,
+      preview: { name: card === 'Surprise me' ? spec.name : card, howToPlay: spec.howToPlay.slice(0, 4), missing: [] }, cannot: [], adjustments: [], sources: [], guessed: false,
+    };
+  }
+
   /** What was shown, in words for the game agent; the roles and marks are applied here anyway. */
   private shownInWords(i: Intent): string {
     const parts = i.roles.map((r) => `the ${r.role}${r.items.length > 1 ? 's are' : ' is'} ${r.items.map((k) => this.kit.itemName(k)).join(', ')}`);
@@ -475,7 +500,11 @@ export class GameAgentSystem extends createSystem({}) {
     else if (id === 'describe:clear') this.startDescribe();
     else if (id === 'describe:make') void this.make();
     else if (id.startsWith('pick:')) this.picked(id.slice(5));
-    else if (id.startsWith('game:') && !['game:type', 'game:rules', 'game:lookup'].includes(id)) void this.askGame({ name: id.slice(5) });
+    else if (id.startsWith('game:') && !['game:type', 'game:rules', 'game:lookup'].includes(id)) {
+      // the agent asleep or away: a card still gives its built-in game at once (no waiting)
+      const local = agentStatus.value === 'online' ? null : this.cardOffline(id.slice(5));
+      void this.askGame({ name: id.slice(5) }, undefined, local ?? undefined);
+    }
     else if (id === 'game:type') this.type('Which game?', (name) => void this.askGame({ name }));
     else if (id === 'game:lookup') this.type("Which game? I'll look up the rules", (name) => void this.askGame({ name, rulesUnknown: true }));
     else if (id === 'game:rules') {

@@ -1,0 +1,22 @@
+# Keeps the free game-agent backend (Render, render.yaml) awake for players and judges until 11 Dec 2026:
+# a free Render web service sleeps after 15 min without traffic and takes about a minute to wake.
+# One health check every 10 minutes (no AI call, no quota used). Render's free plan gives 750 instance
+# hours a month: one service awake all month is 744 h, inside it. GitHub may delay scheduled runs a few
+# minutes, and turns them off after 60 days without commits: re-enable from the Actions tab if so.
+# The game never depends on it: without the backend it says "waking up" and the built-in games play.
+name: Keep the agent backend awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Health check (wakes it if asleep)
+        run: curl -fsS --max-time 120 --retry 2 https://claymind-agents.onrender.com/v1/health -o /dev/null -w "%{http_code} in %{time_total}s\n" || echo "backend did not answer (it may be waking up)"

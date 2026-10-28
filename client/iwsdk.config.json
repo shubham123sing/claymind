@@ -58,8 +58,8 @@
     "emulator": {
       "device": "metaQuest3",
       "environment": "living_room",
-      "injectOnBuild": true,
-      "activation": "always",
+      "injectOnBuild": false,
+      "activation": "localhost",
       "userAgentException": {
         "source": "OculusBrowser|Quest|Pico|Wolvic|Android|iPhone|iPad|Mobile"
       }
