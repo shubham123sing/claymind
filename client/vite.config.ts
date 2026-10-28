@@ -43,10 +43,28 @@ function lucideSubset(): Plugin {
   };
 }
 
+/**
+ * IWSDK fetches the hand models from cdn.jsdelivr.net. The two generic-hand models ship with the app
+ * (public/input-profiles, MIT, @webxr-input-profiles/assets 1.0.20), so the release needs no outside
+ * host (V6, R2). Controller models, which ClayMind does not use, still come from the CDN.
+ */
+function localHands(): Plugin {
+  const adapter = /[\\/]@iwsdk[\\/]xr-input[\\/]dist[\\/]visual[\\/]adapter[\\/]base-visual-adapter\.js/;
+  const from = '`${DEFAULT_PROFILES_PATH}/${profileId}/';
+  return {
+    name: 'claymind-local-hands',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!adapter.test(id.split('?')[0]) || !code.includes(from)) return null;
+      return code.replace(from, "`${profileId === 'generic-hand' ? './input-profiles' : DEFAULT_PROFILES_PATH}/${profileId}/");
+    },
+  };
+}
+
 export default defineConfig({
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
-  plugins: [claymindPhysicsRuntime(), lucideSubset(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
+  plugins: [claymindPhysicsRuntime(), lucideSubset(), localHands(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
   server: {
     host: '0.0.0.0',
     port: 8081,
