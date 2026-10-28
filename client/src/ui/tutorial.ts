@@ -14,6 +14,7 @@ import { input } from '../platform/input/input-system.js';
 import { GameAgentSystem } from '../game-agent/game-agent-system.js';
 import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
+import { SettingsSystem } from './settings-panel.js';
 import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
 const W = 900, H = 330;
@@ -202,8 +203,8 @@ export class TutorialSystem extends createSystem({}) {
   update(): void {
     const m = this.panel.mesh;
     // the "Play!" step and the success card stay while the game is on the table
-    // the game agent's panel is read on its own (the card would show through it)
-    const agentOpen = this.world.getSystem(GameAgentSystem)?.panelOpen ?? false;
+    // the game agent's panel and Settings are read on their own (the card would show through them)
+    const agentOpen = (this.world.getSystem(GameAgentSystem)?.panelOpen ?? false) || (this.world.getSystem(SettingsSystem)?.panelOpen ?? false);
     const away = agentOpen || (this.world.getSystem(SculptSystem)!.suspended && !(this.active && this.panel.step === STEPS.length - 1) && !this.panel.doneText);
     if (away && m.visible) {
       m.visible = false;

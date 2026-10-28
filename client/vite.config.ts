@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig, Plugin } from 'vite';
@@ -61,7 +62,21 @@ function localHands(): Plugin {
   };
 }
 
+/** Build id shown in Settings -> About (V6 gap 4): the commit and the build date, so a report names the exact build. */
+function buildId(): string {
+  let sha = (process.env.GITHUB_SHA ?? '').slice(0, 7);
+  if (!sha) {
+    try {
+      sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      sha = 'local';
+    }
+  }
+  return `${sha} ${new Date().toISOString().slice(0, 10)}`;
+}
+
 export default defineConfig({
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
   plugins: [claymindPhysicsRuntime(), lucideSubset(), localHands(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],

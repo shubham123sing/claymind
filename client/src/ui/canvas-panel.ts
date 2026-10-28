@@ -143,7 +143,9 @@ export function bindPanelMouse(world: World, panel: CanvasPanel, press: (id: str
  * Headset panels are drawn 25% larger than their nominal size so body text is
  * >= 2.5 cm tall at 1 m (plan v4, section 7) at the ~0.5 m they float from the eyes.
  */
-export const XR_TEXT_SCALE = 1.25;
+export let XR_TEXT_SCALE = 1.25;
+/** Large text (V6 4.6): every headset panel 20% bigger again. A live binding: importers read the current value. */
+onSettings((s) => (XR_TEXT_SCALE = s.largeText ? 1.5 : 1.25));
 
 /** Shared drawing helpers (design tokens: one radius, glass panel, accent). High contrast: opaque, white outlines. */
 export const ui = {

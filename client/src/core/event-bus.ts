@@ -96,6 +96,8 @@ export type AppEvents = {
   /** Browser tool menu shown or hidden with its round button. */
   'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;
+  /** Say today's challenge (V6 4.5). */
+  'daily:show': Record<string, never>;
   /** Tutorial signals: the clay was shaped / painted (or coloured); an object was pinned. */
   'clay:touched': Record<string, never>;
   'clay:painted': Record<string, never>;

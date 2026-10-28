@@ -16,6 +16,7 @@ import { DeleteSystem } from './ui/delete-creation.js';
 import { DownloadSystem } from './ui/download-dialog.js';
 import { SceneActionsSystem } from './ui/scene-actions.js';
 import { AutosaveSystem } from './storage/autosave-system.js';
+import { DailyChallengeSystem } from './ui/daily-challenge-system.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
@@ -62,12 +63,13 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(DownloadSystem);
     world.registerSystem(SceneActionsSystem);
     world.registerSystem(AutosaveSystem); // the clay and loose creations survive a crash (V6)
+    world.registerSystem(DailyChallengeSystem); // one small goal a day, from the date (V6 4.5)
     // ?debug: systems by stable names (class names are minified in release builds)
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
-          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem),
         },
       });
     }

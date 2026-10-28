@@ -645,5 +645,67 @@
     return out;
   }
 
-  Object.assign(F, { robust, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
+  // ---------- x. V6 Stage D: today's challenge, Settings -> About (build id), Large text ----------
+
+  async function extras() {
+    const out = [], d = sys().daily, set = sys().settings;
+    if (sys().playkit.playMode !== 'off' && qa.region('hud:end')) await qa.panelPress('hud:end');
+    await waitFor(() => sys().playkit.playMode === 'off', 200);
+    const toasts = [];
+    const off = w.__bus.on('ui:toast', (e) => toasts.push(e.text));
+
+    // 1. Play -> Today's challenge says the goal
+    const m = await F.menuPath('kit', 'daily');
+    await qa.frames(10);
+    out.push({ name: "x1. Play -> Today's challenge says today's goal", pass: m.ok && toasts.some((t) => t.startsWith("Today's challenge")), detail: `${d.state.day}: "${toasts.at(-1) ?? ''}"` });
+
+    // 2. done by hand: the day's goal set to the throw one for the test (the date picks another on most days), then a hard throw
+    // (already done earlier in this run, e.g. a won game in step f: noted, then cleared for the throw)
+    const before = d.line();
+    d.state = { day: d.state.day, done: false, streak: 0, lastDone: null };
+    d.challenge = { id: 'throwHard', text: 'Throw a creation of yours, hard' };
+    const id = sys().objects.liveCreationIds().at(-1) ?? (await bringToLife());
+    let thrown = false, rel = null;
+    const offR = w.__bus.on('body:released', (e) => (rel = Math.hypot(...e.v).toFixed(2)));
+    if (await grab(id)) {
+      const o = obj(id);
+      await swing('right', [o.p[0], o.p[1] + 0.08, o.p[2] + 0.12], 0.015);
+      await swing('right', [o.p[0] + 0.05, o.p[1] + 0.25, o.p[2] - 0.5], 5, 0.5);
+      await qa.rest('right');
+      thrown = true;
+    }
+    await waitFor(() => d.state.done, 120);
+    offR?.();
+    out.push({ name: 'x2. a hard throw completes the challenge: a result card (toast) and a streak of 1', pass: thrown && d.state.done && d.state.streak === 1 && toasts.some((t) => t.startsWith('Daily challenge done')), detail: `before: "${before}"; thrown ${thrown} at ${rel} m/s (fps ${w.__quality.fps}), ${JSON.stringify(d.state)}, "${toasts.at(-1) ?? ''}"` });
+    await qa.frames(60);
+    if (obj(id)) {
+      await F.menuPath('physics', 'recenter');
+      await qa.frames(20);
+    }
+
+    // 3. Settings -> About: the short help, today's challenge and the build id
+    await F.menuPath('settings');
+    await qa.frames(10);
+    const a = await qa.panelPress('about');
+    await qa.frames(10);
+    const about = set.panel.page === 'about' && !!qa.region('back') && set.panel.daily.includes('done');
+    out.push({ name: 'x3. Settings -> About shows the help lines, the challenge (done) and the build id', pass: a.ok && about, detail: `page ${set.panel.page}, "${set.panel.daily}"` });
+    await qa.panelPress('back');
+    await qa.frames(10);
+
+    // 4. Large text: panels 20% bigger, still none overlapping
+    const s0 = set.panel.mesh.scale.x;
+    const t = await qa.panelPress('largeText');
+    await qa.frames(10);
+    const s1 = set.panel.mesh.scale.x, ov = qa.overlaps();
+    out.push({ name: 'x4. Large text: the panel grows 1.25 -> 1.5, no overlapping panels', pass: t.ok && Math.abs(s1 / s0 - 1.2) < 0.01 && ov.length === 0, detail: `scale ${s0.toFixed(2)} -> ${s1.toFixed(2)}, overlaps ${JSON.stringify(ov)}` });
+    await qa.panelPress('largeText');
+    await qa.frames(10);
+    await qa.panelPress('close');
+    await qa.frames(10);
+    off?.();
+    return out;
+  }
+
+  Object.assign(F, { robust, extras, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
 })();

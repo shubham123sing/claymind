@@ -14,6 +14,8 @@ export interface Settings {
   /** The menu floats beside the clay (no palm-up gesture), poke it with either hand. */
   oneHanded: boolean;
   sound: boolean;
+  /** Bigger headset panels and text (V6 4.6). */
+  largeText: boolean;
   /** Simpler effects for a steadier frame rate (the governor's low level, always). */
   performanceMode: boolean;
   tutorialDone: boolean;
@@ -22,7 +24,7 @@ export interface Settings {
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, performanceMode: false, tutorialDone: false, vision: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, largeText: false, performanceMode: false, tutorialDone: false, vision: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();

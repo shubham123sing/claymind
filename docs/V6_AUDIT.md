@@ -111,3 +111,21 @@ Evidence: scripted emulated hands (IWER), release build; not a real Quest. Full 
   measured (`docs/PERF.md`).
 - **Still open:** panels cannot be grabbed and moved (gap 1); no seated-height calibration (gap 2);
   no Quest test (no device).
+
+## Stage D (2026-10-29): 4.5, 4.6, release rehearsal
+- **Daily challenge (4.5):** Play -> Today's challenge. One goal a day from the date alone (no backend,
+  the same for everyone; six goals, never the same two days in a row): a 20 cm tower, three pieces,
+  two materials, a hard throw (>= 2 m/s), 3 points in a game, a won game. The game checks it from what
+  happens; done = a fanfare and a toast with the days-in-a-row streak (IndexedDB). In the full run the
+  day's goal ("Win a game") was completed by step f's real game on its own. Unit tests: 4.
+- **Accessibility (4.6):** Large text setting (headset panels 1.25 -> 1.5, still no overlaps);
+  `docs/ACCESSIBILITY.md` lists what is supported and what is not.
+- **Help / build id (gap 4):** Settings -> About: six lines of how to play, today's challenge, what
+  needs the internet, and the build id (commit + date, from `vite.config.ts`). The tutorial card now
+  steps aside while Settings is open (it overlapped with Large text on).
+- **Release rehearsal:** `qa/e2e/smoke.spec.ts` (loads clean, no outside hosts, names its build,
+  backend unreachable still clean, Enter VR = opaque VR session) and `docs/RELEASE.md`.
+  Local release preview: 4/4. **The live Pages site fails 3/4: it is still the V5 build** (loads
+  unpkg, offers mixed reality, no build id), because none of the V6 branches are on GitHub yet.
+- **Evidence:** full e2e 64/66 (x2 was a test bug, fixed and re-run with f,x: 10/10; the room throw
+  is the known flaky one); unit tests 157; smoke 4/4 locally.

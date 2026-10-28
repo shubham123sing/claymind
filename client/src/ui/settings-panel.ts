@@ -1,5 +1,6 @@
 /**
- * Settings (plan v4, section 7): accessibility toggles, the tutorial again, and
+ * Settings (plan v4, section 7): accessibility toggles, the tutorial again, About (V6: how to
+ * play in short, today's challenge, what needs the internet, the build id) and
  * Reset (two taps: wipes the Library, the brain and the settings, then reloads).
  */
 import { createSystem, Vector3 } from '@iwsdk/core';
@@ -8,9 +9,12 @@ import { bus } from '../core/event-bus.js';
 import { setSetting, settings, Settings } from '../core/settings.js';
 import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
+import { DailyChallengeSystem } from './daily-challenge-system.js';
 import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
-const W = 760, H = 890;
+const W = 760, H = 990;
+/** The commit and date of this build (vite.config.ts); 'dev' in unit tests. */
+export const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 const SIZE: [number, number] = [0.24, (0.24 * H) / W];
 
 const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
@@ -18,13 +22,27 @@ const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
   { key: 'highContrast', label: 'High contrast', hint: 'solid panels, white outlines' },
   { key: 'leftHanded', label: 'Left-handed', hint: 'left hand sculpts, right palm menu' },
   { key: 'oneHanded', label: 'One-handed menu', hint: 'menu stays beside the clay' },
+  { key: 'largeText', label: 'Large text', hint: 'bigger panels and text in the headset' },
   { key: 'sound', label: 'Sound', hint: 'all sounds on / off' },
   { key: 'performanceMode', label: 'Performance mode', hint: 'simpler effects, steadier frame rate' },
   { key: 'vision', label: 'Vision check (online)', hint: 'pictures of new Play Kit toys go to Groq; their terms apply' },
 ];
 
+/** About: what the player needs in a few lines (hands only, seated). */
+const ABOUT = [
+  'Palm up: the menu. Poke a button with a fingertip.',
+  'Pinch on the clay to shape it; pinch an object to pick it up.',
+  'Bring to life makes it real; throw it, pin it, play with it.',
+  'Play -> Make it a game: the agent proposes a game.',
+  'Everything works offline except the game agent and rooms.',
+  'Your work saves itself; Keep -> Library for good.',
+];
+
 class SettingsPanel extends CanvasPanel {
   resetArmed = false;
+  page: 'settings' | 'about' = 'settings';
+  /** Today's challenge line for About. */
+  daily = '';
   constructor() {
     super([W, H], SIZE);
   }
@@ -34,7 +52,30 @@ class SettingsPanel extends CanvasPanel {
     ctx.fillStyle = '#f4f1ec';
     ctx.font = '700 38px system-ui, sans-serif';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Settings', 32, 46);
+    ctx.fillText(this.page === 'about' ? 'About ClayMind' : 'Settings', 32, 46);
+    const by = H - 130;
+    const bw = (W - 40 - 48) / 4;
+    const btn = (i: number, label: string, id: string, accent?: string) => {
+      add(20 + i * (bw + 16), by, bw, 76, id);
+      ui.button(ctx, 20 + i * (bw + 16), by, bw, 76, label, { hover: this.hover === id, accent });
+    };
+    ctx.font = '500 20px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(244,241,236,0.55)';
+    ctx.fillText(`Build ${BUILD_ID}`, 32, H - 28);
+    if (this.page === 'about') {
+      ctx.font = '500 27px system-ui, sans-serif';
+      ABOUT.forEach((line, i) => {
+        ctx.fillStyle = '#f4f1ec';
+        ctx.fillText(line, 36, 120 + i * 70, W - 72);
+      });
+      ctx.fillStyle = '#f0b429';
+      ctx.font = '600 26px system-ui, sans-serif';
+      wrap(ctx, this.daily, 36, 120 + ABOUT.length * 70 + 10, W - 72, 36);
+      btn(0, 'Tutorial again', 'tutorial');
+      btn(2, 'Back', 'back');
+      btn(3, 'Close', 'close');
+      return;
+    }
     TOGGLES.forEach((t, i) => {
       const y = 96 + i * 92;
       const on = settings[t.key] as boolean, hover = this.hover === t.key;
@@ -60,16 +101,25 @@ class SettingsPanel extends CanvasPanel {
       ctx.arc(on ? sx + 74 : sx + 18, sy + 18, 14, 0, Math.PI * 2);
       ctx.fill();
     });
-    const by = H - 120;
-    const bw = (W - 40 - 32) / 3;
-    const btn = (i: number, label: string, id: string, accent?: string) => {
-      add(20 + i * (bw + 16), by, bw, 76, id);
-      ui.button(ctx, 20 + i * (bw + 16), by, bw, 76, label, { hover: this.hover === id, accent });
-    };
     btn(0, 'Tutorial again', 'tutorial');
-    btn(1, this.resetArmed ? 'Tap to confirm' : 'Reset everything', 'reset', this.resetArmed ? '#d9534f' : undefined);
-    btn(2, 'Close', 'close');
+    btn(1, 'About', 'about');
+    btn(2, this.resetArmed ? 'Tap to confirm' : 'Reset all', 'reset', this.resetArmed ? '#d9534f' : undefined);
+    btn(3, 'Close', 'close');
   }
+}
+
+/** Word-wrapped text, at most two lines. */
+function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, lh: number): void {
+  let line = '', row = 0;
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > w && line) {
+      ctx.fillText(line, x, y + row++ * lh, w);
+      line = word;
+      if (row === 2) return;
+    } else line = next;
+  }
+  ctx.fillText(line, x, y + row * lh, w);
 }
 
 export class SettingsSystem extends createSystem({}) {
@@ -90,8 +140,14 @@ export class SettingsSystem extends createSystem({}) {
     );
   }
 
+  /** Settings is on screen (the tutorial card steps aside: no overlap). */
+  get panelOpen(): boolean {
+    return this.panel.mesh.visible;
+  }
+
   private open(): void {
     this.panel.resetArmed = false;
+    this.panel.page = 'settings';
     this.panel.invalidate();
     this.place();
     this.panel.mesh.visible = true;
@@ -129,7 +185,11 @@ export class SettingsSystem extends createSystem({}) {
         this.panel.resetArmed = true;
         bus.emit('ui:toast', { text: 'Tap again to erase your Library and settings' });
       } else void resetEverything();
-    } else if (id === 'close') this.close();
+    } else if (id === 'about') {
+      this.panel.page = 'about';
+      this.panel.daily = this.world.getSystem(DailyChallengeSystem)?.line() ?? '';
+    } else if (id === 'back') this.panel.page = 'settings';
+    else if (id === 'close') this.close();
     this.panel.invalidate();
   }
 

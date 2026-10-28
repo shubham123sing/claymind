@@ -188,6 +188,7 @@ export class SculptSystem extends createSystem({}) {
         { id: 'makegame', label: 'Make it a game', icon: '★', color: 0x5fbf72, onPress: () => bus.emit('gameagent:make', {}) },
         { id: 'playkit', label: 'Open Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
         { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
+        { id: 'daily', label: "Today's challenge", icon: '◎', color: 0xf0b429, onPress: () => bus.emit('daily:show', {}) },
       ]),
       group('lib', 'Keep', '▦', 0x7f9cc0, [
         { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },

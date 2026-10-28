@@ -320,3 +320,8 @@ Other findings:
 - **Performance governor** decisions come from desktop measurements; the 55 fps threshold and foveation levels are not tuned on a Quest. About 130 draw calls with the room: a risk on Quest.
 - **Scripted throw in a room** missed the blocks in 3 of 5 runs (both pages at about 22-25 fps; the release speed from the emulated hand varies). Alone it scores; real throws need a Quest.
 - The headset's own **Enter** button now opens **VR** (it opened mixed reality before); mixed reality stays on the second button.
+
+## V6 Stage D (2026-10-29)
+- **Daily challenge** goals are checked from simple measures (height, piece count, materials, release speed, game result); it does not judge what a creation looks like. The streak lives in this browser only. A "hard throw" (2 m/s) is tuned in the emulator, not on a Quest.
+- **Large text** makes panels bigger, not the palm menu's buttons (already about 3.6 cm).
+- **The live site is still V5** until the V6 branches are pushed and merged; the smoke test against it fails on purpose (unpkg, mixed reality default, no build id).
