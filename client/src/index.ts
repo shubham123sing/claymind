@@ -2,7 +2,9 @@ import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { bus } from './core/event-bus.js';
 import { PanelSystem } from './panel.js';
+import { TextEntrySystem } from './ui/text-entry.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
+import { RoomSystem } from './platform/environment/room-system.js';
 import { surface, SurfaceSystem } from './platform/surface/surface-system.js';
 import { ObjectSystem } from './objects/object-system.js';
 import { ImpactSystem } from './physics/impact-system.js';
@@ -29,6 +31,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
   if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface });
   world.registerSystem(PanelSystem);
   world.registerSystem(SurfaceSystem);
+  world.registerSystem(RoomSystem); // the VR studio room (hidden in mixed reality)
   {
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
@@ -45,6 +48,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(SharedPlaySystem);
     world.registerSystem(SharedBodiesSystem); // living objects shared with the room
     world.registerSystem(SettingsSystem);
+    world.registerSystem(TextEntrySystem); // the pinch keypad for names (hands only)
     world.registerSystem(TutorialSystem);
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);

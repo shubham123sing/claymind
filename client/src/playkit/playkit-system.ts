@@ -994,13 +994,15 @@ export class PlayKitSystem extends createSystem({}) {
     else if (!item) return;
     else if (id === 'kit:place') this.placeKit(item);
     else if (id === 'kit:rename') {
-      if (input.xr) return this.toast('Rename needs a keyboard: open ClayMind in a browser');
-      const name = this.ask('New name', item.name);
-      if (name && name !== item.name) {
-        item.name = name;
-        item.data.creation.name = name;
-        void saveKitItem(item);
-      }
+      bus.emit('text:ask', {
+        title: 'New name', initial: item.name, done: (name) => {
+          if (name === item.name) return;
+          item.name = name;
+          item.data.creation.name = name;
+          void saveKitItem(item);
+          this.refreshPanel();
+        },
+      });
     } else if (id === 'kit:role') {
       item.role = ROLE_TAGS[(ROLE_TAGS.indexOf(item.role) + 1) % ROLE_TAGS.length];
       void saveKitItem(item);
@@ -1098,12 +1100,14 @@ export class PlayKitSystem extends createSystem({}) {
     else if (!set) return;
     else if (id === 'set:open') this.openSet(set);
     else if (id === 'set:rename') {
-      if (input.xr) return this.toast('Rename needs a keyboard: open ClayMind in a browser');
-      const name = this.ask('New name', set.name);
-      if (name && name !== set.name) {
-        set.name = name;
-        void saveSet(set);
-      }
+      bus.emit('text:ask', {
+        title: 'New name', initial: set.name, done: (name) => {
+          if (name === set.name) return;
+          set.name = name;
+          void saveSet(set);
+          this.refreshPanel();
+        },
+      });
     } else if (id === 'set:delete') {
       const now = performance.now();
       if (!p.armedRemove || now - this.armedAt > CONFIRM_MS) {

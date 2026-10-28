@@ -220,7 +220,8 @@ export class ColorPickerSystem extends createSystem({}) {
       p.hue = (Number(id.slice(1)) / RING.seg) * 360;
       pick(p.lightColor(Math.round((LIGHT_STEPS - 1) / 2)));
     } else if (id.startsWith('l')) pick(p.lightColor(Number(id.slice(1))));
-    else if (id.startsWith('s')) pick(SWATCHES[Number(id.slice(1))]);
+    // swatches are s0..s7 ("smaller" also starts with "s": it is the brush button below)
+    else if (/^s\d+$/.test(id)) pick(SWATCHES[Number(id.slice(1))]);
     else if (id === 'piece' || id === 'natural') {
       const color = id === 'piece' ? p.current : null;
       const t = this.target;

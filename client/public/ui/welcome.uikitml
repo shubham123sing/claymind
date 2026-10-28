@@ -51,6 +51,10 @@
     margin-bottom: 24px;
   }
 
+  .mr {
+    margin-top: 0px;
+  }
+
   .button-label {
     transform-translate-y: 1px;
   }
@@ -60,14 +64,20 @@
     <div class="heading">ClayMind</div>
     <Divider></Divider>
     <div class="sub-heading">
-      Shape the clay with your hands. Pinch to pull, poke to dent, open palm to smooth. Turn your left palm up for tools.
+      Make anything from clay with your bare hands, bring it to life, and turn it into a game. Seated, hands only. Turn your left palm up for tools.
     </div>
   </div>
   <Button id="xr-button" class="button">
     <ButtonIcon>
       <RectangleGoggles></RectangleGoggles>
     </ButtonIcon>
-    <ButtonLabel class="button-label">Start in mixed reality</ButtonLabel>
+    <ButtonLabel class="button-label">Enter VR</ButtonLabel>
+  </Button>
+  <Button id="mr-button" class="button mr" variant="secondary">
+    <ButtonIcon>
+      <RectangleGoggles></RectangleGoggles>
+    </ButtonIcon>
+    <ButtonLabel class="button-label">Mixed reality (your own table)</ButtonLabel>
   </Button>
   <Button id="exit-button" class="button" style="display: none">
     <ButtonIcon>

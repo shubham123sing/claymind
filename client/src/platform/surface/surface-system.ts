@@ -13,6 +13,7 @@
  */
 import { SURFACE_MATERIAL } from '../../materials/matchups.js';
 import { getMaterial } from '../../materials/materials.js';
+import { passthroughOn } from '../xr-mode.js';
 import {
   BoxGeometry, createSystem, Entity, Mesh, MeshStandardMaterial, PhysicsBody, PhysicsShape,
   PhysicsShapeType, PhysicsState, Quaternion, Vector3, VisibilityState, XRPlane,
@@ -174,12 +175,12 @@ export class SurfaceSystem extends createSystem({
     this.staticBox([12, FLOOR_DEPTH, 12], [0, -FLOOR_DEPTH / 2, 0], 'floor');
     this.createFallbackWalls();
 
-    // In passthrough the virtual table is a translucent hint until a real one is found.
+    // In passthrough the virtual table is a translucent hint until a real one is found; in VR it is the table.
     this.cleanupFuncs.push(
       this.world.visibilityState.subscribe((v) => {
-        const immersive = v !== VisibilityState.NonImmersive;
-        this.tableMat.transparent = immersive;
-        this.tableMat.opacity = immersive ? 0.35 : 1;
+        const hint = v !== VisibilityState.NonImmersive && passthroughOn(this.world.renderer);
+        this.tableMat.transparent = hint;
+        this.tableMat.opacity = hint ? 0.35 : 1;
         this.tableMat.needsUpdate = true;
       }),
     );
