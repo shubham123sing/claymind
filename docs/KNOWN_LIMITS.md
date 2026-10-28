@@ -301,5 +301,11 @@ Other findings:
 ## V6 Stage A (2026-10-28)
 - **Backend until 11 Dec:** one Render free web service (agent + room relay). A GitHub Actions job pings its health check every 10 minutes so it stays awake (744 of the 750 free hours a month); GitHub can delay scheduled runs and pauses them after 60 days without commits. The game never waits on it: game cards fall back to their built-in rules at once, the agent panel says "waking up" (4 s health checks, retried with growing gaps). Free model quotas (about 1,000 requests a day per model) are spent only after the built-in Rule Cards and the answer cache.
 - **No emulator in the release build:** the XR emulator and its unpkg room file are gone from the production build; tests add the emulator themselves (`qa/e2e/iwer.ts`). The desktop page is a mouse preview; there is no "try in an emulator" mode for judges without a headset.
-- **Hand models still load from jsdelivr** (IWSDK's generic hand models) until they are self-hosted.
+- ~~Hand models still load from jsdelivr~~ Since Stage B the two generic hand models ship with the app (`client/public/input-profiles`, MIT); only controller models, which ClayMind does not use, would still come from the CDN.
 - **Brand names:** the game shows generic names only (Block tower, Roll-ball ramp, Throwing pins); branded requests are understood through aliases and answered with the generic game; a server filter rewrites brand names in agent output; tests scan every built-in text.
+
+## V6 Stage B (2026-10-28)
+- **Make it a game from one creation** chooses from three shapes only (small and round -> the ball; open and hollow -> the cup; anything else -> the target to knock over), from measured size, fill and mass. It does not recognise what the creation depicts (a "car" is a target). The optional vision check and the LLM are not used on this path, so it works offline and instantly.
+- **A heavy creation may not fall** to a light ball: a hit scores 1 so a first game always has a score moment; the scripted run scored 3 without a win. Repeated touches can score more than once (a 1 s cooldown per pair).
+- **The success card** appears when the first game ends (win, loss or out of throws); leaving the game early leaves the card on its "Play!" step until Skip.
+- Not verified on a real Quest: the card's reach and text size, the one-tap buttons and the palm menu's small icons (2.9 cm) are emulator-checked only.

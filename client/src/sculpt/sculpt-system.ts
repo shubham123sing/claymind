@@ -134,9 +134,8 @@ export class SculptSystem extends createSystem({}) {
   }
 
   /**
-   * The menu (Update 3): Make, Material & Colour, Paint, Physics, Place & Pin, Library,
-   * Play Kit, Multiplayer, Settings; each category opens its actions (wrist menu and
-   * toolbar). Hide / show is the menu's own button (one-handed menu, browser toolbar).
+   * The menu (V6, R4): Make, Colour & Material, Bring to life, Play, Keep, Room, and Settings
+   * and Help as small icons; each category opens its actions (wrist menu and toolbar). Hide / show is the menu's own button (one-handed menu, browser toolbar).
    */
   private menuItems(): MenuItem[] {
     const tool = (id: string): MenuItem => {
@@ -169,34 +168,35 @@ export class SculptSystem extends createSystem({}) {
         },
         { id: 'delete', label: 'Delete this creation', icon: '🗑', color: 0xd9534f, danger: true, onPress: () => bus.emit('creation:delete', {}) },
       ]),
-      group('matcol', 'Material & Colour', '◐', 0x5aa9e6, [
+      // V6 R4: six categories (Paint is part of Colour, Place & Pin of Bring to life), Settings and Help as small icons
+      group('matcol', 'Colour & Material', '◐', 0x5aa9e6, [
+        color(),
         { id: 'material', label: 'Material', icon: '◐', color: 0x5aa9e6, onPress: () => bus.emit('material:toggle', {}) },
-        color(), undo(),
+        tool('paint'), tool('erase'), undo(),
       ]),
-      group('paintg', 'Paint', '✎', 0xb07aa6, [tool('paint'), tool('erase'), color(), undo()]),
-      group('physics', 'Physics', '✦', 0xf0b429, [
+      group('physics', 'Bring to life', '✦', 0xf0b429, [
         { id: 'life', label: 'Bring to life', icon: '✦', color: 0xf0b429, enabled: () => !this.baking, onPress: () => void this.bringToLife() },
-        undo(),
-      ]),
-      group('place', 'Place & Pin', '⌖', 0xf0b429, [
         { id: 'pin', label: 'Pin / Unpin', icon: '⌖', color: 0xf0b429, onPress: () => bus.emit('object:pin', {}) },
         // worded and coloured apart from Delete: these take copies off the table (blue)
         { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
         { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
         { id: 'recenter', label: 'Recenter', icon: '⊙', color: 0x8fa3b8, onPress: () => bus.emit('view:recenter', {}) },
+        undo(),
       ]),
-      group('lib', 'Library', '▦', 0x7f9cc0, [
-        { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
-        { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
-      ]),
-      group('kit', 'Play Kit', '●', 0x8d8a85, [
+      group('kit', 'Play', '●', 0x5fbf72, [
+        { id: 'makegame', label: 'Make it a game', icon: '★', color: 0x5fbf72, onPress: () => bus.emit('gameagent:make', {}) },
         { id: 'playkit', label: 'Open Play Kit', icon: '●', color: 0x8d8a85, onPress: () => bus.emit('playkit:toggle', {}) },
         { id: 'kitadd', label: 'Add to Play Kit', icon: '⊞', color: 0x8d8a85, onPress: () => bus.emit('playkit:add', {}) },
       ]),
-      group('mp', 'Multiplayer', '⚇', 0x5fbf72, [
+      group('lib', 'Keep', '▦', 0x7f9cc0, [
+        { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
+        { id: 'libadd', label: 'Add to Library', icon: '＋', color: 0x7f9cc0, onPress: () => bus.emit('library:add', {}) },
+      ]),
+      group('mp', 'Room', '⚇', 0x8fa3b8, [
         { id: 'room', label: 'Create or join a room', icon: '⚇', color: 0x5fbf72, onPress: () => bus.emit('multiplayer:toggle', {}) },
       ]),
-      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, onPress: () => bus.emit('settings:toggle', {}) },
+      { id: 'settings', label: 'Settings', icon: '⚙', color: 0x8fa3b8, small: true, onPress: () => bus.emit('settings:toggle', {}) },
+      { id: 'help', label: 'Help', icon: '?', color: 0x8fa3b8, small: true, onPress: () => bus.emit('tutorial:start', {}) },
     ];
   }
 

@@ -4,14 +4,17 @@
  * look them up) · rules (your own rules as number cards) · thinking · preview (Play / Show
  * me how / Adjust / Cancel) · adjust (the rules card) · message · describe (Point + Say: show the
  * pieces with your hands and say what they are, mark the goal or a path on the table) · confirm
- * (one short question when the hands were not clear).
+ * (one short question when the hands were not clear) · explain (the rules in plain sentences).
+ * A game made from a creation shows what the agent saw, its rule and why (V6, 4.2); every
+ * tested game shows the Referee's badge.
  * Big targets; everything the agent says is shown with where it came from.
  */
 import { CanvasPanel, ui } from '../ui/canvas-panel.js';
 import type { GameAnswer } from './agent-client.js';
+import type { Look } from './look.js';
 import { ROLE_WORDS } from './intent.js';
 
-export type View = 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'message' | 'describe' | 'confirm';
+export type View = 'games' | 'rules' | 'thinking' | 'preview' | 'adjust' | 'message' | 'describe' | 'confirm' | 'explain';
 
 export interface RuleNumbers {
   players: number;
@@ -53,6 +56,10 @@ export class GameAgentPanel extends CanvasPanel {
   /** confirm: the question and the answers (id, label) */
   question = '';
   options: [string, string][] = [];
+  /** a game made from a creation: what the agent saw and why it chose the rule */
+  look: Look | null = null;
+  /** explain: the game in plain sentences */
+  explained: string[] = [];
 
   constructor() {
     super([W, H], [0.3, (0.3 * H) / W]);
@@ -76,6 +83,21 @@ export class GameAgentPanel extends CanvasPanel {
     this.ctx.fillStyle = color;
     this.ctx.font = `500 ${size}px system-ui, sans-serif`;
     return ui.wrap(this.ctx, t, 40, y, W - 80, size + 9, lines);
+  }
+
+  /** A green pill (the Referee's check). */
+  private badge(t: string, x: number, y: number): void {
+    const c = this.ctx;
+    c.font = '700 21px system-ui, sans-serif';
+    const w = c.measureText(t).width + 32;
+    c.fillStyle = 'rgba(95,191,114,0.22)';
+    c.strokeStyle = '#5fbf72';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.roundRect(x, y, w, 42, 21);
+    c.fill();
+    c.stroke();
+    this.text(t, x + 16, y + 22, 21, '#7fdc92', 700, w);
   }
 
   protected paint(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {
@@ -125,15 +147,31 @@ export class GameAgentPanel extends CanvasPanel {
       }
       case 'thinking': {
         this.text(this.status || 'Thinking…', 40, 200, 32, '#f4f1ec', 700);
-        this.wrapped('This can take up to half a minute on the free models.', 260, 2);
+        const st = this.status;
+        this.wrapped(st.startsWith("I'm looking") ? 'Measuring its size and shape, its pieces and what they are made of.'
+          : st.includes('physics') ? 'The Referee plays the game in the real physics before you do.'
+          : 'This can take up to half a minute on the free models.', 260, 2);
         break;
       }
       case 'preview': {
         const a = this.answer!;
         this.text(a.preview.name, 40, 108, 32, '#f4f1ec', 700, 560);
-        this.text(a.note, 620, 110, 20, a.path === 'web' ? '#9fd0f5' : '#f0b429', 600, 340);
+        if (a.physics?.ok) this.badge('✓ Referee check passed', 620, 88);
+        else this.text(a.note, 620, 110, 20, a.path === 'web' ? '#9fd0f5' : '#f0b429', 600, 340);
         let y = 150;
-        for (const l of a.preview.howToPlay.slice(0, 4)) y = this.wrapped(`• ${l}`, y, 1, 23) + 4;
+        const look = this.look;
+        if (look) {
+          // what the agent understood, then its rule and why
+          ctx.fillStyle = 'rgba(159,208,245,0.10)';
+          ctx.beginPath();
+          ctx.roundRect(28, y - 22, W - 56, 44 + 32 * (look.seen.length + 2), 16);
+          ctx.fill();
+          this.text('I see', 44, y, 20, '#9fd0f5', 700);
+          for (const l of look.seen) y = this.wrapped(`• ${l}`, y + 24, 1, 21) + 0;
+          y = this.wrapped(`Rule: ${look.rule}`, y + 16, 1, 22, '#f4f1ec') + 2;
+          y = this.wrapped(`Why: ${look.why}`, y, 1, 21, '#5fbf72') + 18;
+        }
+        for (const l of a.preview.howToPlay.slice(0, look ? 2 : 4)) y = this.wrapped(`• ${l}`, y, 1, 23) + 4;
         if (this.uses.length) y = this.wrapped(`Uses: ${this.uses.join(', ')}`, y + 6, 2, 21, '#5fbf72') + 4;
         // rules that could not be applied matter most, then what the kit lacks: alternate them
         const extra: string[] = [];
@@ -144,11 +182,20 @@ export class GameAgentPanel extends CanvasPanel {
         for (const l of extra.slice(0, 3)) y = this.wrapped(l, y, 1, 20, '#f0b429') + 2;
         if (a.sources.length) y = this.wrapped(`Sources: ${a.sources.map((s) => s.title).join(', ')} (Wikipedia)`, y + 4, 1, 19, 'rgba(159,208,245,0.9)');
         if (a.guessed) y = this.wrapped('Some of these rules are a guess: no source described them.', y + 4, 1, 19, '#d9534f');
-        if (a.physics) this.wrapped(a.physics.ok ? 'Tested in the physics: it works.' : `Physics test: ${a.physics.problems[0]}`, y + 4, 1, 19, a.physics.ok ? '#5fbf72' : '#f0b429');
-        this.btn(40, by, 220, 56, 'Play', 'preview:play', true, '#5fbf72');
-        this.btn(272, by, 250, 56, 'Show me how', 'preview:demo', true, '#9fd0f5');
-        this.btn(534, by, 200, 56, 'Adjust', 'preview:adjust');
-        this.btn(746, by, 214, 56, 'Cancel', 'back');
+        if (a.physics && !a.physics.ok) this.wrapped(`Physics test: ${a.physics.problems[0]}`, y + 4, 1, 19, '#f0b429');
+        else if (a.physics) this.wrapped(`${look ? 'Made from your creation. ' : ''}The Referee played it in the real physics first: it works.`, y + 4, 1, 19, 'rgba(95,191,114,0.9)');
+        this.btn(40, by, 180, 56, 'Play', 'preview:play', true, '#5fbf72');
+        this.btn(232, by, 210, 56, 'Show me how', 'preview:demo', true, '#9fd0f5');
+        this.btn(454, by, 170, 56, 'Explain', 'preview:explain');
+        this.btn(636, by, 160, 56, 'Adjust', 'preview:adjust');
+        this.btn(808, by, 152, 56, 'Cancel', 'back');
+        break;
+      }
+      case 'explain': {
+        this.text(`How "${this.answer?.preview.name ?? ''}" works`, 40, 108, 28, '#f4f1ec', 700);
+        let y = 160;
+        for (const l of this.explained.slice(0, 7)) y = this.wrapped(l, y, 2, 24, '#f4f1ec') + 12;
+        this.btn(W - 360, by, 320, 56, 'Play', 'preview:play', true, '#5fbf72');
         break;
       }
       case 'describe': {

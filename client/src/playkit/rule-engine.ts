@@ -320,7 +320,9 @@ export class RuleEngine {
   scoreboard(): string[] {
     const s = this.state, g = this.spec;
     const lines = g.players > 1 ? s.scores.map((v, i) => `${i === s.player && !s.over ? '▶ ' : ''}${this.nameOf(i)}: ${v}`) : [`Score: ${s.scores[0]}`];
-    if (g.counter) lines.push(`${g.counter.label}: ${s.counters[g.counter.id] ?? 0}${g.counter.target ? ` / ${g.counter.target}` : ''}`);
+    // "5 / 1" read as wrong when one throw passed a win-at of 1: past the target only the count shows
+    const cv = g.counter ? s.counters[g.counter.id] ?? 0 : 0;
+    if (g.counter) lines.push(`${g.counter.label}: ${cv}${g.counter.target && cv <= g.counter.target ? ` / ${g.counter.target}` : ''}`);
     if (g.shotsPerTurn > 0 && !s.over) lines.push(`Shots: ${s.shotsThisTurn} / ${g.shotsPerTurn}` + (g.maxTurns > 0 ? ` · Turn ${s.turn} / ${g.maxTurns}` : ''));
     if (g.timerSec > 0 && !s.over) lines.push(`Time: ${Math.max(0, Math.ceil(g.timerSec - s.elapsed))} s`);
     return lines;

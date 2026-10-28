@@ -83,7 +83,7 @@ export class InfoLabel {
     this.tex.colorSpace = SRGBColorSpace;
     this.sprite = new Sprite(new SpriteMaterial({ map: this.tex, transparent: true, depthWrite: false, depthTest: false }));
     this.sprite.scale.set(0.16, 0.044, 1);
-    this.sprite.renderOrder = 30;
+    this.sprite.renderOrder = 20; // over the objects, under the floating cards and panels (21+)
   }
 
   set(title: string, detail: string, accent: string): void {

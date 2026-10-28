@@ -26,6 +26,8 @@ export interface MenuItem {
   enabled?: () => boolean;
   /** Erases something (drawn in red so it is never confused with a harmless action). */
   danger?: boolean;
+  /** A small icon-only button in a row under the categories (Settings, Help). */
+  small?: boolean;
   /** A category: pressing it shows these (with Back) instead of calling onPress. */
   children?: MenuItem[];
   onPress: () => void;
@@ -40,7 +42,9 @@ const BTN = 0.036; // 3.6 cm buttons (>= 3 cm hit targets)
 const GAP = 0.008;
 /** Drawn after the floating cards and pickers (21-22): the menu under your fingertip is never covered. */
 const MENU_ORDER = 25;
-/** Columns: 3 for the 9 categories (about 13 cm square), 4 for a category's actions. */
+/** Small buttons (Settings, Help): 0.8 of a button, about 2.9 cm, icon only. */
+const SMALL = 0.8;
+/** Columns: 3 for the categories (about 13 cm wide), 4 for a category's actions. */
 function colsFor(n: number): number {
   return n <= 3 ? n : n <= 9 ? 3 : 4;
 }
@@ -116,12 +120,19 @@ export class WristMenu {
   /** Show a category's actions (null: the categories), laid out as a centred grid. */
   openGroup(group: MenuItem | null): void {
     this.group = group;
-    const items = this.shown(), cols = colsFor(items.length), rows = Math.ceil(items.length / cols);
+    const all = this.shown(), items = all.filter((x) => !x.small), small = all.filter((x) => x.small);
+    const cols = colsFor(items.length), rows = Math.ceil(items.length / cols);
     for (const b of this.buttons) b.wasFront = false;
     items.forEach((item, i) => {
       const b = this.buttons.find((x) => x.item === item)!;
       const col = i % cols, row = Math.floor(i / cols);
       b.mesh.position.set((col - (cols - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 - row) * (BTN + GAP), 0);
+    });
+    // the small icons in one row under the grid, at its right end
+    small.forEach((item, i) => {
+      const b = this.buttons.find((x) => x.item === item)!;
+      const w = BTN * SMALL + GAP;
+      b.mesh.position.set(((cols - 1) / 2) * (BTN + GAP) + (BTN - BTN * SMALL) / 2 - (small.length - 1 - i) * w, (-(rows - 1) / 2 - 1) * (BTN + GAP) + (BTN - BTN * SMALL) / 2, 0);
     });
     // the Hide button above the top-left button
     this.toggle.mesh.position.set(-((cols - 1) / 2) * (BTN + GAP), ((rows - 1) / 2 + 1) * (BTN + GAP) + GAP, 0);
@@ -236,12 +247,17 @@ export class WristMenu {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '600 72px system-ui, sans-serif';
-    ctx.fillText(b.item.icon, 96, 82);
-    ctx.font = '600 32px system-ui, sans-serif';
-    if (b.item.danger && !selected) ctx.fillStyle = '#ff8a80';
-    ctx.fillText(b.item.label, 96, 152, 180);
+    if (b.item.small) {
+      ctx.font = '600 96px system-ui, sans-serif';
+      ctx.fillText(b.item.icon, 96, 100);
+    } else {
+      ctx.fillText(b.item.icon, 96, 82);
+      ctx.font = '600 32px system-ui, sans-serif';
+      if (b.item.danger && !selected) ctx.fillStyle = '#ff8a80';
+      ctx.fillText(b.item.label, 96, 152, 180);
+    }
     ctx.globalAlpha = 1;
     b.tex.needsUpdate = true;
-    b.mesh.scale.setScalar(hover && !settings.reducedMotion ? 1.06 : 1);
+    b.mesh.scale.setScalar((b.item.small ? SMALL : 1) * (hover && !settings.reducedMotion ? 1.06 : 1));
   }
 }

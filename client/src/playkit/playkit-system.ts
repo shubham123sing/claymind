@@ -504,9 +504,18 @@ export class PlayKitSystem extends createSystem({}) {
     bus.emit('playkit:game', { kind: 'start' });
   }
 
+  private overSent = false;
+
   private tickGame(dt: number): void {
     const e = this.engine;
-    if (!e || this.mode !== 'play' || this.paused || e.state.over) return;
+    if (!e || this.mode !== 'play' || this.paused) return;
+    if (e.state.over) {
+      // once: the game just ended (first five minutes: the success moment)
+      if (!this.overSent) bus.emit('playkit:over', { result: e.state.result ?? 'done', score: Math.max(...e.state.scores) });
+      this.overSent = true;
+      return;
+    }
+    this.overSent = false;
     if (this.roomNames) e.names = this.roomNames();
     const byToy = new Map(this.pieces.filter((p) => p.key).map((p) => [p.toyId, p]));
     const obs: Observation = { pieces: [], contacts: [], shots: [] };

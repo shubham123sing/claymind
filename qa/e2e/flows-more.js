@@ -112,7 +112,7 @@
     out.push({ name: 'no tunnelling through the floor', pass: minY > -0.05, detail: `lowest bottom ${r3(minY)} m` });
     // reset: Place & Pin -> Remove from scene (the object last touched); Clear scene only takes Library copies
     const n0 = sys().objects.liveCreationIds().length;
-    const m = await F.menuPath('place', 'remove');
+    const m = await F.menuPath('physics', 'remove');
     await qa.frames(30);
     const n1 = sys().objects.liveCreationIds().length;
     out.push({ name: 'reset (Place & Pin -> Remove from scene)', pass: m.ok && n1 === n0 - 1 && !sys().objects.byCreation(id), detail: `creations in the scene ${n0} -> ${n1}` });
@@ -430,5 +430,94 @@
     return ok;
   }
 
-  Object.assign(F, { throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne });
+  // ---------- h. first five minutes (V6, 4.1): the card on first launch, hands only ----------
+
+  /** part 1: to the agent's preview · 2: explain, play, the success card · 3: Help again, Skip (a screenshot after each). */
+  async function firstFive(part = 1) {
+    const out = [], c = sys().coach, ga = sys().gameAgent, pk = sys().playkit;
+    if (part === 2) return firstFivePlay(out, c, ga, pk);
+    if (part === 3) return firstFiveHelp(out, c, pk);
+    w.__f5t0 = performance.now();
+    await waitFor(() => c.active, 300);
+    const top = sys().sculpt.menu.top.map((i) => i.id).join(', ');
+    out.push({ name: 'first launch: the card shows step 1 (pinch and pull); the palm menu has 6 categories + 2 small icons', pass: c.active && c.panel.step === 0 && c.panel.mesh.visible, detail: `step ${c.panel.step + 1}; menu: ${top}` });
+    // 1. pinch the clay and pull
+    await F.stroke([1, 0.3, 0.3], [0.04, 0.01, 0]);
+    await waitFor(() => c.panel.step === 1, 60);
+    out.push({ name: '1. pinch and pull the clay: the card moves on', pass: c.panel.step === 1, detail: `step ${c.panel.step + 1}` });
+    // 2. one tap on the card: Bring to life
+    const n0 = sys().objects.liveCreationIds().length;
+    const life = await qa.panelPress('life');
+    await waitFor(() => c.panel.step === 2, 400);
+    out.push({ name: '2. one tap on "Bring to life" (on the card): it drops', pass: life.ok && c.panel.step === 2 && sys().objects.liveCreationIds().length > n0, detail: `creations ${n0} -> ${sys().objects.liveCreationIds().length}` });
+    await qa.frames(60);
+    // 3. one tap: Make it a game: the agent looks, says what it saw and why, the Referee tests it
+    // every status the panel shows, sampled from before the press (the "looking" moment is short)
+    const seen = new Set();
+    const watch = setInterval(() => ga.panel.view === 'thinking' && seen.add(ga.panel.status), 30);
+    const g = await qa.panelPress('game');
+    await waitFor(() => ga.panel.view === 'preview', 900);
+    clearInterval(watch);
+    const looked = [...seen].some((x) => /looking/.test(x));
+    const a = ga.panel.answer, look = ga.panel.look;
+    out.push({
+      name: '3. one tap on "Make it a game": "looking at your creation", then what it saw, the rule and why, the Referee badge',
+      pass: g.ok && !!looked && ga.panel.view === 'preview' && !!look && !!a?.physics?.ok && ga.panel.uses.some((u) => u.includes('your ')),
+      detail: look ? `shown: ${[...seen].join(' -> ')} | ${a.preview.name} | saw: ${look.seen.join('; ')} | rule: ${look.rule} | why: ${look.why} | Referee: ${a.physics?.ok ? 'passed' : a.physics?.problems?.[0]} | uses: ${ga.panel.uses.join(', ')}` : `view ${ga.panel.view}; ${ga.panel.message}`,
+    });
+    return out;
+  }
+
+  async function firstFivePlay(out, c, ga, pk) {
+    const ex = await qa.panelPress('preview:explain');
+    await qa.frames(10);
+    out.push({ name: 'explain mode: the rules in plain words', pass: ex.ok && ga.panel.view === 'explain' && ga.panel.explained.length >= 3, detail: ga.panel.explained.join(' / ') });
+    await qa.panelPress('preview:play');
+    await waitFor(() => pk.playMode === 'play' && c.panel.step === 3, 300);
+    await qa.frames(60);
+    out.push({ name: 'Play from the explanation: the game starts with the creation on the table', pass: pk.playMode === 'play' && c.panel.step === 3, detail: `${pk.gameName}: ${hud().lines.join(' | ')}` });
+    // 4. play: throw the balls until the game ends; then the success moment
+    const spec = pk.spec;
+    const movers = new Set((spec?.roles ?? []).filter((r) => !r.pinned && (r.tags.includes('launcher') || ['ball', 'marble', 'coin', 'disc'].includes(r.fallback))).map((r) => r.id));
+    const balls = pk.pieces.filter((p) => movers.has(p.role)).map((p) => p.toyId);
+    const targets = pk.pieces.filter((p) => !movers.has(p.role)).map((p) => obj(p.toyId)?.p).filter(Boolean);
+    const aim = targets.length ? [0, 1, 2].map((i) => targets.reduce((sum, t) => sum + t[i], 0) / targets.length) : [0, 0.78, -0.55];
+    const lob = (spec?.roles ?? []).some((r) => r.tags.includes('container'));
+    let thrown = 0;
+    for (const b of balls) {
+      if (c.panel.doneText) break;
+      if (await throwAt(b, aim, lob, lob ? 1.3 : 2.5)) thrown++;
+      await qa.frames(150);
+    }
+    await waitFor(() => !!c.panel.doneText, 300);
+    const sec = Math.round((performance.now() - w.__f5t0) / 1000);
+    out.push({ name: '4. play by hand; the game ends: the success card and where to go next', pass: !!c.panel.doneText && c.panel.mesh.visible, detail: `${thrown} throw(s); HUD: ${hud().lines.join(' | ')} "${hud().message}"; card: "${c.panel.doneText}" (scripted run ${sec} s)` });
+    return out;
+  }
+
+  async function firstFiveHelp(out, c, pk) {
+    // OK, end the game; then Help (?) shows the card again and Skip closes it
+    await qa.panelPress('close');
+    if (qa.region('hud:end')) await qa.panelPress('hud:end');
+    await waitFor(() => pk.playMode === 'off', 200);
+    const h = await F.menuPath('help');
+    await qa.frames(10);
+    const again = c.active && c.panel.step === 0;
+    const sk = await qa.panelPress('skip');
+    await qa.frames(10);
+    out.push({ name: 'Help (?) in the palm menu shows it again; Skip closes it', pass: h.ok && again && sk.ok && !c.active && !c.panel.mesh.visible, detail: `help ${h.ok}, restarted ${again}, skipped ${sk.ok}` });
+    // tidy for the next steps: touch the first creation, then Bring to life -> Remove from scene, as a player would
+    const n = sys().objects.liveCreationIds().length, first = sys().objects.liveCreationIds()[0];
+    if (first && (await grab(first))) {
+      await qa.pinch('right', false);
+      await qa.rest('right');
+      await qa.frames(30);
+    }
+    await F.menuPath('physics', 'remove');
+    await waitFor(() => sys().objects.liveCreationIds().length < n, 120);
+    await qa.frames(30);
+    return out;
+  }
+
+  Object.assign(F, { throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
 })();

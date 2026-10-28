@@ -30,6 +30,8 @@ export const uiSounds = {
     tone(660, 660, 0.25, 0.1);
     tone(990, 990, 0.3, 0.08, 'sine', 0.08);
   },
+  /** a success moment (first game played): four rising notes */
+  fanfare: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, i === 3 ? 0.5 : 0.16, 0.09, 'triangle', i * 0.12)),
   /** refused action */
   bonk: () => tone(220, 140, 0.15, 0.12, 'square'),
 };

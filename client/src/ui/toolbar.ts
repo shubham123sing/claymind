@@ -33,9 +33,11 @@ export class Toolbar {
     this.back = { id: 'back', label: 'Back', icon: '◀', color: 0x8fa3b8, onPress: () => this.openGroup(null) };
     for (const item of [this.back, ...items, ...items.flatMap((g) => g.children ?? [])]) {
       const b = document.createElement('button');
-      b.innerHTML = `<span style="font-size:15px;line-height:1;width:16px;text-align:center">${item.icon}</span><span>${item.label}</span>`;
+      // Settings and Help: icon-only (V6, R4); the label is the tooltip
+      b.innerHTML = item.small ? `<span style="font-size:15px;line-height:1">${item.icon}</span>` : `<span style="font-size:15px;line-height:1;width:16px;text-align:center">${item.icon}</span><span>${item.label}</span>`;
+      if (item.small) b.title = b.ariaLabel = item.label;
       Object.assign(b.style, {
-        display: 'flex', alignItems: 'center', gap: '6px', minWidth: '96px', padding: '7px 9px',
+        display: 'flex', alignItems: 'center', justifyContent: item.small ? 'center' : 'flex-start', gap: '6px', minWidth: item.small ? '0' : '96px', padding: '7px 9px',
         border: '0', borderRadius: '10px', color: '#fff', cursor: 'pointer', font: 'inherit', transition: 'background 180ms ease-out',
       });
       b.onclick = () => {

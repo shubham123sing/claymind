@@ -16,7 +16,7 @@ import { withEmulator } from './iwer';
 
 const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
-const ONLY = (process.env.QA_STEPS ?? 'a,b,c,d,e,f,g').split(',');
+const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,g').split(',');
 const BACKEND = 'http://127.0.0.1:8790';
 
 interface StepResult { step: string; name: string; pass: boolean; detail: string; at: number; shot?: string; fps?: number; page: string }
@@ -90,6 +90,8 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
   const ctxA = await browser.newContext({ recordVideo: { dir: join(OUT, 'video'), size: { width: 1280, height: 720 } }, viewport: { width: 1280, height: 720 } });
   const A = await open(ctxA, 'A');
 
+  // h first: a new player's first launch (V6, 4.1)
+  if (ONLY.includes('h')) for (const part of [1, 2, 3]) await flow(A, 'A', 'h', 'firstFive', part);
   if (ONLY.includes('a')) await flow(A, 'A', 'a', 'sculpt');
   if (ONLY.includes('b')) await flow(A, 'A', 'b', 'colourPaintMaterial');
   if (ONLY.includes('c')) await flow(A, 'A', 'c', 'physicsPush');

@@ -84,6 +84,10 @@ export type AppEvents = {
   'multiplayer:toggle': Record<string, never>;
   /** Play Kit: a game started, ended or was reset here (the room's host shares it). */
   'playkit:game': { kind: 'start' | 'end' | 'reset' };
+  /** A game here ended (its result and the best score). */
+  'playkit:over': { result: 'win' | 'lose' | 'done'; score: number };
+  /** Menu -> Play -> Make it a game: the agent looks at the creation and proposes a game from it. */
+  'gameagent:make': Record<string, never>;
   'room:joined': { code: string; host: boolean };
   'room:left': { why: string };
   /** Open / close the Play Kit panel, or add the current creation to the kit. */

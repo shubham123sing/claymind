@@ -50,8 +50,24 @@ eyes see). In mixed reality the virtual table is a translucent hint until a real
 
 1. **Panels cannot be grabbed, moved or pinned**: they follow the clay or the head (Stage C, 4.3).
 2. **No seated-height calibration**: the virtual table is at 0.72 m; a real desk is used when found (Stage C).
-3. **The menu has 9 categories** (R4, Stage B: Make, Colour & Material, Bring to life, Play, Keep, Room).
-4. **No Help panel with the build id** (section 7, Stage D).
-5. **Emulator and unpkg in the production build** (R2, Stage A).
+3. ~~The menu has 9 categories~~ Done in Stage B (R4): Make, Colour & Material (with Paint), Bring to life (with Pin, Remove, Clear, Recenter), Play (Make it a game, Play Kit), Keep (Library), Room, and Settings and Help (?) as small icons. The browser toolbar shows the same.
+4. **No Help panel with the build id** (section 7, Stage D). Help (?) now replays the first five minutes.
+5. ~~Emulator and unpkg in the production build~~ Done in Stage A; the hand models ship with the app since Stage B.
 6. **The VR room is plain** (flat colours, no textures): polish in Stage C (4.4).
 7. Gaze is not used (optional).
+
+## Stage B (2026-10-28): first five minutes, visible agent, simpler menu
+
+Evidence: `QA_STEPS=h` in `qa/e2e/xr-e2e.spec.ts` (scripted emulated hands, not a real Quest), run `stageB-h`: 9/9.
+
+- **First five minutes (4.1):** shown on first launch above the clay, four steps, hands only: pinch and pull (a drawn
+  pinch-and-pull picture) -> one tap on "Bring to life" on the card -> one tap on "Make it a game" -> play. Then a
+  success card (time, score or win, stars, a short fanfare) and where to go next. Skip any time; never shown again
+  once done or skipped (settings, stored locally); the menu's Help (?) shows it again. Scripted run: 22 s.
+- **Visible agent (4.2):** Play -> "Make it a game" (or the card) highlights the creation, shows "I'm looking at your
+  creation…", then what it saw (size, mass, pieces and materials, shape), the rule, **why** it suits this shape, and
+  a "Referee check passed" badge after the physics dry run. Play (accept), Adjust (tweak with number cards),
+  Explain (the rules in plain sentences, for any game), Cancel. The creation plays the main role (ball, cup or
+  target, from its measured shape); all code, offline (`client/src/game-agent/look.ts`, unit-tested).
+- **Honest limits:** the "parts" are the creation's pieces and materials, not named body parts; the highlight glows
+  the whole creation, not each piece. Nothing here is verified on a real Quest.
