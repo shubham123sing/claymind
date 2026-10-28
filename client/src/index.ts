@@ -4,6 +4,9 @@ import { bus } from './core/event-bus.js';
 import { PanelSystem } from './panel.js';
 import { TextEntrySystem } from './ui/text-entry.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
+import { handNoise } from './platform/input/xr-hands-provider.js';
+import { PerfGovernorSystem } from './platform/perf-governor.js';
+import { quality } from './core/quality.js';
 import { RoomSystem } from './platform/environment/room-system.js';
 import { surface, SurfaceSystem } from './platform/surface/surface-system.js';
 import { ObjectSystem } from './objects/object-system.js';
@@ -12,6 +15,7 @@ import { SculptSystem } from './sculpt/sculpt-system.js';
 import { DeleteSystem } from './ui/delete-creation.js';
 import { DownloadSystem } from './ui/download-dialog.js';
 import { SceneActionsSystem } from './ui/scene-actions.js';
+import { AutosaveSystem } from './storage/autosave-system.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
@@ -28,8 +32,9 @@ import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface, __handNoise: handNoise, __quality: quality });
   world.registerSystem(PanelSystem);
+  world.registerSystem(PerfGovernorSystem); // frame-rate governor: quality steps down when slow (V6)
   world.registerSystem(SurfaceSystem);
   world.registerSystem(RoomSystem); // the VR studio room (hidden in mixed reality)
   {
@@ -56,12 +61,13 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(DeleteSystem);
     world.registerSystem(DownloadSystem);
     world.registerSystem(SceneActionsSystem);
+    world.registerSystem(AutosaveSystem); // the clay and loose creations survive a crash (V6)
     // ?debug: systems by stable names (class names are minified in release builds)
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
-          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem),
         },
       });
     }

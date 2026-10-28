@@ -22,7 +22,6 @@ export class TextEntrySystem extends createSystem({}) {
   private lastTouch = 0;
   private eye = new Vector3();
   private fwd = new Vector3();
-  private tip = new Vector3();
 
   init(): void {
     const m = this.keypad.mesh;
@@ -78,8 +77,7 @@ export class TextEntrySystem extends createSystem({}) {
     if (!this.keypad.mesh.visible) return;
     const now = performance.now();
     if (!input.xr || now - this.lastTouch > IDLE_CLOSE_MS) return this.finish(false);
-    const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-    const id = this.keypad.poke(h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, now);
+    const id = this.keypad.pokeHands(input.both, now);
     if (id) {
       this.lastTouch = now;
       uiSounds.tick();

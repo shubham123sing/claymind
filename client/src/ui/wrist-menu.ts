@@ -14,6 +14,7 @@ import {
 } from '@iwsdk/core';
 import { settings } from '../core/settings.js';
 import type { HandState } from '../platform/input/hand-state.js';
+import { PokeGate } from '../platform/input/poke-gate.js';
 
 export interface MenuItem {
   id: string;
@@ -40,6 +41,10 @@ export function itemSelected(item: MenuItem): boolean {
 
 const BTN = 0.036; // 3.6 cm buttons (>= 3 cm hit targets)
 const GAP = 0.008;
+/** Extra hit-box margin (m) for the button a fingertip is aiming at (V6, 4.3). */
+const AIM_SLACK = 0.006;
+/** An open palm menu stays through a tracking loss this short (ms). */
+const LOST_GRACE_MS = 500;
 /** Drawn after the floating cards and pickers (21-22): the menu under your fingertip is never covered. */
 const MENU_ORDER = 25;
 /** Small buttons (Settings, Help): 0.8 of a button, about 2.9 cm, icon only. */
@@ -56,7 +61,8 @@ interface Button {
   canvas: HTMLCanvasElement;
   tex: CanvasTexture;
   state: string;
-  wasFront: boolean;
+  /** Poke intent per hand (V6, 4.3). */
+  gates: { left: PokeGate; right: PokeGate };
 }
 
 export class WristMenu {
@@ -66,6 +72,7 @@ export class WristMenu {
   private openTime = 0;
   private openAmount = 0;
   private lastPress = 0;
+  private lostAt = 0;
   /** after a press, nothing is pressed again until the fingertip has left every button (one push, one press) */
   private held = false;
   private tmp = new Vector3();
@@ -109,7 +116,7 @@ export class WristMenu {
     mesh.renderOrder = MENU_ORDER;
     mesh.visible = false;
     this.panel.add(mesh);
-    return { item, mesh, canvas, tex, state: '', wasFront: false };
+    return { item, mesh, canvas, tex, state: '', gates: { left: new PokeGate(), right: new PokeGate() } };
   }
 
   /** The items on screen now. */
@@ -122,7 +129,7 @@ export class WristMenu {
     this.group = group;
     const all = this.shown(), items = all.filter((x) => !x.small), small = all.filter((x) => x.small);
     const cols = colsFor(items.length), rows = Math.ceil(items.length / cols);
-    for (const b of this.buttons) b.wasFront = false;
+    for (const b of this.buttons) b.gates.left.reset(), b.gates.right.reset();
     items.forEach((item, i) => {
       const b = this.buttons.find((x) => x.item === item)!;
       const col = i % cols, row = Math.floor(i / cols);
@@ -150,7 +157,11 @@ export class WristMenu {
    */
   update(menuHand: HandState, poker: HandState, headObj: Object3D, dt: number, now: number): boolean {
     const palmUp = menuHand.tracked && menuHand.palmNormal[1] > 0.55 && !menuHand.pinching;
-    this.openTime = palmUp ? this.openTime + dt : 0;
+    // a short tracking loss of the palm hand (up to half a second) keeps an open menu where it was
+    if (menuHand.tracked) this.lostAt = 0;
+    else if (!this.lostAt) this.lostAt = now;
+    const lostBriefly = !menuHand.tracked && this.openTime > OPEN_DELAY && now - this.lostAt < LOST_GRACE_MS;
+    this.openTime = palmUp ? this.openTime + dt : lostBriefly ? this.openTime : 0;
     const wantOpen = this.openTime > OPEN_DELAY;
     this.ease(wantOpen, dt);
     if (!this.root.visible) return false;
@@ -193,31 +204,37 @@ export class WristMenu {
     let touching = false;
     for (const b of this.buttons) {
       if (!b.mesh.visible) {
-        b.wasFront = false;
+        b.gates.left.reset();
+        b.gates.right.reset();
         continue;
       }
       const enabled = b.item.enabled?.() ?? true;
       let hover = false;
       for (const poker of pokers) {
-        if (!poker.tracked || !this.isOpen) continue;
+        const gate = b.gates[poker.side];
+        if (!poker.tracked || !this.isOpen) {
+          gate.reset();
+          continue;
+        }
         this.tmp.set(poker.indexTip[0], poker.indexTip[1], poker.indexTip[2]);
         this.local.copy(this.tmp);
         b.mesh.worldToLocal(this.local);
-        const inside = Math.abs(this.local.x) < BTN / 2 && Math.abs(this.local.y) < BTN / 2;
-        const front = this.local.z > 0.006;
-        // press = fingertip crosses the button plane from the front
-        const h = inside && this.local.z < 0.03 && this.local.z > -0.02;
+        // a button being aimed at keeps a 6 mm wider hit box: a shaky fingertip does not lose it at the edge
+        const half = BTN / 2 + (gate.aiming ? AIM_SLACK : 0);
+        const inside = Math.abs(this.local.x) < half && Math.abs(this.local.y) < half;
+        const h = inside && this.local.z < 0.03 && this.local.z > -0.02 && !poker.pinching;
         hover ||= h;
         touching ||= inside && this.local.z < 0.03;
-        // the layout changes after a press (a category opens, Back): the same push must not press what moved under it
-        if (inside && b.wasFront && !front && this.local.z > -0.02 && enabled && !this.held && now - this.lastPress > 350) {
+        // press = fingertip aimed from the front, then crossing the button (PokeGate); a pinching hand never presses.
+        // The layout changes after a press (a category opens, Back): the same push must not press what moved under it
+        const pressed = gate.update(inside, this.local.z, inside ? b.item.id : null, now, poker.pinching);
+        if (pressed && enabled && !this.held && now - this.lastPress > 350) {
           this.lastPress = now;
           this.held = true;
           if (b.item.children) this.openGroup(b.item);
           else b.item.onPress();
           this.onTick();
         }
-        if (inside || pokers.length === 1) b.wasFront = inside ? front : true;
       }
       this.draw(b, hover, enabled);
     }

@@ -6,14 +6,50 @@
  * table colliders stay in SurfaceSystem. Low-poly and unlit-cheap: about a dozen meshes, no shadows.
  */
 import {
-  BoxGeometry, CircleGeometry, Color, createSystem, CylinderGeometry, Group, Mesh, MeshStandardMaterial,
-  PlaneGeometry, VisibilityState,
+  BoxGeometry, CanvasTexture, CircleGeometry, Color, createSystem, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  PlaneGeometry, SRGBColorSpace, VisibilityState,
 } from '@iwsdk/core';
 import { surface, VIRTUAL_TABLE } from '../surface/surface-system.js';
 import { passthroughOn } from '../xr-mode.js';
 
 const ROOM = { halfW: 3, halfD: 3, height: 2.8 };
 const LEG = 0.035;
+
+/** The view through the window, drawn once (V6, 4.4): a soft sky, far hills, a window frame. No image files. */
+function windowView(): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 280;
+  const g = c.getContext('2d')!;
+  const sky = g.createLinearGradient(0, 0, 0, 280);
+  sky.addColorStop(0, '#9cc7e6');
+  sky.addColorStop(0.65, '#e3eef4');
+  sky.addColorStop(1, '#f6ead8');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 512, 280);
+  // two soft rows of hills
+  const hills = (y: number, amp: number, color: string, phase: number) => {
+    g.fillStyle = color;
+    g.beginPath();
+    g.moveTo(0, 280);
+    for (let x = 0; x <= 512; x += 8) g.lineTo(x, y - amp * (Math.sin(x / 70 + phase) * 0.6 + Math.sin(x / 31 + phase * 2) * 0.25));
+    g.lineTo(512, 280);
+    g.fill();
+  };
+  hills(210, 22, '#a9c4a4', 0.4);
+  hills(240, 16, '#86ad85', 2.1);
+  // the frame: a border and two bars
+  g.fillStyle = '#f2ece3';
+  g.fillRect(0, 0, 512, 10);
+  g.fillRect(0, 270, 512, 10);
+  g.fillRect(0, 0, 10, 280);
+  g.fillRect(502, 0, 10, 280);
+  g.fillRect(251, 0, 10, 280);
+  g.fillRect(0, 135, 512, 8);
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
 
 export class RoomSystem extends createSystem({}) {
   private room = new Group();
@@ -48,7 +84,7 @@ export class RoomSystem extends createSystem({}) {
       trim.rotation.y = ry;
     }
     // a big soft "window" of daylight on the wall in front, and a shelf with clay pots on the left
-    const window = add(new Mesh(new PlaneGeometry(2.2, 1.2), mat(0xdfeaf2, 1, 0xcfe3f0)));
+    const window = add(new Mesh(new PlaneGeometry(2.2, 1.2), new MeshBasicMaterial({ map: windowView(), toneMapped: false })));
     window.position.set(0, 1.55, -ROOM.halfD + 0.01);
     const shelf = add(new Mesh(new BoxGeometry(0.3, 0.04, 1.4), woodMat));
     shelf.position.set(-ROOM.halfW + 0.16, 1.1, -0.6);

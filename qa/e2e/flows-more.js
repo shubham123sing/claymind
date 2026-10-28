@@ -425,8 +425,13 @@
     const targets = pk.pieces.filter((p) => p.role === 'block').map((p) => obj(p.toyId)?.p).filter(Boolean);
     if (!ball || !targets.length) return false;
     const aim = [0, 1, 2].map((i) => targets.reduce((s, t) => s + t[i], 0) / targets.length);
+    let rel = null;
+    const off = w.__bus.on('toy:released', (e) => (rel = e));
+    const b0 = obj(ball)?.p;
     const ok = await throwAt(ball, aim);
     await qa.frames(180);
+    off?.();
+    console.info(`[throwOne] ball ${b0?.map((v) => v.toFixed(2))} -> ${obj(ball)?.p.map((v) => v.toFixed(2))}, aim ${aim.map((v) => v.toFixed(2))}, release ${JSON.stringify(rel)}, fps ${w.__quality.fps}`);
     return ok;
   }
 
@@ -519,5 +524,126 @@
     return out;
   }
 
-  Object.assign(F, { throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
+  // ---------- r. robustness (V6 section 6): bad tracking must not break anything ----------
+
+  /** Page errors from here on (uncaught errors and rejections). */
+  function watchErrors() {
+    const errs = [];
+    const onErr = (e) => errs.push(String(e.message ?? e.reason ?? e));
+    addEventListener('error', onErr);
+    addEventListener('unhandledrejection', onErr);
+    return { errs, stop: () => (removeEventListener('error', onErr), removeEventListener('unhandledrejection', onErr)) };
+  }
+
+  const noiseOff = () => Object.assign(w.__handNoise, { jitter: 0, jointJitter: 0, dropEvery: [0, 0], dropFor: [0, 0] });
+  const held = () => sys().objects.heldItems().length;
+
+  async function robust() {
+    const out = [], watch = watchErrors(), N = w.__handNoise;
+    noiseOff();
+    // a game still running from step f: end it (the HUD's End button), as step g does; sculpting is paused in a game
+    if (sys().playkit.playMode !== 'off' && qa.region('hud:end')) await qa.panelPress('hud:end');
+    await waitFor(() => sys().playkit.playMode === 'off', 200);
+    let id = sys().objects.liveCreationIds().at(-1) ?? (await bringToLife());
+    const n0 = sys().objects.liveCreationIds().length;
+
+    // 1. a short loss (about 50 ms) while holding: the object stays in the hand
+    let g = await grab(id);
+    N.dropUntil.right = performance.now() + 50;
+    await qa.frames(20);
+    const kept = obj(id)?.held ?? false;
+    await qa.pinch('right', false);
+    await qa.frames(20);
+    out.push({ name: 'r1. hand lost for 50 ms while holding: still held (no drop)', pass: g && kept, detail: `grabbed ${g}, held after ${kept}` });
+
+    // 2. the hand vanishes mid-grab (0.4 s) and the fingers open meanwhile: let go, the hand is free, nothing lost
+    g = await grab(id);
+    N.dropUntil.right = performance.now() + 400;
+    await qa.frames(4);
+    await qa.pinch('right', false);
+    await waitFor(() => performance.now() > N.dropUntil.right, 200);
+    await qa.frames(40);
+    const st = { held: held(), claim: w.__input.claims.right, tracked: w.__input.hands.right.tracked, exists: !!obj(id) };
+    const again = await grab(id);
+    // put it down beside the clay (not on it), as a player tidies up before sculpting again
+    const cl = qa.clay().center, s0 = qa.surfaceInfo();
+    if (again) await qa.moveTo('right', [cl[0] + 0.24, s0.topY + 0.12, cl[2] + 0.05], 'pinch', 0.03);
+    await qa.pinch('right', false);
+    await qa.rest('right');
+    await qa.frames(40);
+    out.push({ name: 'r2. hand vanishes mid-grab (0.4 s): released, hand free, object kept, grabs again', pass: g && st.held === 0 && !st.claim && st.tracked && st.exists && again && held() === 0, detail: `${JSON.stringify(st)}, grabbed again ${again}` });
+
+    // 3. two hands crossing over the clay (one pinching): no stuck claim, no stray tool action
+    const c = qa.clay().center, v0 = qa.clay().volume;
+    await Promise.all([qa.moveTo('left', [c[0] - 0.12, c[1] + 0.14, c[2] + 0.04], 'tip', 0.03), qa.moveTo('right', [c[0] + 0.12, c[1] + 0.14, c[2] + 0.04], 'tip', 0.03)]);
+    await qa.pinch('left', true);
+    const L = dev().hands.left, R = dev().hands.right;
+    for (let i = 0; i < 24; i++) {
+      L.position.x += 0.01;
+      R.position.x -= 0.01;
+      await qa.frames(1);
+    }
+    await qa.pinch('left', false);
+    await Promise.all([qa.rest('left'), qa.rest('right')]);
+    await qa.frames(20);
+    const cross = { claims: [w.__input.claims.left, w.__input.claims.right], held: held(), volume: [v0, qa.clay().volume] };
+    out.push({ name: 'r3. hands crossing over the clay (one pinching in the air): nothing stuck, the clay unchanged', pass: !cross.claims[0] && !cross.claims[1] && cross.held === 0 && Math.abs(cross.volume[1] - v0) < 1, detail: JSON.stringify(cross) });
+
+    // tidy as a player would: creations left on or against the clay by earlier steps are carried aside by hand
+    for (const cid of sys().objects.liveCreationIds()) {
+      const o = obj(cid), cc0 = qa.clay().center;
+      if (!o || Math.hypot(o.p[0] - cc0[0], o.p[2] - cc0[2]) > 0.16 || !(await grab(cid))) continue;
+      await qa.moveTo('right', [cc0[0] + 0.26, qa.surfaceInfo().topY + 0.12, cc0[2] + 0.08], 'pinch', 0.03);
+      await qa.pinch('right', false);
+      await qa.rest('right');
+      await qa.frames(40);
+    }
+
+    // 4. rapid tool switching: eight pokes in a row on the Make tools, then the last tool works
+    await F.openMenu();
+    if (!qa.menuButton('add') && qa.menuButton('back')) await qa.menuPress('back');
+    await qa.menuPress('make');
+    await qa.frames(4);
+    const seq = ['add', 'carve', 'smooth', 'shape', 'add', 'carve', 'smooth', 'add'];
+    let pressed = 0;
+    for (const t of seq) pressed += (await qa.menuPress(t)).ok ? 1 : 0;
+    await F.closeMenu();
+    const tool = qa.clay().tool, va = qa.clay().volume;
+    const cc = qa.clay().center, near = qa.objectsState().filter((o) => Math.hypot(o.p[0] - cc[0], o.p[2] - cc[2]) < 0.3).map((o) => `${o.kind}:${o.mode}@${o.p.map((v) => v.toFixed(2)).join(',')}`);
+    let heldMid = null;
+    const probe = setInterval(() => (heldMid ??= held() ? JSON.stringify(sys().objects.heldItems()) : null), 30);
+    const surf = qa.claySurface([1, 0.3, 0.5]);
+    await F.stroke([1, 0.3, 0.5], [0.04, 0.01, 0.02]);
+    clearInterval(probe);
+    console.info(`[r4] near clay: ${near.join(' | ')}; held during stroke: ${heldMid}; surface ${JSON.stringify(surf)}; suspended ${sys().sculpt.suspended}; claims ${JSON.stringify(w.__input.claims)}`);
+    out.push({ name: 'r4. rapid tool switching (8 pokes), then the last tool (Add) works', pass: pressed === seq.length && tool === 'add' && qa.clay().volume > va, detail: `${pressed}/${seq.length} pokes, tool ${tool}, volume ${va} -> ${qa.clay().volume}` });
+
+    // 5. noisy hands (1 cm whole-hand jitter, 2 mm per joint, a 0.2-0.5 s dropout every 2.5-5 s): sculpt, carry, drop
+    Object.assign(N, { jitter: 0.01, jointJitter: 0.002, dropEvery: [2500, 5000], dropFor: [200, 500] });
+    const d0 = N.drops, vn = qa.clay().volume;
+    // as a player would: a missed press (the hand vanished mid-poke) is tried again, up to 3 times
+    let m = { ok: false }, tries = 0;
+    while (tries < 3 && !(m.ok && qa.clay().tool === 'add')) {
+      tries++;
+      m = await F.menuPath('make', 'add');
+    }
+    for (let k = 0; k < 2 && qa.clay().volume <= vn; k++) await F.stroke([1, 0.3, 0.5], [0.04, 0.01, 0.02]);
+    const vn1 = qa.clay().volume;
+    id = sys().objects.liveCreationIds().at(-1);
+    g = await grab(id);
+    if (g) await swing('right', [c[0] + 0.15, c[1] + 0.1, c[2] + 0.05], 0.01, 1);
+    await qa.pinch('right', false);
+    await qa.frames(60);
+    noiseOff();
+    await Promise.all([qa.rest('left'), qa.rest('right')]);
+    await qa.frames(40);
+    const after = { menu: m.ok, tries, volume: [vn, vn1], grabbed: g, held: held(), creations: [n0, sys().objects.liveCreationIds().length], drops: N.drops - d0 };
+    out.push({ name: 'r5. noisy hands (1 cm jitter + dropouts): sculpt, grab and drop still work, nothing held or lost', pass: after.held === 0 && after.creations[1] >= n0 && vn1 > vn, detail: JSON.stringify(after) });
+
+    watch.stop();
+    out.push({ name: 'r6. no uncaught errors during the robustness steps', pass: watch.errs.length === 0, detail: watch.errs.slice(0, 3).join(' | ') || 'none' });
+    return out;
+  }
+
+  Object.assign(F, { robust, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
 })();

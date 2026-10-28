@@ -14,13 +14,15 @@ export interface Settings {
   /** The menu floats beside the clay (no palm-up gesture), poke it with either hand. */
   oneHanded: boolean;
   sound: boolean;
+  /** Simpler effects for a steadier frame rate (the governor's low level, always). */
+  performanceMode: boolean;
   tutorialDone: boolean;
   /** Vision check (online, off by default): pictures of a toy added to the Play Kit go to the game agent's free vision model. */
   vision: boolean;
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, tutorialDone: false, vision: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, performanceMode: false, tutorialDone: false, vision: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();

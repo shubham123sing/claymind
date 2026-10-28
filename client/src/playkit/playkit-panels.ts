@@ -216,13 +216,34 @@ export class GameHud extends CanvasPanel {
   /** second row: the demo controls while the demo hand plays */
   extra: [string, string, boolean, string?][] = [];
 
+  /** A point was scored: the board's edge lights green for a moment (one pulse, no flashing). */
+  private pulseUntil = 0;
+
   constructor() {
     super([900, 500], [0.27, 0.15]);
+  }
+
+  pulse(): void {
+    this.pulseUntil = performance.now() + 450;
+    this.invalidate();
+  }
+
+  override draw(): void {
+    if (this.pulseUntil && performance.now() > this.pulseUntil) {
+      this.pulseUntil = 0;
+      this.invalidate();
+    }
+    super.draw();
   }
 
   protected paint(ctx: CanvasRenderingContext2D, add: (x: number, y: number, w: number, h: number, id: string) => void): void {
     const W2 = 900, H2 = 500;
     ui.panel(ctx, W2, H2);
+    if (this.pulseUntil) {
+      ctx.strokeStyle = '#5fbf72';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(5, 5, W2 - 10, H2 - 10);
+    }
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f4f1ec';
     ctx.font = '700 32px system-ui, sans-serif';

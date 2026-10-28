@@ -6,6 +6,7 @@
 import { createSystem, PerspectiveCamera, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
 import { bus } from '../core/event-bus.js';
+import { agentStatus, warmUp } from '../game-agent/agent-client.js';
 import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
@@ -14,6 +15,8 @@ import { room } from './room-client.js';
 import { RoomPanel } from './room-panel.js';
 
 const NAME_KEY = 'claymind.name';
+/** After a lost connection: rejoin the same room after these waits (ms), then give up with a message. */
+const REJOIN_WAITS = [1500, 4000, 9000];
 
 function savedName(): string {
   try {
@@ -55,12 +58,15 @@ export class MultiplayerSystem extends createSystem({}) {
         if (room.isHost) this.toast('You are the host now');
       }),
     );
-    room.onClose = (why) => {
-      bus.emit('room:left', { why });
-      this.panel.view = 'message';
-      this.panel.message = why;
-      this.panel.mesh.visible = true;
+    this.panel.server = agentStatus.value;
+    this.cleanupFuncs.push(agentStatus.on((st) => {
+      this.panel.server = st;
       this.panel.invalidate();
+    }));
+    room.onClose = (why, lost) => {
+      bus.emit('room:left', { why });
+      if (lost?.code) return void this.rejoin(lost.code);
+      this.showMessage(why);
     };
     const onDown = (e: PointerEvent) => this.onPointer(e, true);
     const onMove = (e: PointerEvent) => this.onPointer(e, false);
@@ -72,11 +78,54 @@ export class MultiplayerSystem extends createSystem({}) {
     });
   }
 
+  private showMessage(text: string): void {
+    this.panel.view = 'message';
+    this.panel.message = text;
+    this.panel.mesh.visible = true;
+    this.panel.invalidate();
+  }
+
+  /** QA: rejoin attempts after lost connections. */
+  rejoins = { tried: 0, ok: 0 };
+
+  /**
+   * The connection dropped (network, a server restart): rejoin the same room a few times. The room
+   * keeps going for the others (the next player is host if the host dropped); a rejoin gets the
+   * table from the host's snapshot. Playing alone carries on meanwhile.
+   */
+  private async rejoin(code: string): Promise<void> {
+    const p = this.panel, my = ++this.attempt;
+    for (let i = 0; i < REJOIN_WAITS.length; i++) {
+      this.toast(`Connection lost: reconnecting to room ${code} (${i + 1}/${REJOIN_WAITS.length})…`);
+      await new Promise((r) => setTimeout(r, REJOIN_WAITS[i]));
+      if (my !== this.attempt || room.connected) return;
+      this.rejoins.tried++;
+      try {
+        await room.open(p.name, code);
+        if (my !== this.attempt) return room.leave();
+        this.rejoins.ok++;
+        p.view = 'room';
+        this.syncRoom();
+        bus.emit('room:joined', { code: room.code, host: room.isHost });
+        this.toast(`Back in room ${code}`);
+        uiSounds.chime();
+        return;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '';
+        // the room is gone (everyone left): no point trying again
+        if (/not found|no room|does not exist/i.test(msg)) return this.showMessage(`Room ${code} has closed. You can keep playing alone or create a new room.`);
+      }
+    }
+    this.showMessage(`Could not reconnect to room ${code}. Your own table is safe: play alone, or try Join again later.`);
+  }
+
   private toast(text: string): void {
     bus.emit('ui:toast', { text });
   }
 
   private open(): void {
+    // wake the free server while the player reads the panel (the status line says how it goes)
+    if (agentStatus.value !== 'online') void warmUp();
     this.panel.view = room.connected ? 'room' : 'home';
     this.syncRoom();
     this.panel.mesh.visible = true;
@@ -217,13 +266,11 @@ export class MultiplayerSystem extends createSystem({}) {
     const now = performance.now();
     this.place();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const tip = h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null;
       if (this.pad) {
-        const k = this.pad.poke(tip, now);
+        const k = this.pad.pokeHands(input.both, now);
         if (k) this.padPress(k);
       } else {
-        const id = this.panel.poke(tip, now);
+        const id = this.panel.pokeHands(input.both, now);
         if (id) this.press(id);
       }
     }

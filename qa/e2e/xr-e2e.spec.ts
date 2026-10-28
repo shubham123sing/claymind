@@ -16,7 +16,7 @@ import { withEmulator } from './iwer';
 
 const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
-const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,g').split(',');
+const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,g').split(',');
 const BACKEND = 'http://127.0.0.1:8790';
 
 interface StepResult { step: string; name: string; pass: boolean; detail: string; at: number; shot?: string; fps?: number; page: string }
@@ -76,6 +76,9 @@ async function flow(page: Page, who: string, step: string, call: string, arg?: u
   } catch (e) {
     out = [{ name: call, pass: false, detail: `error: ${(e as Error).message.split('\n')[0]}` }];
   }
+  // V6 4.4: no overlapping panels on the screen the player sees, after every flow
+  const ov = await page.evaluate(() => (window as any).qa.overlaps()).catch(() => null);
+  if (ov) out.push({ name: `no overlapping panels after ${call}`, pass: ov.length === 0, detail: ov.length ? JSON.stringify(ov) : 'none' });
   const file = await shot(page, who, `${step}-${call}`);
   const fps = await page.evaluate(() => (window as any).qa.fps(1000)).catch(() => null);
   for (const r of out) Object.assign(record(who, step, r.name, !!r.pass, r.detail ?? ''), { shot: file, fps });
@@ -101,6 +104,7 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
     await flow(A, 'A', 'e', 'describeGame');
   }
   if (ONLY.includes('f')) await flow(A, 'A', 'f', 'playGame');
+  if (ONLY.includes('r')) await flow(A, 'A', 'r', 'robust');
   if (ONLY.includes('e')) {
     // the backend off: every call to it fails, as when the server is down
     await A.route(`${BACKEND}/**`, (r) => r.abort());
@@ -153,6 +157,27 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
     record('B', 'g', 'one turn played: blocks go down, both see the same score', thrown && moved && ha.lines.join() === hb.lines.join(), `A: ${ha.lines.join(' | ')}; B: ${hb.lines.join(' | ')}`);
     await shot(A, 'A', 'g-turn');
     await shot(B, 'B', 'g-turn');
+    // V6 section 5: B's connection drops (as on a network failure); it rejoins the same room by itself
+    // and gets the same clay back from the host's snapshot
+    const code = made.code;
+    await B.evaluate(() => (window as any).__room.dropForTest());
+    const back = await B.evaluate(async (c) => {
+      const w = window as any, t0 = performance.now();
+      while (performance.now() - t0 < 30000 && !(w.__room.connected && w.__room.code === c && w.__room.players.length >= 2)) await new Promise((r) => setTimeout(r, 100));
+      await w.qa.frames(90);
+      return { connected: w.__room.connected, code: w.__room.code, players: w.__room.players.length, rejoins: w.__sys.multiplayer.rejoins, ms: Math.round(performance.now() - t0) };
+    }, code);
+    const [ra, rb] = [await sync(A), await sync(B)];
+    record('B', 'g', 'connection lost: rejoins the same room by itself, same clay', back.connected && back.code === code && back.players >= 2 && ra.sum === rb.sum,
+      `${JSON.stringify(back)}; checksums ${ra.sum === rb.sum ? 'equal' : `differ (${ra.sum} / ${rb.sum})`}`);
+    // the host leaves: B becomes the host and keeps its table
+    await A.evaluate(() => (window as any).__room.leave());
+    const host = await B.evaluate(async () => {
+      const w = window as any, t0 = performance.now();
+      while (performance.now() - t0 < 10000 && !(w.__room.isHost && w.__room.players.length === 1)) await new Promise((r) => setTimeout(r, 100));
+      return { host: w.__room.isHost, connected: w.__room.connected, players: w.__room.players.length, clayVolume: w.qa.clay().rawVolume };
+    });
+    record('B', 'g', 'the host leaves: the other player becomes host, keeps the table', host.host && host.connected && host.players === 1 && host.clayVolume > 0, JSON.stringify(host));
   }
 
   // fps over the run's end state, then close (the videos are written on close)

@@ -10,7 +10,7 @@ import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
-const W = 760, H = 800;
+const W = 760, H = 890;
 const SIZE: [number, number] = [0.24, (0.24 * H) / W];
 
 const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
@@ -19,6 +19,7 @@ const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
   { key: 'leftHanded', label: 'Left-handed', hint: 'left hand sculpts, right palm menu' },
   { key: 'oneHanded', label: 'One-handed menu', hint: 'menu stays beside the clay' },
   { key: 'sound', label: 'Sound', hint: 'all sounds on / off' },
+  { key: 'performanceMode', label: 'Performance mode', hint: 'simpler effects, steadier frame rate' },
   { key: 'vision', label: 'Vision check (online)', hint: 'pictures of new Play Kit toys go to Groq; their terms apply' },
 ];
 
@@ -73,7 +74,6 @@ class SettingsPanel extends CanvasPanel {
 
 export class SettingsSystem extends createSystem({}) {
   private panel = new SettingsPanel();
-  private tip = new Vector3();
   private v = new Vector3();
   private at = new Vector3();
   private toEye = new Vector3();
@@ -137,8 +137,7 @@ export class SettingsSystem extends createSystem({}) {
     if (!this.panel.mesh.visible) return;
     this.place();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const id = this.panel.poke(h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, performance.now());
+      const id = this.panel.pokeHands(input.both, performance.now());
       if (id) this.press(id);
     }
     this.panel.draw();

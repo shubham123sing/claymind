@@ -53,7 +53,7 @@ eyes see). In mixed reality the virtual table is a translucent hint until a real
 3. ~~The menu has 9 categories~~ Done in Stage B (R4): Make, Colour & Material (with Paint), Bring to life (with Pin, Remove, Clear, Recenter), Play (Make it a game, Play Kit), Keep (Library), Room, and Settings and Help (?) as small icons. The browser toolbar shows the same.
 4. **No Help panel with the build id** (section 7, Stage D). Help (?) now replays the first five minutes.
 5. ~~Emulator and unpkg in the production build~~ Done in Stage A; the hand models ship with the app since Stage B.
-6. **The VR room is plain** (flat colours, no textures): polish in Stage C (4.4).
+6. ~~The VR room is plain~~ Stage C: a drawn window view (sky, hills, frame); still flat-coloured walls. And the headset's own Enter button now opens VR (it opened mixed reality before).
 7. Gaze is not used (optional).
 
 ## Stage B (2026-10-28): first five minutes, visible agent, simpler menu
@@ -71,3 +71,43 @@ Evidence: `QA_STEPS=h` in `qa/e2e/xr-e2e.spec.ts` (scripted emulated hands, not 
   target, from its measured shape); all code, offline (`client/src/game-agent/look.ts`, unit-tested).
 - **Honest limits:** the "parts" are the creation's pieces and materials, not named body parts; the highlight glows
   the whole creation, not each piece. Nothing here is verified on a real Quest.
+
+## Stage C (2026-10-28): hand quality, sound, multiplayer, robustness
+
+Evidence: scripted emulated hands (IWER), release build; not a real Quest. Full run `stageC-full3`: 61/61
+(steps h, a-g and the new r, plus a no-overlapping-panels check after every flow); autosave reload test pass;
+153 unit tests.
+
+- **Poke intent (4.3):** every panel and the palm menu press only after the fingertip aimed at one
+  button from the front (within 10 cm, at least 60 ms) and then crossed it; sliding in from the side,
+  going right through, a quick brush or a pinching hand presses nothing (`PokeGate`, 6 unit tests).
+  The aimed menu button keeps a 6 mm wider hit box (shaky hands); an open palm menu survives a 0.5 s
+  tracking loss of the palm hand. **Either hand** now pokes panels (before: the right hand whenever it
+  was tracked, which left-handed and one-handed players could not use).
+- **Clay first (4.3):** a pinch on the clay's surface sculpts even with a creation resting against
+  the lump; the creation takes it only when the fingers are on its own shape (within 4 mm). Found by
+  step r: Library "Use" put creations inside the clay, so the next pinch on the clay grabbed them;
+  they now land beside the clay.
+- **Grab feedback (4.3, 4.4):** a free hand within grab reach makes the object glow faintly; a grab
+  pops and flashes; letting go plays a soft note (louder for a throw); each point scored dings (one
+  step higher per point) and the scoreboard's edge lights green once. All sounds are procedural.
+- **No overlapping panels (4.4):** the e2e now projects every visible panel to the screen after each
+  flow and fails on overlaps; the success card moves left of the game's scoreboard.
+- **Multiplayer (5):** a BETA tag; the room panel says whether the room server is ready, waking up or
+  unreachable (and wakes it when opened); a dropped connection rejoins the same room by itself (three
+  tries, 1.5 / 4 / 9 s), and the table comes back from the host's snapshot. Host leaving: the next
+  player becomes host (relay, unchanged) and keeps the table. Both are now in e2e step g.
+- **Robustness (6):** e2e step r: a 50 ms loss while holding keeps the object; a 0.4 s loss mid-grab lets
+  go cleanly and the hand can grab again; crossing hands leave nothing stuck; 8 rapid tool pokes; then
+  sculpt, grab and drop with **noisy hands** (1 cm whole-hand wobble, 2 mm per joint, a 0.2-0.5 s dropout
+  every 2.5-5 s); no uncaught errors.
+  Menu presses under noise (18 presses each): clean 18/18; 1 cm wobble 16 right, 1 wrong, 1 missed;
+  1 cm white jitter 17/1/0; with dropouts 8 right, 1 wrong, 9 missed (the poking hand vanished; a
+  retry works). A wrong press is rare but possible with 1 cm noise.
+- **Autosave (6):** the clay (with undo history) and loose creations are saved locally every few
+  seconds and when the page is hidden; a reload brings both back (`qa/e2e/autosave.spec.ts`: same clay
+  checksum, same creation).
+- **Performance (6):** a frame-rate governor and a Performance mode setting; CPU 4x / 6x throttle
+  measured (`docs/PERF.md`).
+- **Still open:** panels cannot be grabbed and moved (gap 1); no seated-height calibration (gap 2);
+  no Quest test (no device).

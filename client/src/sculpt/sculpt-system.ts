@@ -102,6 +102,7 @@ export class SculptSystem extends createSystem({}) {
       this.updateMeasure();
     });
 
+    input.nearClay = (p, margin) => this.ctx.nearClay([p[0], p[1], p[2]], margin);
     input.clayRaycast = (ray, dragging) => {
       if (!dragging) this.dragSnapshot = null;
       else if (!this.dragSnapshot) this.dragSnapshot = this.view.snapshot();

@@ -5,6 +5,8 @@
  */
 import { CanvasTexture, Mesh, MeshBasicMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Vector2, Vector3, World } from '@iwsdk/core';
 import { onSettings, settings } from '../core/settings.js';
+import type { HandState } from '../platform/input/hand-state.js';
+import { PokeGate } from '../platform/input/poke-gate.js';
 
 export interface Region {
   x: number;
@@ -23,10 +25,11 @@ export abstract class CanvasPanel {
   private tex: CanvasTexture;
   private regions: Region[] = [];
   private dirty = true;
-  private wasFront = false;
+  /** Poke intent per hand (and one for a bare fingertip point), see PokeGate. */
+  private gates = { left: new PokeGate(), right: new PokeGate(), tip: new PokeGate() };
   private local = new Vector3();
   private uv = new Vector2();
-  private lastPress = 0;
+  private tipV = new Vector3();
 
   constructor(readonly px: [number, number], readonly size: [number, number]) {
     this.canvas.width = px[0];
@@ -60,28 +63,40 @@ export abstract class CanvasPanel {
     return this.regions.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)?.id ?? null;
   }
 
-  /** XR: returns the region id pressed this frame by a fingertip crossing the panel. */
+  /** XR: returns the region id pressed this frame by a fingertip crossing the panel (with intent, see PokeGate). */
   poke(tip: Vector3 | null, now: number): string | null {
+    const r = this.sample(tip, this.gates.tip, now, false);
+    this.setHover(r.hover);
+    return r.pressed;
+  }
+
+  /**
+   * XR: either hand pokes (left-handed and one-handed players alike); a pinching hand never does
+   * (it is grabbing or sculpting). Returns the region pressed this frame.
+   */
+  pokeHands(hands: readonly HandState[], now: number): string | null {
+    let hover: string | null = null, pressed: string | null = null;
+    for (const h of hands) {
+      const r = this.sample(h.tracked ? this.tipV.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, this.gates[h.side], now, h.pinching);
+      hover ??= r.hover;
+      pressed ??= r.pressed;
+    }
+    this.setHover(hover);
+    return pressed;
+  }
+
+  private sample(tip: Vector3 | null, gate: PokeGate, now: number, blocked: boolean): { hover: string | null; pressed: string | null } {
     if (!tip || !this.mesh.visible) {
-      this.wasFront = false;
-      this.setHover(null);
-      return null;
+      gate.reset();
+      return { hover: null, pressed: null };
     }
     this.local.copy(tip);
     this.mesh.worldToLocal(this.local);
     const inside = Math.abs(this.local.x) < this.size[0] / 2 && Math.abs(this.local.y) < this.size[1] / 2;
     this.uv.set(this.local.x / this.size[0] + 0.5, this.local.y / this.size[1] + 0.5);
+    const id = inside ? this.regionAtUv(this.uv) : null;
     const near = inside && this.local.z < 0.03 && this.local.z > -0.02;
-    const id = near ? this.regionAtUv(this.uv) : null;
-    this.setHover(id);
-    const front = this.local.z > 0.006;
-    let pressed: string | null = null;
-    if (inside && this.wasFront && !front && this.local.z > -0.02 && id && now - this.lastPress > 400) {
-      this.lastPress = now;
-      pressed = id;
-    }
-    this.wasFront = inside ? front : true;
-    return pressed;
+    return { hover: near && !blocked ? id : null, pressed: gate.update(inside, this.local.z, id, now, blocked) };
   }
 
   setHover(id: string | null): void {

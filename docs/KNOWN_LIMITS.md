@@ -309,3 +309,14 @@ Other findings:
 - **A heavy creation may not fall** to a light ball: a hit scores 1 so a first game always has a score moment; the scripted run scored 3 without a win. Repeated touches can score more than once (a 1 s cooldown per pair).
 - **The success card** appears when the first game ends (win, loss or out of throws); leaving the game early leaves the card on its "Play!" step until Skip.
 - Not verified on a real Quest: the card's reach and text size, the one-tap buttons and the palm menu's small icons (2.9 cm) are emulator-checked only.
+
+## V6 Stage C (2026-10-28)
+- **No Quest test yet** (no device). Poke intent, grab radius, hover glow, sounds and text sizes are tuned in the emulator with scripted hands; how they feel on a real headset is unknown. `docs/QUEST_TEST.md` is ready for the first borrowed Quest.
+- **Noisy hands:** with 1 cm of tracking noise a menu press occasionally lands on the wrong button (1 in 18 in our runs) or is missed; with hands dropping out of tracking about half the presses need a second try. Nothing breaks, sticks or is lost (e2e step r).
+- **A creation resting inside the clay** (dropped onto the lump) takes a pinch there before the clay does; move it aside to sculpt. Library "Use" and recalled creations now land beside the clay, not in it.
+- **Panels still cannot be grabbed and moved**; they follow the clay. No seated-height calibration (the virtual table is 0.72 m high).
+- **Multiplayer is BETA.** A lost connection rejoins the same room (three tries in about 15 s); if the room closed meanwhile, it says so. Rejoining takes a fresh copy of the table from the host. The room server is a free host that sleeps: the panel says when it is waking up.
+- **Autosave** keeps the clay and loose creations in this browser only (IndexedDB); clearing site data or a private window loses them. Not while in a multiplayer room.
+- **Performance governor** decisions come from desktop measurements; the 55 fps threshold and foveation levels are not tuned on a Quest. About 130 draw calls with the room: a risk on Quest.
+- **Scripted throw in a room** missed the blocks in 3 of 5 runs (both pages at about 22-25 fps; the release speed from the emulated hand varies). Alone it scores; real throws need a Quest.
+- The headset's own **Enter** button now opens **VR** (it opened mixed reality before); mixed reality stays on the second button.

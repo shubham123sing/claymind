@@ -55,6 +55,7 @@ export class GameAgentSystem extends createSystem({}) {
   private v = new Vector3();
   private v2 = new Vector3();
   private tip = new Vector3();
+  private side = new Vector3();
   /** Point + Say: what has been shown and said so far */
   private intent: Intent = { roles: [], zones: [], paths: [], text: '' };
   private pending: RoleWord | null = null;
@@ -613,6 +614,10 @@ export class GameAgentSystem extends createSystem({}) {
     m.scale.setScalar(xr ? XR_TEXT_SCALE : 0.5);
     m.position.copy(at).addScaledVector(toEye, xr ? 0.12 : narrow ? 0.16 : 0.14);
     m.position.y += xr ? 0.16 : 0.07;
+    if (this.kit.scoreboardUp) {
+      // the game's scoreboard stands right of the play area: keep clear of it (no overlapping panels)
+      m.position.addScaledVector(this.side.set(-toEye.z, 0, toEye.x), xr ? 0.15 : 0.07);
+    }
     m.lookAt(eye);
     const k = this.keypad.mesh;
     k.scale.setScalar(xr ? XR_TEXT_SCALE : 0.5);
@@ -627,13 +632,11 @@ export class GameAgentSystem extends createSystem({}) {
     if (now - this.openedAt > IDLE_CLOSE_MS && !this.busy && !this.keypad.mesh.visible) return this.close();
     this.place();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const tip = h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null;
       if (this.keypad.mesh.visible) {
-        const k = this.keypad.poke(tip, now);
+        const k = this.keypad.pokeHands(input.both, now);
         if (k) this.keypadPress(k);
       } else {
-        const id = this.panel.poke(tip, now);
+        const id = this.panel.pokeHands(input.both, now);
         if (id) this.press(id);
       }
     }

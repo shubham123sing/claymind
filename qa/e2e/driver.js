@@ -250,6 +250,42 @@
     return null;
   }
 
+  /**
+   * Visible panels that overlap on screen (the view the player sees: the left eye in XR). A keypad
+   * over its own panel is a deliberate pop-up and is left out. Returns [{ a, b, share }], share =
+   * overlap / the smaller panel's area.
+   */
+  function overlaps(min = 0.08) {
+    const r = w.__world.renderer;
+    const cam = r.xr.isPresenting ? r.xr.getCamera().cameras[0] ?? r.xr.getCamera() : w.__world.camera;
+    const rects = [];
+    for (const pn of panels()) {
+      let vis = pn.mesh.visible;
+      for (let o = pn.mesh.parent; o && vis; o = o.parent) vis = o.visible;
+      if (!vis || 'upper' in pn) continue;
+      pn.mesh.updateMatrixWorld(true);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, behind = false;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const P = pn.mesh.localToWorld(new (V())((sx * pn.size[0]) / 2, (sy * pn.size[1]) / 2, 0));
+        const Q = P.clone().applyMatrix4(cam.matrixWorldInverse);
+        if (Q.z > 0) behind = true;
+        P.project(cam);
+        x0 = Math.min(x0, P.x); x1 = Math.max(x1, P.x); y0 = Math.min(y0, P.y); y1 = Math.max(y1, P.y);
+      }
+      if (behind || x1 < -1 || x0 > 1 || y1 < -1 || y0 > 1) continue;
+      rects.push({ name: `${pn.px[0]}x${pn.px[1]}`, x0, y0, x1, y1 });
+    }
+    const out = [];
+    for (let i = 0; i < rects.length; i++)
+      for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i], b = rects[j];
+        const ix = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)), iy = Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+        const share = (ix * iy) / Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0));
+        if (share > min) out.push({ a: a.name, b: b.name, share: Math.round(share * 100) / 100 });
+      }
+    return out;
+  }
+
   function regions(filter) {
     const out = [];
     for (const pn of panels()) if (pn.mesh.visible) for (const r of pn.regions ?? []) if (!filter || r.id.includes(filter)) out.push(r.id);
@@ -318,6 +354,6 @@
 
   w.qa = {
     frames, fps, enterXR, point, pose, pinch, pinchAt, moveTo, rest, pokeAt, menuButton, menuShown, menuPress,
-    panels, region, regions, panelPress, clay, claySurface, objectsState, surfaceInfo, sleep,
+    panels, region, regions, panelPress, overlaps, clay, claySurface, objectsState, surfaceInfo, sleep,
   };
 })();

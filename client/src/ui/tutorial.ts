@@ -12,6 +12,7 @@ import { AppEvents, bus } from '../core/event-bus.js';
 import { setSetting, settings, settingsReady } from '../core/settings.js';
 import { input } from '../platform/input/input-system.js';
 import { GameAgentSystem } from '../game-agent/game-agent-system.js';
+import { PlayKitSystem } from '../playkit/playkit-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { bindPanelMouse, CanvasPanel, ui, XR_TEXT_SCALE } from './canvas-panel.js';
 
@@ -115,9 +116,9 @@ export class TutorialSystem extends createSystem({}) {
   private active = false;
   private startedAt = 0;
   private offs: (() => void)[] = [];
-  private tip = new Vector3();
   private v = new Vector3();
   private at = new Vector3();
+  private side = new Vector3();
 
   init(): void {
     const m = this.panel.mesh;
@@ -223,10 +224,14 @@ export class TutorialSystem extends createSystem({}) {
     m.scale.setScalar(input.xr ? XR_TEXT_SCALE : 0.6);
     m.position.copy(at);
     m.position.y += input.xr ? 0.2 : 0.15; // above the clay's size label
+    if (this.world.getSystem(PlayKitSystem)?.scoreboardUp) {
+      // the game's scoreboard stands right of the play area: the card moves to the left, no overlap
+      const side = this.side.set(at.z - eye.z, 0, eye.x - at.x).normalize();
+      m.position.addScaledVector(side, input.xr ? 0.2 : 0.13);
+    }
     m.lookAt(eye);
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const id = this.panel.poke(h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, performance.now());
+      const id = this.panel.pokeHands(input.both, performance.now());
       if (id) this.press(id);
     }
     m.updateMatrixWorld();
