@@ -11,12 +11,15 @@ import { input } from '../platform/input/input-system.js';
 import { SculptSystem } from '../sculpt/sculpt-system.js';
 import { XR_TEXT_SCALE } from '../ui/canvas-panel.js';
 import { CODE_KEYS, KeypadPanel, LETTERS } from '../ui/keypad.js';
-import { room } from './room-client.js';
+import { room, RoomUnreachable } from './room-client.js';
 import { RoomPanel } from './room-panel.js';
 
 const NAME_KEY = 'claymind.name';
 /** After a lost connection: rejoin the same room after these waits (ms), then give up with a message. */
 const REJOIN_WAITS = [1500, 4000, 9000];
+/** Create / Join while the free server wakes: try again every few seconds for up to this long (ms). */
+const WAKE_MS = 75000;
+const WAKE_RETRY_MS = 3000;
 
 function savedName(): string {
   try {
@@ -191,7 +194,23 @@ export class MultiplayerSystem extends createSystem({}) {
     p.status = code ? `Joining room ${code}…` : 'Creating a room…';
     p.invalidate();
     try {
-      await room.open(p.name, code);
+      // a sleeping free server drops the first connections while it starts: wake it and keep trying
+      const until = performance.now() + WAKE_MS;
+      for (;;) {
+        try {
+          await room.open(p.name, code);
+          break;
+        } catch (e) {
+          if (my !== this.attempt) return;
+          if (!(e instanceof RoomUnreachable)) throw e;
+          if (performance.now() > until) throw new Error('The room server is not answering. Playing alone works fully: try again in a minute.');
+          p.status = 'Waking the room server…';
+          p.invalidate();
+          void warmUp();
+          await new Promise((r) => setTimeout(r, WAKE_RETRY_MS));
+          if (my !== this.attempt) return;
+        }
+      }
       if (my !== this.attempt) return room.leave();
       p.view = 'room';
       this.syncRoom();

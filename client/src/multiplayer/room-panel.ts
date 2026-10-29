@@ -70,7 +70,7 @@ export class RoomPanel extends CanvasPanel {
         text(this.status || 'Connecting…', 40, 200, 32, '#f4f1ec', 700);
         ctx.fillStyle = 'rgba(244,241,236,0.7)';
         ctx.font = '500 23px system-ui, sans-serif';
-        ui.wrap(ctx, 'The free server can take up to half a minute to wake up.', 40, 260, W - 80, 32, 2);
+        ui.wrap(ctx, 'The free server can take up to a minute to wake up: this keeps trying by itself.', 40, 260, W - 80, 32, 2);
         btn(40, H - 90, 300, 64, 'Cancel', 'cancel');
         break;
       case 'room': {

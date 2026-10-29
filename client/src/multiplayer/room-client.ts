@@ -22,6 +22,9 @@ const LAG_MS = Number(params.get('netLag') ?? 0);
 const LOSS = Number(params.get('netLoss') ?? 0);
 const LOSSY = new Set(['presence', 'state']);
 
+/** The room server did not answer or closed before the room was set up (a sleeping free server): worth another try. */
+export class RoomUnreachable extends Error {}
+
 export function roomsUrl(): string | null {
   const base = agentsUrl();
   return base ? `${base.replace(/^http/, 'ws')}/v1/rooms` : null;
@@ -74,7 +77,7 @@ export class RoomClient {
           settled = true;
           this.ws = null;
           ws.close();
-          reject(new Error('The room server did not answer (it may be waking up): try again.'));
+          reject(new RoomUnreachable('The room server did not answer (it may be waking up): try again.'));
         }
       }, 15000);
       ws.onopen = () => this.sendNow(code ? { t: 'join', code, name } : { t: 'create', name });
@@ -113,7 +116,7 @@ export class RoomClient {
           settled = true;
           clearTimeout(timer);
           this.ws = null;
-          reject(new Error('Could not reach the room server.'));
+          reject(new RoomUnreachable('Could not reach the room server.'));
           return;
         }
         const why = this.closedWhy || 'Disconnected from the room.';
