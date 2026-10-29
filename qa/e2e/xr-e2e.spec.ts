@@ -18,6 +18,9 @@ const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
 const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,x,m,k,g').split(',');
 const BACKEND = 'http://127.0.0.1:8790';
+const LIVE = process.env.QA_URL;
+/** The backend the page talks to (blocked for the offline check). */
+const AGENTS = LIVE ? 'https://claymind-agents.onrender.com' : BACKEND;
 
 interface StepResult { step: string; name: string; pass: boolean; detail: string; at: number; shot?: string; fps?: number; page: string }
 const results: StepResult[] = [];
@@ -44,7 +47,8 @@ async function open(context: BrowserContext, who: string): Promise<Page> {
   page.on('requestfailed', (r) => appendFileSync(net, JSON.stringify({ t: (Date.now() - t0[who]) / 1000, method: r.method(), url: r.url().slice(0, 200), failed: r.failure()?.errorText }) + '\n'));
   page.on('websocket', (ws) => appendFileSync(net, JSON.stringify({ t: (Date.now() - t0[who]) / 1000, websocket: ws.url() }) + '\n'));
   await withEmulator(page);
-  await page.goto(`/?debug&agents=${BACKEND}`);
+  // QA_URL: a deployed copy (e.g. the Pages address), with its own backend
+  await page.goto(LIVE ? `${LIVE}?debug` : `/?debug&agents=${BACKEND}`);
   await page.waitForFunction(() => !!(window as any).__sys, null, { timeout: 90_000 });
   for (const f of ['driver.js', 'flows.js', 'flows-more.js']) await page.addScriptTag({ path: join(__dirname, f) });
   const xr = await page.evaluate(() => (window as any).qa.enterXR());
@@ -110,9 +114,9 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
   if (ONLY.includes('k')) await flow(A, 'A', 'k', 'seatHeight');
   if (ONLY.includes('e')) {
     // the backend off: every call to it fails, as when the server is down
-    await A.route(`${BACKEND}/**`, (r) => r.abort());
+    await A.route(`${AGENTS}/**`, (r) => r.abort());
     await flow(A, 'A', 'e', 'gameOffline');
-    await A.unroute(`${BACKEND}/**`);
+    await A.unroute(`${AGENTS}/**`);
   }
 
   let ctxB: BrowserContext | null = null;

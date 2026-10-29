@@ -14,6 +14,15 @@ screen and in the description ("recorded in the WebXR emulator, not on a headset
 | 130-160 s | One line on how it works, one on limits | "Physics and games run on your device; the AI only fills a checked game form, it never writes code. Not yet tested on a Quest." |
 | End card | Link, "Hands only. Free." | |
 
+### Making it again (after the freeze)
+The footage is scripted with the emulated hands on the published build, then cut with ffmpeg:
+1. `QA_DEMO=1 QA_URL=https://shubham123sing.github.io/claymind/ npx --prefix client playwright test -c qa/e2e/playwright.config.ts demo`
+   records `qa/recordings/demo-<time>/` (`A.webm`, `B.webm`, `marks.json`; scenes in `qa/e2e/demo.js`).
+2. `python qa/video/edit.py qa/recordings/demo-<time> submission/claymind-demo.mp4` (needs numpy and an
+   ffmpeg with libx264 and drawtext: `pip install imageio-ffmpeg numpy`, or `FFMPEG=<path>`).
+   It adds title, "how it works" and end cards, the two players side by side, close-ups and the
+   music, which `qa/video/music.py` makes from scratch (no outside tracks, no licence questions).
+
 Zoom into the agent panel and the HUD so text is readable. No AI-generated footage, no voice-over
 needed (captions only), no brand names or real people.
 
