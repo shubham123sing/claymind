@@ -6,6 +6,7 @@
   const qa = window.qa, w = window, F = w.qaFlows;
   const sys = () => w.__sys;
   const dev = () => w.IWER_DEVICE;
+  const input = () => w.__input;
   const V = () => w.__world.camera.position.constructor; // the app's Vector3
   const r3 = (x) => Math.round(x * 1000) / 1000;
 
@@ -758,5 +759,43 @@
     return out;
   }
 
-  Object.assign(F, { robust, extras, panelMove, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
+  // ---------- k. seated height (V6 gap 2): the view sits at a seated player's height over the table ----------
+
+  async function seatHeight() {
+    const out = [], hs = sys().height, d = dev(), table = 0.72;
+    const eyeY = () => w.__world.camera.getWorldPosition(new (V())()).y;
+    const handGap = () => input().hands.right.pinchPoint[1] - d.hands.right.position.y;
+    const s0 = hs.shift, gap0 = handGap();
+    out.push({ name: 'k1. a normal chair (eyes 43 cm over the table): no shift', pass: s0 === 0, detail: `shift ${s0}, eyes ${eyeY().toFixed(2)} m` });
+    // a low seat: the head 25 cm lower; Recenter measures again
+    d.position.set(d.position.x, 0.9, d.position.z);
+    await qa.frames(10);
+    let m = await F.menuPath('physics', 'recenter');
+    await qa.frames(15);
+    const e1 = eyeY(), s1 = hs.shift, gap1 = handGap();
+    out.push({ name: 'k2. a low seat + Recenter: the view rises so the eyes are 45 cm over the table; the hands rise with it', pass: m.ok && Math.abs(e1 - (table + 0.45)) < 0.02 && Math.abs(gap1 - gap0 - s1) < 0.02, detail: `shift ${s1.toFixed(3)}, eyes ${e1.toFixed(3)}, hand ${(gap1 - gap0).toFixed(3)} higher` });
+    // the menu and the clay still work there
+    const v0 = qa.clay().rawVolume;
+    await F.menuPath('make', 'add');
+    // on the clay's left: earlier steps leave creations resting against its right side (they take a pinch there)
+    await F.stroke([-1, 0.3, 0.4], [-0.03, 0.01, 0.02]);
+    await qa.frames(20);
+    out.push({ name: 'k3. sculpting by hand still works at the new height', pass: qa.clay().rawVolume > v0, detail: `volume ${v0} -> ${qa.clay().rawVolume}` });
+    // Table higher: 3 cm (the view 3 cm lower), Table lower back
+    m = await F.menuPath('physics', 'tableup');
+    await qa.frames(10);
+    const s2 = hs.shift;
+    await F.menuPath('physics', 'tabledown');
+    await qa.frames(10);
+    out.push({ name: 'k4. Table higher / lower move it 3 cm and back', pass: m.ok && Math.abs(s1 - s2 - 0.03) < 0.005 && Math.abs(hs.shift - s1) < 0.005, detail: `${s1.toFixed(3)} -> ${s2.toFixed(3)} -> ${hs.shift.toFixed(3)}` });
+    // back to the usual seat for the next steps
+    d.position.set(d.position.x, 1.15, d.position.z);
+    await qa.frames(10);
+    await F.menuPath('physics', 'recenter');
+    await qa.frames(15);
+    out.push({ name: 'k5. back on a normal chair + Recenter: no shift', pass: hs.shift === 0, detail: `shift ${hs.shift}` });
+    return out;
+  }
+
+  Object.assign(F, { robust, extras, panelMove, seatHeight, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
 })();

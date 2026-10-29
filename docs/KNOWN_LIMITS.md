@@ -314,7 +314,7 @@ Other findings:
 - **No Quest test yet** (no device). Poke intent, grab radius, hover glow, sounds and text sizes are tuned in the emulator with scripted hands; how they feel on a real headset is unknown. `docs/QUEST_TEST.md` is ready for the first borrowed Quest.
 - **Noisy hands:** with 1 cm of tracking noise a menu press occasionally lands on the wrong button (1 in 18 in our runs) or is missed; with hands dropping out of tracking about half the presses need a second try. Nothing breaks, sticks or is lost (e2e step r).
 - **A creation resting inside the clay** (dropped onto the lump) takes a pinch there before the clay does; move it aside to sculpt. Library "Use" and recalled creations now land beside the clay, not in it.
-- ~~Panels still cannot be grabbed and moved~~ Since gap 1 a grab bar above each panel moves it (headset only). No seated-height calibration (the virtual table is 0.72 m high).
+- ~~Panels still cannot be grabbed and moved~~ Since gap 1 a grab bar above each panel moves it (headset only). ~~No seated-height calibration~~ Since gap 2 the view adapts (see below).
 - **Multiplayer is BETA.** A lost connection rejoins the same room (three tries in about 15 s); if the room closed meanwhile, it says so. Rejoining takes a fresh copy of the table from the host. The room server is a free host that sleeps: the panel says when it is waking up.
 - **Autosave** keeps the clay and loose creations in this browser only (IndexedDB); clearing site data or a private window loses them. Not while in a multiplayer room.
 - **Performance governor** decisions come from desktop measurements; the 55 fps threshold and foveation levels are not tuned on a Quest. About 130 draw calls with the room: a risk on Quest.
@@ -331,3 +331,8 @@ Other findings:
 - A keypad moves with its panel. Pop-up cards (delete, download, confirm) have bars too but are short-lived.
 - Moved panels may overlap others if the player puts them there (the no-overlap check is for where the game places them).
 - Full e2e with this change: 68/70 (r2 "grabs again" and the g "shared clay pull" failed once each; r passed 8/8 in three other runs, and the g pull is the one that failed once before in Stage C). Not tried on a Quest.
+
+## Gap 2: seated height (2026-10-29)
+- On entering VR (after 1 s) and on Recenter, the player's rig is raised or lowered so the eyes are 45 cm above the virtual table (within 5 cm nothing changes; at most 60 cm). Table higher / lower nudge 3 cm and are saved. The table and everything on it stay where they are, so physics is untouched.
+- Not in mixed reality and not on a detected real table: the real room must line up.
+- The 45 cm is a desk-and-chair average, not measured on people; the e2e checks it with an emulated head only. Not tried on a Quest.

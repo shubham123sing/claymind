@@ -137,3 +137,14 @@ Evidence: scripted emulated hands (IWER), release build; not a real Quest. Full 
   work where the panel is. Recenter clears every offset.
 - e2e step m: drag Settings 16 cm (clay untouched), poke About on it there, reopen where it was
   left, Recenter back: 5/5. Full run 68/70 (see KNOWN_LIMITS).
+
+## Gap 2: seated height (2026-10-29)
+- `SeatedHeightSystem`: moves `world.player` (the camera's parent) vertically; hand poses read from XR
+  get the same offset (`xrOrigin` in hand-state.ts), so hands, camera and panels agree. A first try with
+  an offset XR reference space put the emulated view in the wrong place, so it moves the rig instead.
+- Bring to life -> Table higher / Table lower (3 cm, saved as `tableAdjust`). Unit tests: 3.
+- e2e step k: normal chair no shift; a head 25 cm lower + Recenter: eyes 45 cm over the table, hands
+  27 cm higher with it; sculpting by hand still works; nudges 3 cm and back; back to normal: 7/7.
+- Full e2e 76/76. Two earlier misses (k3 and the room's "shared clay pull") came from the test pulling
+  on the clay's right side, where creations from earlier steps rest against it (clay-first rule: they
+  take the pinch); both now pull on the free left side.

@@ -106,6 +106,8 @@ export type AppEvents = {
   'text:ask': { title: string; initial: string; done: (text: string) => void };
   /** Put the clay (and its tools) back in front of the player. */
   'view:recenter': Record<string, never>;
+  /** Table higher (+) / lower (-) for this player, in metres (V6 gap 2). */
+  'table:nudge': { delta: number };
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */

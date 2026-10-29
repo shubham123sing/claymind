@@ -16,7 +16,7 @@ import { withEmulator } from './iwer';
 
 const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
-const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,x,m,g').split(',');
+const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,x,m,k,g').split(',');
 const BACKEND = 'http://127.0.0.1:8790';
 
 interface StepResult { step: string; name: string; pass: boolean; detail: string; at: number; shot?: string; fps?: number; page: string }
@@ -107,6 +107,7 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
   if (ONLY.includes('r')) await flow(A, 'A', 'r', 'robust');
   if (ONLY.includes('x')) await flow(A, 'A', 'x', 'extras');
   if (ONLY.includes('m')) await flow(A, 'A', 'm', 'panelMove');
+  if (ONLY.includes('k')) await flow(A, 'A', 'k', 'seatHeight');
   if (ONLY.includes('e')) {
     // the backend off: every call to it fails, as when the server is down
     await A.route(`${BACKEND}/**`, (r) => r.abort());
@@ -135,7 +136,8 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
       const w = window as any, sc = w.__sys.sculpt;
       await w.qaFlows.menuPath('make', 'shape');
       const seq0 = w.__claySync?.lastSeq ?? 0;
-      await w.qaFlows.stroke([1, 0.3, 0.3], [0.04, 0.01, 0]);
+      // on the clay's left: creations from earlier steps rest against its right side and take a pinch there
+      await w.qaFlows.stroke([-1, 0.3, 0.3], [-0.04, 0.01, 0]);
       await w.qa.frames(30);
       return { tool: sc.tool?.id, mirror: sc.mirror, suspended: sc.suspended, playMode: w.__sys.playkit.playMode, edits: (w.__claySync?.lastSeq ?? 0) - seq0 };
     });

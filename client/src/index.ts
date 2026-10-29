@@ -18,6 +18,7 @@ import { SceneActionsSystem } from './ui/scene-actions.js';
 import { AutosaveSystem } from './storage/autosave-system.js';
 import { DailyChallengeSystem } from './ui/daily-challenge-system.js';
 import { PanelMoverSystem } from './ui/panel-mover.js';
+import { SeatedHeightSystem } from './platform/seated-height.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
@@ -43,6 +44,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
+    world.registerSystem(SeatedHeightSystem); // the view at a seated player's height over the table (V6 gap 2)
     world.registerSystem(MaterialPickerSystem); // before objects: a click on the picker never grabs what is behind it
     world.registerSystem(ColorPickerSystem);
     world.registerSystem(LibrarySystem);
@@ -71,7 +73,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
-          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem), panels: world.getSystem(PanelMoverSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem), panels: world.getSystem(PanelMoverSystem), height: world.getSystem(SeatedHeightSystem),
         },
       });
     }

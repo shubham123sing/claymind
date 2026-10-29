@@ -7,6 +7,7 @@
 import { createSystem, DirectionalLight, Entity, Matrix4, Mesh, Quaternion, Vector3 } from '@iwsdk/core';
 import { SculptAudio } from '../audio/sculpt-audio.js';
 import { bus, Handedness } from '../core/event-bus.js';
+import { NUDGE } from '../platform/seated-height.js';
 import { settings } from '../core/settings.js';
 import { Hud } from '../devtools/hud.js';
 import { getMaterial } from '../materials/materials.js';
@@ -182,6 +183,8 @@ export class SculptSystem extends createSystem({}) {
         { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
         { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
         { id: 'recenter', label: 'Recenter', icon: '⊙', color: 0x8fa3b8, onPress: () => bus.emit('view:recenter', {}) },
+        { id: 'tableup', label: 'Table higher', icon: '▲', color: 0x8fa3b8, onPress: () => bus.emit('table:nudge', { delta: NUDGE }) },
+        { id: 'tabledown', label: 'Table lower', icon: '▼', color: 0x8fa3b8, onPress: () => bus.emit('table:nudge', { delta: -NUDGE }) },
         undo(),
       ]),
       group('kit', 'Play', '●', 0x5fbf72, [

@@ -140,8 +140,10 @@
     const h = D(side);
     h.poseId = 'default';
     h.updateHandPose?.();
+    // the offsets were measured at entry; the seated-height rig shift (V6 gap 2) moves every hand up since
+    const up = w.__sys?.height?.shift ?? 0;
     const o = pinchOffset[side];
-    const dest = [target[0] - o[0], target[1] - o[1], target[2] - o[2]];
+    const dest = [target[0] - o[0], target[1] - o[1] - up, target[2] - o[2]];
     const from = [h.position.x, h.position.y, h.position.z];
     const dist = Math.hypot(dest[0] - from[0], dest[1] - from[1], dest[2] - from[2]);
     const n = Math.max(1, Math.ceil(dist / step));
@@ -155,7 +157,7 @@
     const curve = pinchCurve[side];
     for (let k = 1; k <= 8; k++) {
       const c = curve[k] ?? o;
-      h.position.set(target[0] - c[0], target[1] - c[1], target[2] - c[2]);
+      h.position.set(target[0] - c[0], target[1] - c[1] - up, target[2] - c[2]);
       h.setPinchValueImmediate?.(k / 8);
       await frames(1);
     }

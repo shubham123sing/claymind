@@ -5,7 +5,7 @@
  */
 import type { World } from '@iwsdk/core';
 import type { Handedness } from '../../core/event-bus.js';
-import type { HandState, InputProvider, Vec3 } from './hand-state.js';
+import { xrOrigin, type HandState, type InputProvider, type Vec3 } from './hand-state.js';
 import { OneEuroFilter3 } from './one-euro.js';
 import { PinchDetector } from './pinch-detector.js';
 
@@ -131,9 +131,11 @@ export class XrHandsProvider implements InputProvider {
       return space ? frame.getJointPose?.(space, ref) ?? null : null;
     };
     const n = handNoise;
-    const pose = n.jitter > 0 || n.jointJitter > 0
+    const pose = n.jitter > 0 || n.jointJitter > 0 || xrOrigin.y !== 0
       ? (() => {
-        const [ox, oy, oz] = handOffset(h.side, performance.now()), j = n.jointJitter;
+        const noisy = n.jitter > 0 || n.jointJitter > 0;
+        const [ox, oy0, oz] = noisy ? handOffset(h.side, performance.now()) : [0, 0, 0], j = noisy ? n.jointJitter : 0;
+        const oy = oy0 + xrOrigin.y; // the rig's seated-height offset (the camera gets it through the rig)
         return (name: XRHandJoint) => {
           const p = raw(name);
           if (!p) return null;

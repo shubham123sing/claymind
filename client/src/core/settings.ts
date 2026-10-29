@@ -19,12 +19,14 @@ export interface Settings {
   /** Simpler effects for a steadier frame rate (the governor's low level, always). */
   performanceMode: boolean;
   tutorialDone: boolean;
+  /** Table higher (+) or lower (-) than the seated calibration puts it (m, V6 gap 2). */
+  tableAdjust: number;
   /** Vision check (online, off by default): pictures of a toy added to the Play Kit go to the game agent's free vision model. */
   vision: boolean;
 }
 
 export const settings: Settings = {
-  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, largeText: false, performanceMode: false, tutorialDone: false, vision: false,
+  reducedMotion: false, highContrast: false, leftHanded: false, oneHanded: false, sound: true, largeText: false, performanceMode: false, tutorialDone: false, tableAdjust: 0, vision: false,
 };
 
 const listeners = new Set<(s: Settings) => void>();
