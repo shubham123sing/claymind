@@ -87,3 +87,15 @@ Notes:
 | Frame time | Browser pane (active) | ~18 ms; the pane throttles to 0.2-1.3 s per frame when not in front |
 | Reflection map | Device | generated once (RoomEnvironment, PMREM), no download |
 | Frame time on Quest | | not measured |
+
+## V6 Stage A (2026-10-28): release bundle and cold start
+
+| | main JS (raw) | main JS (gzip) | total download | external hosts at load |
+|---|---|---|---|---|
+| before (live site, 28 Oct) | 8.18 MB | not measured | about 8.5 MB + 2.1 MB Havok wasm | unpkg (emulator room), jsdelivr (hand models) |
+| after Stage A | **2.76 MB** | **0.78 MB** | about 3.5 MB + 2.1 MB Havok wasm | jsdelivr (hand models, see below) |
+
+What changed: the XR emulator (IWER) is no longer injected into the release build (it was 1.2 MB and
+loaded a room file from unpkg); the UIKitML icon set is cut to the two icons the welcome card uses
+(`src/ui/lucide-subset.ts`, about 4.2 MB raw). Local cold start (headless Chromium on the dev laptop,
+vite preview): page ready 0.4 s, app ready 5.2 s; not measured on a Quest or a throttled network.

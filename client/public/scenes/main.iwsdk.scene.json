@@ -3,9 +3,24 @@
   "units": "meters",
   "components": {
     "com.iwsdk.components.IBLGradient": {
-      "sky": [0.6902, 0.749, 0.7843, 1],
-      "equator": [0.6584, 0.7084, 0.7913, 1],
-      "ground": [0.807, 0.7758, 0.7454, 1],
+      "sky": [
+        0.6902,
+        0.749,
+        0.7843,
+        1
+      ],
+      "equator": [
+        0.6584,
+        0.7084,
+        0.7913,
+        1
+      ],
+      "ground": [
+        0.807,
+        0.7758,
+        0.7454,
+        1
+      ],
       "intensity": 1
     }
   },
@@ -19,17 +34,25 @@
         "asset": "welcome-panel"
       },
       "transform": {
-        "position": [0.6, 1.25, -0.75],
-        "rotationDeg": [0, -40, 0],
+        "position": [
+          0.6,
+          1.25,
+          -0.75
+        ],
+        "rotationDeg": [
+          0,
+          -40,
+          0
+        ],
         "scale": 0.16
       },
       "components": {
         "RayInteractable": {},
         "ScreenSpace": {
           "top": "20px",
-          "left": "20px",
           "width": "25vw",
-          "height": "40%"
+          "height": "52%",
+          "right": "20px"
         }
       }
     }

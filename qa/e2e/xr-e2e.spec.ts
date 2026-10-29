@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type BrowserContext, type Page } from 'playwright/test';
+import { withEmulator } from './iwer';
 
 const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
@@ -42,6 +43,7 @@ async function open(context: BrowserContext, who: string): Promise<Page> {
   });
   page.on('requestfailed', (r) => appendFileSync(net, JSON.stringify({ t: (Date.now() - t0[who]) / 1000, method: r.method(), url: r.url().slice(0, 200), failed: r.failure()?.errorText }) + '\n'));
   page.on('websocket', (ws) => appendFileSync(net, JSON.stringify({ t: (Date.now() - t0[who]) / 1000, websocket: ws.url() }) + '\n'));
+  await withEmulator(page);
   await page.goto(`/?debug&agents=${BACKEND}`);
   await page.waitForFunction(() => !!(window as any).__sys, null, { timeout: 90_000 });
   for (const f of ['driver.js', 'flows.js', 'flows-more.js']) await page.addScriptTag({ path: join(__dirname, f) });

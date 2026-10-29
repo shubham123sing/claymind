@@ -1,11 +1,13 @@
 /** Probe: headless WebGL + the XR emulator in hand mode + frame rate. QA_PROBE=1 to run. */
 import { expect, test } from 'playwright/test';
+import { withEmulator } from './iwer';
 
 test.skip(process.env.QA_PROBE !== '1', 'probe only');
 
 test('XR session with emulated hands, fps', async ({ page }) => {
   const logs: string[] = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+  await withEmulator(page);
   await page.goto('/?debug&agents=http://127.0.0.1:8790');
   await page.waitForFunction(() => !!(window as any).__sys, null, { timeout: 60_000 });
   const gl = await page.evaluate(() => {

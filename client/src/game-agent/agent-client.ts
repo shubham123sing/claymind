@@ -5,6 +5,9 @@
  * this computer, else the hosted backend (public-backend.ts).
  * The player id is a random string kept in this browser (no account, nothing personal).
  * The game never waits on this: a call gives up after 30 s and the built-in games stay.
+ * A free hosted backend sleeps when idle: `warmUp()` (called when the page loads) wakes it with
+ * short health checks (4 s each) retried in the background with growing gaps, and `agentStatus`
+ * says what the player is told meanwhile ("waking up, keep sculpting").
  */
 import type { GameSpec, RoleTag } from '../playkit/game-spec.js';
 import type { KitItem } from '../playkit/kit-store.js';
@@ -13,6 +16,10 @@ import { PUBLIC_AGENTS_URL } from './public-backend.js';
 const URL_KEY = 'claymind.agentsUrl';
 const PLAYER_KEY = 'claymind.playerId';
 const TIMEOUT_MS = 30000;
+/** A health check gives up after this; the next one follows in the background. */
+const HEALTH_TIMEOUT_MS = 4000;
+/** Gaps between wake-up checks (ms): a cold free server takes about a minute. */
+const WAKE_GAPS = [2000, 4000, 8000, 15000, 30000, 30000, 30000];
 
 export const OFFLINE = 'The game agent is offline; the built-in games still work.';
 
@@ -63,11 +70,11 @@ export function describeKit(kit: KitItem[]) {
 
 export class OfflineError extends Error {}
 
-async function call<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
+async function call<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', timeoutMs = TIMEOUT_MS): Promise<T> {
   const base = agentsUrl();
   if (!base) throw new OfflineError(OFFLINE);
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(base + path, {
       method, signal: ctrl.signal,
@@ -84,10 +91,54 @@ async function call<T>(path: string, body?: unknown, method = body === undefined
   }
 }
 
+/** What the player is told about the agent: 'waking' while a sleeping free server starts. */
+export type AgentStatus = 'waking' | 'online' | 'offline';
+
+export const agentStatus = {
+  value: (agentsUrl() ? 'waking' : 'offline') as AgentStatus,
+  listeners: new Set<(s: AgentStatus) => void>(),
+  set(s: AgentStatus): void {
+    if (s === this.value) return;
+    this.value = s;
+    for (const l of this.listeners) l(s);
+  },
+  /** Subscribe; returns the unsubscribe. */
+  on(l: (s: AgentStatus) => void): () => void {
+    this.listeners.add(l);
+    return () => this.listeners.delete(l);
+  },
+};
+
+let waking: Promise<boolean> | null = null;
+
+/**
+ * Wake the backend without blocking anything: short health checks, retried with growing gaps until
+ * it answers or the gaps run out (then 'offline'; the next panel open tries again).
+ */
+export function warmUp(): Promise<boolean> {
+  if (!agentsUrl()) {
+    agentStatus.set('offline');
+    return Promise.resolve(false);
+  }
+  if (waking) return waking;
+  if (agentStatus.value !== 'online') agentStatus.set('waking');
+  waking = (async () => {
+    for (let i = 0; i <= WAKE_GAPS.length; i++) {
+      const ok = await agentApi.online();
+      if (ok) return (agentStatus.set('online'), true);
+      if (i < WAKE_GAPS.length) await new Promise((r) => setTimeout(r, WAKE_GAPS[i]));
+    }
+    agentStatus.set('offline');
+    return false;
+  })().finally(() => (waking = null));
+  return waking;
+}
+
 export const agentApi = {
+  /** One short health check (4 s). */
   async online(): Promise<boolean> {
     try {
-      return (await call<{ ok: boolean }>('/v1/health')).ok;
+      return (await call<{ ok: boolean }>('/v1/health', undefined, 'GET', HEALTH_TIMEOUT_MS)).ok;
     } catch {
       return false;
     }

@@ -305,12 +305,18 @@
     const ga = sys().gameAgent;
     if (ga.panel.mesh.visible) await qa.panelPress('close');
     await qa.frames(10);
-    const online = await openGameAgent();
+    await openPlayKit();
+    await qa.panelPress('tab:games');
+    await qa.panelPress('games:agent');
+    await waitFor(() => ga.panel.mesh.visible, 300);
     await backToGames();
+    // V6: a card still gives its built-in game (no waiting on the backend); the panel says the agent is waking / offline
     const p = await qa.panelPress('game:Bowling');
     const a = await waitAnswer();
+    await waitFor(() => ga.panel.online !== true, 300);
+    const status = ga.panel.online;
     if (ga.panel.mesh.visible) await qa.panelPress('close');
-    return [{ name: 'backend off: the offline line', pass: online === false && a.view === 'message' && /offline/i.test(a.message) && p.ok, detail: `online ${online}; "${a.message}"` }];
+    return [{ name: 'backend off: a game card still gives its built-in game', pass: p.ok && a.view === 'preview' && !!a.name && status !== true, detail: `${a.view}: ${a.name ?? a.message} (${a.path ?? ''}) ${a.note ?? ''}; agent shown as ${status === null ? 'waking up' : status ? 'online' : 'offline'}` }];
   }
 
   // ---------- f. playing ----------
