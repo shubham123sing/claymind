@@ -75,7 +75,7 @@ function buildId(): string {
   return `${sha} ${new Date().toISOString().slice(0, 10)}`;
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   define: { __BUILD_ID__: JSON.stringify(buildId()) },
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
@@ -95,7 +95,9 @@ export default defineConfig({
   },
   // workers are bundled separately: they need the runtime swap too
   worker: { format: 'es', plugins: () => [claymindPhysicsRuntime()] },
-  esbuild: { target: 'esnext' },
+  // the release logs nothing for debugging (V6 section 7): console.log / info / debug calls are dropped
+  // from the build (warnings and errors stay); the dev server keeps them
+  esbuild: { target: 'esnext', ...(command === 'build' ? { pure: ['console.log', 'console.info', 'console.debug'] } : {}) },
   // @drawcall/uikitml otherwise pulls a second three/@pmndrs/uikit graph
   // (three@0.185 vs app super-three@0.181). Duplicate Component classes break
   // instanceof checks → "Only pmndrs/uikit components can be added as children".
@@ -120,4 +122,4 @@ export default defineConfig({
   },
   publicDir: 'public',
   base: './',
-});
+}));
