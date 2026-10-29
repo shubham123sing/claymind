@@ -125,6 +125,11 @@ export class SculptSystem extends createSystem({}) {
         this.surfaceVersion = -1; // re-place clay relative to the new head pose
       }),
       bus.on('ui:toast', (e) => this.showStatus(e.text, 2600, e.color)),
+      // Recenter: the clay (and the one-handed menu beside it) back in front of where the player looks now
+      bus.on('view:recenter', () => {
+        this.placeClay(0.45);
+        this.showStatus('Recentred in front of you', 1800);
+      }),
     );
   }
 
@@ -178,6 +183,7 @@ export class SculptSystem extends createSystem({}) {
         // worded and coloured apart from Delete: these take copies off the table (blue)
         { id: 'remove', label: 'Remove from scene', icon: '↧', color: 0x5aa9e6, onPress: () => bus.emit('scene:remove', {}) },
         { id: 'clear', label: 'Clear scene', icon: '⇊', color: 0x5aa9e6, onPress: () => bus.emit('scene:clear', {}) },
+        { id: 'recenter', label: 'Recenter', icon: '⊙', color: 0x8fa3b8, onPress: () => bus.emit('view:recenter', {}) },
       ]),
       group('lib', 'Library', '▦', 0x7f9cc0, [
         { id: 'library', label: 'Open Library', icon: '▦', color: 0x7f9cc0, onPress: () => bus.emit('library:toggle', {}) },
@@ -242,9 +248,17 @@ export class SculptSystem extends createSystem({}) {
     return this.client;
   }
 
-  private placeClay(): void {
+  /** `ahead`: aim this far (m) along where the player looks (Recenter), else nearest to the head. */
+  private placeClay(ahead = 0): void {
     this.world.camera.getWorldPosition(this.head);
-    nearestSurfacePoint(this.head.x, this.head.z, 0.2, this.placeTmp);
+    let ax = this.head.x, az = this.head.z;
+    if (ahead > 0) {
+      this.world.camera.getWorldDirection(this.v);
+      const len = Math.hypot(this.v.x, this.v.z) || 1;
+      ax += (this.v.x / len) * ahead;
+      az += (this.v.z / len) * ahead;
+    }
+    nearestSurfacePoint(ax, az, 0.2, this.placeTmp);
     const [x, z] = this.roomPlace ? [this.roomPlace.x, this.roomPlace.z] : this.placeTmp;
     this.view.root.position.x = x;
     this.view.root.position.z = z;

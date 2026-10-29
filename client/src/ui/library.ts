@@ -288,15 +288,15 @@ export class LibrarySystem extends createSystem({}) {
     if (id === 'use') this.bringIn(s, false);
     else if (id === 'edit') this.bringIn(s, true);
     else if (id === 'rename') {
-      if (input.xr) {
-        bus.emit('ui:toast', { text: 'Rename needs a keyboard: open ClayMind in a browser' });
-        return;
-      }
-      const name = this.askName('New name', s.creation.name);
-      if (name === null || name === s.creation.name) return;
-      const renamed: SavedCreation = { ...s, creation: { ...s.creation, name } };
-      void saveToLibrary(renamed);
-      p.items = p.items.map((x) => (x.id === s.id ? renamed : x));
+      bus.emit('text:ask', {
+        title: 'New name', initial: s.creation.name, done: (name) => {
+          if (name === s.creation.name) return;
+          const renamed: SavedCreation = { ...s, creation: { ...s.creation, name } };
+          void saveToLibrary(renamed);
+          p.items = p.items.map((x) => (x.id === s.id ? renamed : x));
+          p.invalidate();
+        },
+      });
     } else if (id === 'download') bus.emit('library:download', { item: s });
     else if (id === 'delete') {
       const now = performance.now();

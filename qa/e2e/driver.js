@@ -133,9 +133,10 @@
 
   /**
    * Bring an open hand to where closing it pinches exactly at `target`, then close it (as a real
-   * hand closes its fingers on the spot). Returns the pinch point's distance from the target.
+   * hand closes its fingers on the spot; `settle` frames still first). Returns the pinch point's
+   * distance from the target.
    */
-  async function pinchAt(side, target, step = 0.015) {
+  async function pinchAt(side, target, step = 0.015, settle = 3) {
     const h = D(side);
     h.poseId = 'default';
     h.updateHandPose?.();
@@ -148,7 +149,8 @@
       h.position.set(from[0] + ((dest[0] - from[0]) * i) / n, from[1] + ((dest[1] - from[1]) * i) / n, from[2] + ((dest[2] - from[2]) * i) / n);
       await frames(1);
     }
-    await frames(3);
+    // the app's pinch point is filtered: it trails a moving hand for a few frames
+    await frames(settle);
     // close the fingers while keeping the pinch point on the target, as a real pinch converges on a spot
     const curve = pinchCurve[side];
     for (let k = 1; k <= 8; k++) {

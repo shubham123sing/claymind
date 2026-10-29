@@ -96,6 +96,10 @@ export type AppEvents = {
   'clay:touched': Record<string, never>;
   'clay:painted': Record<string, never>;
   'object:pinned': { creationId: string };
+  /** Ask the player for a short text: the pinch keypad in the headset, prompt() in the browser. */
+  'text:ask': { title: string; initial: string; done: (text: string) => void };
+  /** Put the clay (and its tools) back in front of the player. */
+  'view:recenter': Record<string, never>;
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */
