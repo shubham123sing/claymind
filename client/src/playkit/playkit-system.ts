@@ -491,6 +491,7 @@ export class PlayKitSystem extends createSystem({}) {
       this.spawnLocal(parts, place.at, place.rotY ?? 0, !!role.pinned, { kitId, builtin, key: `${role.id}:${i}`, role: role.id, fixed: !!role.pinned });
     }
     this.engine = new RuleEngine(spec);
+    this.scoredTotal = 0;
     this.showZones(spec);
     this.mode = 'play';
     this.hud.rules = spec.howToPlay;
@@ -504,9 +505,25 @@ export class PlayKitSystem extends createSystem({}) {
     bus.emit('playkit:game', { kind: 'start' });
   }
 
+  /** The game's scoreboard is up (other panels keep clear of it). */
+  get scoreboardUp(): boolean {
+    return this.hud.mesh.visible;
+  }
+
+  private overSent = false;
+  /** Points so far this game (a rise = a scoring moment). */
+  private scoredTotal = 0;
+
   private tickGame(dt: number): void {
     const e = this.engine;
-    if (!e || this.mode !== 'play' || this.paused || e.state.over) return;
+    if (!e || this.mode !== 'play' || this.paused) return;
+    if (e.state.over) {
+      // once: the game just ended (first five minutes: the success moment)
+      if (!this.overSent) bus.emit('playkit:over', { result: e.state.result ?? 'done', score: Math.max(...e.state.scores) });
+      this.overSent = true;
+      return;
+    }
+    this.overSent = false;
     if (this.roomNames) e.names = this.roomNames();
     const byToy = new Map(this.pieces.filter((p) => p.key).map((p) => [p.toyId, p]));
     const obs: Observation = { pieces: [], contacts: [], shots: [] };
@@ -545,6 +562,13 @@ export class PlayKitSystem extends createSystem({}) {
         this.objects.placeToy(piece.toyId, w.toArray(), piece.start.q, false);
       } else this.objects.placeToy(piece.toyId, piece.start.p, piece.start.q, false);
     }
+    const total = e.state.scores.reduce((a, b) => a + b, 0);
+    if (total > this.scoredTotal) {
+      // a point: a ding (higher with each point) and a pulse of the scoreboard
+      uiSounds.score(total - 1);
+      this.hud.pulse();
+    }
+    this.scoredTotal = total;
     if (e.state.over && !this.hud.over) {
       this.hud.over = true;
       this.hud.message = e.state.message;
@@ -1253,12 +1277,10 @@ export class PlayKitSystem extends createSystem({}) {
     if (this.panel.mesh.visible && performance.now() - this.openedAt > IDLE_CLOSE_MS) this.closePanel();
     this.placePanels();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const tip = h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null;
       const now = performance.now();
-      const a = this.panel.poke(tip, now);
+      const a = this.panel.pokeHands(input.both, now);
       if (a) this.press(a);
-      const b = this.hud.poke(tip, now);
+      const b = this.hud.pokeHands(input.both, now);
       if (b) this.hudPress(b);
     }
     this.panel.draw();

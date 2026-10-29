@@ -4,6 +4,9 @@ import { bus } from './core/event-bus.js';
 import { PanelSystem } from './panel.js';
 import { TextEntrySystem } from './ui/text-entry.js';
 import { input, InputHubSystem } from './platform/input/input-system.js';
+import { handNoise } from './platform/input/xr-hands-provider.js';
+import { PerfGovernorSystem } from './platform/perf-governor.js';
+import { quality } from './core/quality.js';
 import { RoomSystem } from './platform/environment/room-system.js';
 import { surface, SurfaceSystem } from './platform/surface/surface-system.js';
 import { ObjectSystem } from './objects/object-system.js';
@@ -12,6 +15,10 @@ import { SculptSystem } from './sculpt/sculpt-system.js';
 import { DeleteSystem } from './ui/delete-creation.js';
 import { DownloadSystem } from './ui/download-dialog.js';
 import { SceneActionsSystem } from './ui/scene-actions.js';
+import { AutosaveSystem } from './storage/autosave-system.js';
+import { DailyChallengeSystem } from './ui/daily-challenge-system.js';
+import { PanelMoverSystem } from './ui/panel-mover.js';
+import { SeatedHeightSystem } from './platform/seated-height.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
@@ -28,14 +35,16 @@ import { TutorialSystem } from './ui/tutorial.js';
 import { MaterialPickerSystem } from './ui/material-picker.js';
 
 World.create(document.getElementById('scene-container') as HTMLDivElement, projectOptions).then((world) => {
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __world: world, __bus: bus, __input: input, __room: room, __surface: surface, __handNoise: handNoise, __quality: quality });
   world.registerSystem(PanelSystem);
+  world.registerSystem(PerfGovernorSystem); // frame-rate governor: quality steps down when slow (V6)
   world.registerSystem(SurfaceSystem);
   world.registerSystem(RoomSystem); // the VR studio room (hidden in mixed reality)
   {
     // order matters (same priority = registration order): input first, then
     // objects (they claim hands they hold), then sculpting (uses unclaimed hands)
     world.registerSystem(InputHubSystem);
+    world.registerSystem(SeatedHeightSystem); // the view at a seated player's height over the table (V6 gap 2)
     world.registerSystem(MaterialPickerSystem); // before objects: a click on the picker never grabs what is behind it
     world.registerSystem(ColorPickerSystem);
     world.registerSystem(LibrarySystem);
@@ -50,18 +59,21 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(SettingsSystem);
     world.registerSystem(TextEntrySystem); // the pinch keypad for names (hands only)
     world.registerSystem(TutorialSystem);
+    world.registerSystem(PanelMoverSystem); // grab bars: after the panels are placed, before objects and sculpting take a pinch
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
     world.registerSystem(DeleteSystem);
     world.registerSystem(DownloadSystem);
     world.registerSystem(SceneActionsSystem);
+    world.registerSystem(AutosaveSystem); // the clay and loose creations survive a crash (V6)
+    world.registerSystem(DailyChallengeSystem); // one small goal a day, from the date (V6 4.5)
     // ?debug: systems by stable names (class names are minified in release builds)
     if (new URLSearchParams(location.search).has('debug')) {
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
-          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem), panels: world.getSystem(PanelMoverSystem), height: world.getSystem(SeatedHeightSystem),
         },
       });
     }

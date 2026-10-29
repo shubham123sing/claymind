@@ -34,8 +34,8 @@ export class RoomClient {
   host = '';
   players: RoomPlayer[] = [];
   private listeners = new Map<string, Set<(m: RoomMsg) => void>>();
-  /** The connection ended (left, kicked, network). */
-  onClose: (why: string) => void = () => {};
+  /** The connection ended (left, kicked, network). `lost`: not by choice (network, server restart): worth a rejoin. */
+  onClose: (why: string, lost: { code: string } | null) => void = () => {};
 
   /** Listen to one message type ('*' = all), in arrival order; returns the unsubscribe. */
   on(t: string, fn: (m: RoomMsg) => void): () => void {
@@ -117,8 +117,9 @@ export class RoomClient {
           return;
         }
         const why = this.closedWhy || 'Disconnected from the room.';
+        const lost = this.closedWhy ? null : { code: this.code };
         this.reset();
-        this.onClose(why);
+        this.onClose(why, lost);
       };
     });
   }
@@ -128,6 +129,11 @@ export class RoomClient {
     if (LOSS && LOSSY.has(t) && Math.random() < LOSS) return;
     this.sent++;
     this.later(() => this.sendNow({ t, ...extra }));
+  }
+
+  /** QA: drop the connection as a network failure would (no leave message). */
+  dropForTest(): void {
+    this.ws?.close();
   }
 
   leave(): void {

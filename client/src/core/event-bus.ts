@@ -84,6 +84,10 @@ export type AppEvents = {
   'multiplayer:toggle': Record<string, never>;
   /** Play Kit: a game started, ended or was reset here (the room's host shares it). */
   'playkit:game': { kind: 'start' | 'end' | 'reset' };
+  /** A game here ended (its result and the best score). */
+  'playkit:over': { result: 'win' | 'lose' | 'done'; score: number };
+  /** Menu -> Play -> Make it a game: the agent looks at the creation and proposes a game from it. */
+  'gameagent:make': Record<string, never>;
   'room:joined': { code: string; host: boolean };
   'room:left': { why: string };
   /** Open / close the Play Kit panel, or add the current creation to the kit. */
@@ -92,6 +96,8 @@ export type AppEvents = {
   /** Browser tool menu shown or hidden with its round button. */
   'ui:tools': { open: boolean };
   'tutorial:start': Record<string, never>;
+  /** Say today's challenge (V6 4.5). */
+  'daily:show': Record<string, never>;
   /** Tutorial signals: the clay was shaped / painted (or coloured); an object was pinned. */
   'clay:touched': Record<string, never>;
   'clay:painted': Record<string, never>;
@@ -100,6 +106,8 @@ export type AppEvents = {
   'text:ask': { title: string; initial: string; done: (text: string) => void };
   /** Put the clay (and its tools) back in front of the player. */
   'view:recenter': Record<string, never>;
+  /** Table higher (+) / lower (-) for this player, in metres (V6 gap 2). */
+  'table:nudge': { delta: number };
   /** A short message for the player (shown above the clay). */
   'ui:toast': { text: string; color?: string };
   /** A creation's material changed: by the user (a correction the brain learns from) or by the AI estimate. */

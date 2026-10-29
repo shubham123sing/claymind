@@ -20,6 +20,8 @@ export class RoomPanel extends CanvasPanel {
   me = '';
   host = '';
   note = '';
+  /** The room server: ready, waking up (a free server sleeps), or not reachable. */
+  server: 'online' | 'waking' | 'offline' = 'waking';
 
   constructor() {
     super([W, H], [0.27, (0.27 * H) / W]);
@@ -38,6 +40,12 @@ export class RoomPanel extends CanvasPanel {
     ui.panel(ctx, W, H);
     ctx.textBaseline = 'middle';
     text('Multiplayer', 32, 46, 36, '#f4f1ec', 700);
+    // beta: the room server is a free host that sleeps; single player never needs it
+    ctx.fillStyle = 'rgba(240,180,41,0.18)';
+    ctx.beginPath();
+    ctx.roundRect(262, 28, 96, 38, 19);
+    ctx.fill();
+    text('BETA', 280, 48, 22, '#f0b429', 800);
     btn(W - 86, 18, 64, 56, '×', 'close');
     switch (this.view) {
       case 'home': {
@@ -45,9 +53,17 @@ export class RoomPanel extends CanvasPanel {
         btn(560, 92, 300, 56, 'Change name', 'name');
         btn(40, 190, W - 80, 110, 'Create a room', 'create', '#5fbf72');
         btn(40, 320, W - 80, 110, 'Join a room (enter its code)', 'join', '#5aa9e6');
+        const [dot, line] = this.server === 'online' ? ['#5fbf72', 'Room server ready.']
+          : this.server === 'waking' ? ['#f0b429', 'Room server waking up (a free server sleeps; up to a minute).']
+          : ['#d9534f', 'Room server not reachable now: you can still try; playing alone works fully.'];
+        ctx.fillStyle = dot;
+        ctx.beginPath();
+        ctx.arc(54, 466, 10, 0, Math.PI * 2);
+        ctx.fill();
+        text(line, 76, 467, 23, '#f4f1ec', 600, W - 116);
         ctx.fillStyle = 'rgba(244,241,236,0.7)';
         ctx.font = '500 23px system-ui, sans-serif';
-        ui.wrap(ctx, 'Up to 4 players build on the same table and play the Play Kit games together. No voice: wave or give a thumbs-up to say hi.', 40, 480, W - 80, 32, 3);
+        ui.wrap(ctx, 'Up to 4 players build on the same table and play the Play Kit games together. No voice: wave or give a thumbs-up to say hi.', 40, 520, W - 80, 32, 3);
         break;
       }
       case 'busy':

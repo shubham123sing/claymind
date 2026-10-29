@@ -11,20 +11,28 @@ import { createHandState, HandState, InputProvider } from './hand-state.js';
 import { PointerProvider } from './pointer-provider.js';
 import { XrHandsProvider } from './xr-hands-provider.js';
 
-export type HandClaim = 'object' | 'menu' | 'mark' | null;
+export type HandClaim = 'object' | 'menu' | 'mark' | 'panel' | null;
+
+const HANDS = { left: createHandState('left'), right: createHandState('right') };
 
 export const input: {
   hands: Record<Handedness, HandState>;
+  /** Both hands (left, right): every panel takes a poke from either. */
+  both: readonly HandState[];
   claims: Record<Handedness, HandClaim>;
   pointer: PointerProvider | null;
   /** Set by the sculpt system: raycast against the clay (see PointerProvider). */
   clayRaycast: (ray: Raycaster, dragging: boolean) => Vector3 | null;
+  /** Set by the sculpt system: is a world point on (within `margin` m of) the clay? */
+  nearClay: (p: ArrayLike<number>, margin: number) => boolean;
   xr: boolean;
 } = {
-  hands: { left: createHandState('left'), right: createHandState('right') },
+  hands: HANDS,
+  both: [HANDS.left, HANDS.right],
   claims: { left: null, right: null },
   pointer: null,
   clayRaycast: () => null,
+  nearClay: () => false,
   xr: false,
 };
 

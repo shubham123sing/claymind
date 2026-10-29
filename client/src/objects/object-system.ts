@@ -27,6 +27,7 @@ import {
 import { ImpactAudio } from '../audio/impact-audio.js';
 import { audioContext } from '../audio/audio-context.js';
 import { bus, Handedness } from '../core/event-bus.js';
+import { PIECES_BY_LEVEL, quality } from '../core/quality.js';
 import { Shards } from '../fx/shards.js';
 import { feltSpeed, matchup, SURFACE_MATERIAL } from '../materials/matchups.js';
 import { getMaterial, Material, MATERIALS } from '../materials/materials.js';
@@ -158,6 +159,10 @@ const MAX_TOYS = 40;
 const FLICK_MIN = 0.35, FLICK_MAX = 2.5, FLICK_COOLDOWN_MS = 400;
 const PIECE_LIFETIME = 7000;
 const GRAB_MARGIN = 0.035;
+/** The glow of an object a free hand could grab now (hover highlight, V6 4.3). */
+const HOVER_GLOW = 0.18;
+/** On the clay, an object nearby takes a pinch only when the fingers are this close to its shape (m). */
+const CLAY_FIRST_GAP = 0.004;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
 export class ObjectSystem extends createSystem({}) {
@@ -397,7 +402,7 @@ export class ObjectSystem extends createSystem({}) {
       this.dispose(old);
     }
     const pieces = this.live.filter((r) => r.kind === 'shard');
-    while (pieces.length > MAX_PIECES) this.dispose(pieces.shift()!);
+    while (pieces.length > Math.min(MAX_PIECES, PIECES_BY_LEVEL[quality.level])) this.dispose(pieces.shift()!);
   }
 
   // ---------------- holding ----------------
@@ -487,6 +492,11 @@ export class ObjectSystem extends createSystem({}) {
 
   private hold(rec: Live, mode: Mode, side: Handedness | null): void {
     if (rec.side && rec.side !== side) input.claims[rec.side] = null;
+    if (mode === 'pinch' || mode === 'pointer') {
+      // taken in the hand: a pop and a short glow (no haptics on hands: sound and a visual pulse)
+      uiSounds.grab();
+      this.glow(rec, Math.max(rec.glow, 0.45));
+    }
     rec.mode = mode;
     rec.side = side;
     rec.hist.length = 0;
@@ -509,6 +519,7 @@ export class ObjectSystem extends createSystem({}) {
     this.v.set(0, 0, 0);
     throwVelocity(rec.hist, this.v);
     if (this.v.length() > MAX_THROW) this.v.setLength(MAX_THROW);
+    uiSounds.drop(this.v.length() > 0.6);
     // Always set a velocity: a held body was teleported with zero velocity, so
     // Havok has put it to sleep and re-enabling gravity alone does not wake it.
     if (rec.toyId) {
@@ -1150,8 +1161,8 @@ export class ObjectSystem extends createSystem({}) {
     return gap < 0.03 && gap > -0.01 ? -gap + 0.0005 : 0;
   }
 
-  /** Everything the Library needs to bring this creation back (null if gone). */
-  serialize(id: string): SavedCreation | null {
+  /** Everything the Library needs to bring this creation back (null if gone). `thumb: false` skips the picture (autosave). */
+  serialize(id: string, thumb = true): SavedCreation | null {
     const rec = this.byCreation(id);
     if (!rec?.creation || rec.kind !== 'creation') return null;
     if (rec.pending.size) return null; // saved again once the material is built in
@@ -1160,7 +1171,7 @@ export class ObjectSystem extends createSystem({}) {
     void _drop;
     return {
       schemaVersion: LIBRARY_SCHEMA, id, savedAt: Date.now(), creation: structuredClone(creation), pinned: rec.pinned, pose: local,
-      thumb: renderThumbnail(this.world.renderer, rec.view),
+      thumb: thumb ? renderThumbnail(this.world.renderer, rec.view) : '',
       parts: rec.parts.map((lp) => ({
         label: lp.label, materialId: lp.mat.id, color: lp.color ?? null, mesh: lp.mesh, shards: lp.shards, collider: lp.collider, frame: lp.frame,
       })),
@@ -1191,7 +1202,8 @@ export class ObjectSystem extends createSystem({}) {
       this.enforceLimits();
       return saved.pinned ? 'Back where you pinned it' : 'Back on the table';
     }
-    const at = near ?? rec0Anchor(this.world.camera.getWorldPosition(this.v));
+    // beside the clay, not in it (V6: a creation brought back inside the lump took the next pinch on the clay)
+    const at = near ?? this.besideClay(0.12, new Vector3()).toArray();
     const rec = this.spawnBody(specs, at, fromSurfaceFrame(surface, [0, 0, 0], saved.pose.q).q, { creation, mode: 'materialize' });
     this.syncCreation(rec);
     this.focus = rec;
@@ -1412,8 +1424,17 @@ export class ObjectSystem extends createSystem({}) {
       for (const side of ['left', 'right'] as const) {
         const h = input.hands[side];
         if (!h.tracked) continue;
+        if (!h.pinching && !input.claims[side]) {
+          // hover highlight: a hand within grab reach lights what a pinch would take
+          const near = this.nearest(h.pinchPoint);
+          const clayFirst = near && input.nearClay(h.pinchPoint, 0.015) && this.surfaceGap(near, h.pinchPoint) > CLAY_FIRST_GAP;
+          if (near && !clayFirst && near.glow < HOVER_GLOW) this.glow(near, HOVER_GLOW);
+        }
         if (h.pinchStarted && !input.claims[side]) {
           let rec = this.nearest(h.pinchPoint);
+          // a pinch on the clay's surface sculpts, even with a creation resting against the clay: the
+          // object takes it only when the fingers are on (within 4 mm of) its own shape (V6, 4.3)
+          if (rec && input.nearClay(h.pinchPoint, 0.015) && this.surfaceGap(rec, h.pinchPoint) > CLAY_FIRST_GAP) continue;
           const other = side === 'left' ? 'right' : 'left';
           if (rec && !rec.pinned && rec.toyId && this.canAim?.(rec.toyId)) {
             // assisted flick: pull back and let go (a direct fingertip flick is hard to aim)
@@ -1625,14 +1646,19 @@ export class ObjectSystem extends createSystem({}) {
   }
 
   /** Float a creation back onto the table beside where the clay sits. */
-  private recallToTable(rec: Live): void {
-    rec.outOfReachSince = 0;
+  /** A spot on the table beside the clay (to the viewer's right), `lift` m above the top: never inside the clay. */
+  private besideClay(lift: number, out: Vector3): Vector3 {
     this.world.camera.getWorldPosition(this.v);
-    // back to the table, beside where the clay sits
     nearestSurfacePoint(this.v.x, this.v.z, 0.2, this.xz);
     this.world.camera.getWorldDirection(this.v2);
     this.v3.set(-this.v2.z, 0, this.v2.x).normalize();
-    rec.anchor.set(this.xz[0] + this.v3.x * 0.17, surface.topY + rec.halfH + 0.05, this.xz[1] + this.v3.z * 0.17);
+    return out.set(this.xz[0] + this.v3.x * 0.17, surface.topY + lift, this.xz[1] + this.v3.z * 0.17);
+  }
+
+  private recallToTable(rec: Live): void {
+    rec.outOfReachSince = 0;
+    // back to the table, beside where the clay sits
+    this.besideClay(rec.halfH + 0.05, rec.anchor);
     const p = rec.mesh.position;
     if (!Number.isFinite(p.x + p.y + p.z) || p.y < -0.1) this.teleport(rec, rec.anchor); // from under the floor: no slow glide up through it
     this.glow(rec, 0.4);
@@ -1641,6 +1667,21 @@ export class ObjectSystem extends createSystem({}) {
   private xz = [0, 0];
 
   /** Index of the part whose centre of mass is nearest to a world point. */
+  /** How far a world point is from an object's shape (m; 0 inside), measured to each piece's box. */
+  private surfaceGap(rec: Live, p: ArrayLike<number>): number {
+    let best = Infinity;
+    for (const lp of rec.parts) {
+      const g = lp.view.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      lp.view.updateWorldMatrix(true, false);
+      const local = lp.view.worldToLocal(this.v2.set(p[0], p[1], p[2]));
+      const b = g.boundingBox!, s = lp.view.getWorldScale(this.v3).x;
+      const dx = Math.max(b.min.x - local.x, 0, local.x - b.max.x), dy = Math.max(b.min.y - local.y, 0, local.y - b.max.y), dz = Math.max(b.min.z - local.z, 0, local.z - b.max.z);
+      best = Math.min(best, Math.hypot(dx, dy, dz) * s);
+    }
+    return best;
+  }
+
   private nearestPart(rec: Live, p: number[]): number {
     let best = 0, bestD = Infinity;
     rec.props.parts.forEach((pp, i) => {
@@ -1697,13 +1738,6 @@ function mainColor(rec: Live): string {
     if (pp.mass > rec.props.parts[best].mass) best = i;
   });
   return rec.parts[best].mat.visual.color;
-}
-
-/** Where restored creations appear: on the table in front of the viewer (beside the clay). */
-function rec0Anchor(eye: Vector3): number[] {
-  const xz = [0, 0];
-  nearestSurfacePoint(eye.x, eye.z, 0.2, xz);
-  return [xz[0], surface.topY + 0.12, xz[1]];
 }
 
 let kitCache: { pebble: BakedMesh; domino: BakedMesh; plate: BakedMesh; plateShards: BakedPiece[] } | null = null;

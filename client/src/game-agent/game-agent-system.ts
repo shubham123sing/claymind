@@ -10,6 +10,9 @@
  * words to read it is all code, offline: the built-in game that fits, set up the way shown.
  * Typing: prompt() in the browser, the pinch keypad in the headset (no voice input).
  * Offline: one plain line, and the built-in games keep working.
+ * Make it a game (menu -> Play, and the first five minutes): the agent looks at the creation, says
+ * what it sees and which game suits it and why (look.ts), the Referee tests it, the player accepts,
+ * tweaks, asks it to explain the rules in plain words, or cancels (V6, 4.2).
  */
 import { createSystem, PerspectiveCamera, Raycaster, Vector2, Vector3 } from '@iwsdk/core';
 import { uiSounds } from '../audio/ui-sounds.js';
@@ -32,6 +35,7 @@ import { ObjectSystem } from '../objects/object-system.js';
 import { bind, bindOrdered, type Word } from './binder.js';
 import { addRole, applyIntent, chooseGame, ROLE_WORDS, rolesFromNames, rolesFromWords, tagged, type Intent, type RoleWord } from './intent.js';
 import { PointSaySystem } from './point-say.js';
+import { explain, lookAt, type Look } from './look.js';
 
 /** The game cards' built-in games, for when the agent is not there (same as the server's Rule Cards). */
 const CARD_TEMPLATES: Record<string, string> = { Carrom: 'flick-and-pocket', Bowling: 'knock-down', 'Ring toss': 'target-throw', 'Block tower': 'tower-balance', 'Marble race': 'marble-run' };
@@ -51,6 +55,7 @@ export class GameAgentSystem extends createSystem({}) {
   private v = new Vector3();
   private v2 = new Vector3();
   private tip = new Vector3();
+  private side = new Vector3();
   /** Point + Say: what has been shown and said so far */
   private intent: Intent = { roles: [], zones: [], paths: [], text: '' };
   private pending: RoleWord | null = null;
@@ -58,8 +63,12 @@ export class GameAgentSystem extends createSystem({}) {
   private chipped = new Set<string>();
   /** the roles the player chose for the game being previewed (game role -> kit item) */
   private chosen: Record<string, string> = {};
+  /** the creation touched or brought to life last (Make it a game uses it) */
+  private lastCreation: string | null = null;
 
   init(): void {
+    // the keypads stay under the panel when the player moves it (gap 1)
+    this.keypad.follows = this.panel;
     for (const [m, order] of [[this.panel.mesh, 24], [this.keypad.mesh, 26]] as const) {
       m.visible = false;
       m.renderOrder = order;
@@ -74,6 +83,9 @@ export class GameAgentSystem extends createSystem({}) {
     }));
     this.cleanupFuncs.push(
       bus.on('gameagent:open', () => this.open()),
+      bus.on('gameagent:make', () => void this.makeFromCreation()),
+      bus.on('object:focus', (e) => (this.lastCreation = e.creationId)),
+      bus.on('creation:baked', (e) => (this.lastCreation = e.creation.id)),
       // in a room anyone can make a game; the host decides what the room plays
       room.on('vote', (m) => this.suggested(m)),
     );
@@ -85,6 +97,11 @@ export class GameAgentSystem extends createSystem({}) {
       removeEventListener('pointerdown', onDown, { capture: true });
       removeEventListener('pointermove', onMove);
     });
+  }
+
+  /** The panel is on screen (the first-five-minutes card steps aside). */
+  get panelOpen(): boolean {
+    return this.panel.mesh.visible;
   }
 
   private get kit() {
@@ -190,11 +207,12 @@ export class GameAgentSystem extends createSystem({}) {
 
   // ---------- make a game ----------
 
-  private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }, shown?: Intent, local?: GameAnswer): Promise<void> {
+  private async askGame(req: { name?: string; rules?: string; rulesUnknown?: boolean; surprise?: boolean }, shown?: Intent, local?: GameAnswer, chosen?: Record<string, string>, look?: Look): Promise<void> {
     const status = req.rules ? 'Using your rules…' : req.rulesUnknown ? 'Looking up the rules…' : 'Choosing a game…';
     const kitOf = shown ? await this.kitOfShown(shown) : null;
     const withShown = (a: GameAnswer): GameAnswer => (shown && kitOf ? this.withIntent(a, shown, kitOf) : a);
-    this.chosen = {};
+    this.chosen = { ...chosen };
+    this.panel.look = look ?? null;
     let answer: GameAnswer | null = local ?? (await this.run(status, () => agentApi.game(req, [...this.kit.kitItems()])));
     // a game card whose agent call failed still plays: its built-in game
     if (!answer && !local && req.name && !req.rules && !req.rulesUnknown && !shown) answer = this.cardOffline(req.name);
@@ -238,6 +256,34 @@ export class GameAgentSystem extends createSystem({}) {
       }
     }
     this.showPreview(answer);
+  }
+
+  // ---------- Make it a game (from one creation) ----------
+
+  private async makeFromCreation(): Promise<void> {
+    if (this.busy) return;
+    if (!this.panel.mesh.visible) this.open();
+    const objects = this.world.getSystem(ObjectSystem)!;
+    const live = objects.liveCreationIds().filter((id) => !id.includes('#exp'));
+    const id = this.lastCreation && live.includes(this.lastCreation) ? this.lastCreation : live[live.length - 1];
+    if (!id) return this.say('Bring something to life first (palm up -> Bring to life), then Make it a game.');
+    objects.highlight({ creationId: id });
+    // a short, visible "looking" moment while it measures (and adds it to the Play Kit)
+    this.panel.status = "I'm looking at your creation…";
+    this.go('thinking');
+    const [kitId] = await Promise.all([this.kit.kitIdOfItem(`c:${id}`), new Promise((r) => setTimeout(r, 900))]);
+    const item = this.kit.kitItems().find((k) => k.id === kitId);
+    if (!item) {
+      this.panel.view = this.history.pop() ?? 'games';
+      return this.say('I could not see that creation: touch it, then press Make it a game again.');
+    }
+    const look = lookAt(item.name, item.stats, objects.creationById(id)?.parts ?? item.data.creation.parts);
+    const answer: GameAnswer = {
+      path: 'template', note: 'Made from your creation', templateId: null, spec: look.spec,
+      preview: { name: look.spec.name, howToPlay: look.spec.howToPlay.slice(0, 4), missing: [] }, cannot: [], adjustments: [], sources: [], guessed: false,
+    };
+    this.panel.view = this.history.pop() ?? 'games';
+    await this.askGame({}, undefined, answer, { [look.role]: item.id }, look);
   }
 
   // ---------- Point + Say ----------
@@ -520,6 +566,13 @@ export class GameAgentSystem extends createSystem({}) {
       this.step(k as keyof RuleNumbers, Number(d));
     } else if (id === 'preview:play') this.playGame();
     else if (id === 'preview:demo') this.playGame(undefined, true);
+    else if (id === 'preview:explain' && p.answer) {
+      const spec = this.specOf(p.answer);
+      if (spec) {
+        p.explained = explain(spec, p.uses);
+        this.go('explain');
+      }
+    }
     else if (id === 'preview:adjust' && p.answer) {
       const spec = this.specOf(p.answer);
       if (spec) {
@@ -563,6 +616,10 @@ export class GameAgentSystem extends createSystem({}) {
     m.scale.setScalar(xr ? XR_TEXT_SCALE : 0.5);
     m.position.copy(at).addScaledVector(toEye, xr ? 0.12 : narrow ? 0.16 : 0.14);
     m.position.y += xr ? 0.16 : 0.07;
+    if (this.kit.scoreboardUp) {
+      // the game's scoreboard stands right of the play area: keep clear of it (no overlapping panels)
+      m.position.addScaledVector(this.side.set(-toEye.z, 0, toEye.x), xr ? 0.15 : 0.07);
+    }
     m.lookAt(eye);
     const k = this.keypad.mesh;
     k.scale.setScalar(xr ? XR_TEXT_SCALE : 0.5);
@@ -577,13 +634,11 @@ export class GameAgentSystem extends createSystem({}) {
     if (now - this.openedAt > IDLE_CLOSE_MS && !this.busy && !this.keypad.mesh.visible) return this.close();
     this.place();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const tip = h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null;
       if (this.keypad.mesh.visible) {
-        const k = this.keypad.poke(tip, now);
+        const k = this.keypad.pokeHands(input.both, now);
         if (k) this.keypadPress(k);
       } else {
-        const id = this.panel.poke(tip, now);
+        const id = this.panel.pokeHands(input.both, now);
         if (id) this.press(id);
       }
     }

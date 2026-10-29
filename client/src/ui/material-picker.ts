@@ -75,7 +75,6 @@ export class MaterialPickerSystem extends createSystem({}) {
   private openedAt = 0;
   private ray = new Raycaster();
   private ndc = new Vector2();
-  private tip = new Vector3();
   private v = new Vector3();
 
   init(): void {
@@ -185,8 +184,7 @@ export class MaterialPickerSystem extends createSystem({}) {
     }
     this.place(at.position, at.radius, false);
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const id = this.panel.poke(h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, now);
+      const id = this.panel.pokeHands(input.both, now);
       if (id) this.pick(id);
     }
     this.panel.draw();

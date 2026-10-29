@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { iwsdkDev } from '@iwsdk/vite-plugin-dev';
 import { defineConfig, Plugin } from 'vite';
@@ -43,10 +44,42 @@ function lucideSubset(): Plugin {
   };
 }
 
-export default defineConfig({
+/**
+ * IWSDK fetches the hand models from cdn.jsdelivr.net. The two generic-hand models ship with the app
+ * (public/input-profiles, MIT, @webxr-input-profiles/assets 1.0.20), so the release needs no outside
+ * host (V6, R2). Controller models, which ClayMind does not use, still come from the CDN.
+ */
+function localHands(): Plugin {
+  const adapter = /[\\/]@iwsdk[\\/]xr-input[\\/]dist[\\/]visual[\\/]adapter[\\/]base-visual-adapter\.js/;
+  const from = '`${DEFAULT_PROFILES_PATH}/${profileId}/';
+  return {
+    name: 'claymind-local-hands',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!adapter.test(id.split('?')[0]) || !code.includes(from)) return null;
+      return code.replace(from, "`${profileId === 'generic-hand' ? './input-profiles' : DEFAULT_PROFILES_PATH}/${profileId}/");
+    },
+  };
+}
+
+/** Build id shown in Settings -> About (V6 gap 4): the commit and the build date, so a report names the exact build. */
+function buildId(): string {
+  let sha = (process.env.GITHUB_SHA ?? '').slice(0, 7);
+  if (!sha) {
+    try {
+      sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      sha = 'local';
+    }
+  }
+  return `${sha} ${new Date().toISOString().slice(0, 10)}`;
+}
+
+export default defineConfig(({ command }) => ({
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
   // IWSDK_HTTP=1 serves plain HTTP (localhost is still a secure context) for
   // tools that cannot accept the self-signed dev certificate.
-  plugins: [claymindPhysicsRuntime(), lucideSubset(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
+  plugins: [claymindPhysicsRuntime(), lucideSubset(), localHands(), iwsdkDev(process.env.IWSDK_HTTP === '1' ? { https: false } : {})],
   server: {
     host: '0.0.0.0',
     port: 8081,
@@ -62,7 +95,9 @@ export default defineConfig({
   },
   // workers are bundled separately: they need the runtime swap too
   worker: { format: 'es', plugins: () => [claymindPhysicsRuntime()] },
-  esbuild: { target: 'esnext' },
+  // the release logs nothing for debugging (V6 section 7): console.log / info / debug calls are dropped
+  // from the build (warnings and errors stay); the dev server keeps them
+  esbuild: { target: 'esnext', ...(command === 'build' ? { pure: ['console.log', 'console.info', 'console.debug'] } : {}) },
   // @drawcall/uikitml otherwise pulls a second three/@pmndrs/uikit graph
   // (three@0.185 vs app super-three@0.181). Duplicate Component classes break
   // instanceof checks → "Only pmndrs/uikit components can be added as children".
@@ -87,4 +122,4 @@ export default defineConfig({
   },
   publicDir: 'public',
   base: './',
-});
+}));

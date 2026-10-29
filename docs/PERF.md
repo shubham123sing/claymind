@@ -99,3 +99,23 @@ What changed: the XR emulator (IWER) is no longer injected into the release buil
 loaded a room file from unpkg); the UIKitML icon set is cut to the two icons the welcome card uses
 (`src/ui/lucide-subset.ts`, about 4.2 MB raw). Local cold start (headless Chromium on the dev laptop,
 vite preview): page ready 0.4 s, app ready 5.2 s; not measured on a Quest or a throttled network.
+
+## V6 Stage C (2026-10-28): headroom estimate without a Quest
+
+Release build, Chromium headless with the IWER emulator in VR, hands scripted; CPU slowed with
+DevTools throttling (`QA_THROTTLE=1 ... throttle`, `qa/e2e/throttle.spec.ts`). **A desktop estimate,
+not a Quest measurement.** The emulator itself runs at about 50 fps here even unthrottled.
+
+| CPU | fps idle | fps while sculpting | clay worker p90 / round trip | draw calls / triangles | governor |
+|---|---|---|---|---|---|
+| 1x | 51 | 52 | 4.8 ms / 5 ms | 130 / 34k | low (the emulator's ~50 fps is under its 55 fps line) |
+| 4x | 13 | 22 | 3.1 ms / 36 ms | 132 / 34k | low |
+| 6x | 13 | 13 | 3.0 ms / 67 ms | 132 / 34k | low |
+
+- **Frame-rate governor (new):** below about 55 fps for 3 s it steps quality down (XR fixed foveation
+  0.3 -> 0.7 -> 1, breakage pieces 24 -> 12 -> 6, desktop pixel ratio 2 -> 1.5 -> 1); after 10 s
+  under 14.5 ms a frame it steps back up. **Performance mode** in Settings pins the low level. The clay
+  worker still lowers its own grid resolution when strokes get slow (none were needed here: the
+  worker stays fast, the main thread is what slows down).
+- **Risk:** about 130 draw calls with the room, the clay chunks and the panels. Quest Browser is often
+  draw-call bound around 100-200; merging idle clay chunks (IDEAS.md) is the next step if a Quest shows it.

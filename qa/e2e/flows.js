@@ -155,11 +155,11 @@
     if (qa.region('close')) await qa.panelPress('close');
     // paint on the surface: Paint -> Paint tool, pinch-draw on the clay
     // paint in a different colour than the piece (the same colour would leave no mark)
-    await menuPath('paintg', 'color');
+    await menuPath('matcol', 'color');
     const other = qa.regions('s').filter((r) => /^s\d+$/.test(r) && r !== sw && r !== 's0')[1];
     if (other) await qa.panelPress(other);
     if (qa.region('close')) await qa.panelPress('close');
-    m = await menuPath('paintg', 'paint');
+    m = await menuPath('matcol', 'paint');
     const sum0 = clayColorSum();
     await stroke([0.3, 0.7, 1], [0.03, 0, 0]);
     await qa.frames(20);

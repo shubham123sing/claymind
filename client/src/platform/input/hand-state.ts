@@ -7,6 +7,9 @@ import type { Handedness } from '../../core/event-bus.js';
 
 export type Vec3 = [number, number, number];
 
+/** The XR rig's height offset (m, V6 gap 2: seated height). Hand poses read from XR get it added, as the camera does through the rig. */
+export const xrOrigin = { y: 0 };
+
 export interface HandState {
   readonly side: Handedness;
   tracked: boolean;

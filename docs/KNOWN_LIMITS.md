@@ -301,5 +301,38 @@ Other findings:
 ## V6 Stage A (2026-10-28)
 - **Backend until 11 Dec:** one Render free web service (agent + room relay). A GitHub Actions job pings its health check every 10 minutes so it stays awake (744 of the 750 free hours a month); GitHub can delay scheduled runs and pauses them after 60 days without commits. The game never waits on it: game cards fall back to their built-in rules at once, the agent panel says "waking up" (4 s health checks, retried with growing gaps). Free model quotas (about 1,000 requests a day per model) are spent only after the built-in Rule Cards and the answer cache.
 - **No emulator in the release build:** the XR emulator and its unpkg room file are gone from the production build; tests add the emulator themselves (`qa/e2e/iwer.ts`). The desktop page is a mouse preview; there is no "try in an emulator" mode for judges without a headset.
-- **Hand models still load from jsdelivr** (IWSDK's generic hand models) until they are self-hosted.
+- ~~Hand models still load from jsdelivr~~ Since Stage B the two generic hand models ship with the app (`client/public/input-profiles`, MIT); only controller models, which ClayMind does not use, would still come from the CDN.
 - **Brand names:** the game shows generic names only (Block tower, Roll-ball ramp, Throwing pins); branded requests are understood through aliases and answered with the generic game; a server filter rewrites brand names in agent output; tests scan every built-in text.
+
+## V6 Stage B (2026-10-28)
+- **Make it a game from one creation** chooses from three shapes only (small and round -> the ball; open and hollow -> the cup; anything else -> the target to knock over), from measured size, fill and mass. It does not recognise what the creation depicts (a "car" is a target). The optional vision check and the LLM are not used on this path, so it works offline and instantly.
+- **A heavy creation may not fall** to a light ball: a hit scores 1 so a first game always has a score moment; the scripted run scored 3 without a win. Repeated touches can score more than once (a 1 s cooldown per pair).
+- **The success card** appears when the first game ends (win, loss or out of throws); leaving the game early leaves the card on its "Play!" step until Skip.
+- Not verified on a real Quest: the card's reach and text size, the one-tap buttons and the palm menu's small icons (2.9 cm) are emulator-checked only.
+
+## V6 Stage C (2026-10-28)
+- **No Quest test yet** (no device). Poke intent, grab radius, hover glow, sounds and text sizes are tuned in the emulator with scripted hands; how they feel on a real headset is unknown. `docs/QUEST_TEST.md` is ready for the first borrowed Quest.
+- **Noisy hands:** with 1 cm of tracking noise a menu press occasionally lands on the wrong button (1 in 18 in our runs) or is missed; with hands dropping out of tracking about half the presses need a second try. Nothing breaks, sticks or is lost (e2e step r).
+- **A creation resting inside the clay** (dropped onto the lump) takes a pinch there before the clay does; move it aside to sculpt. Library "Use" and recalled creations now land beside the clay, not in it.
+- ~~Panels still cannot be grabbed and moved~~ Since gap 1 a grab bar above each panel moves it (headset only). ~~No seated-height calibration~~ Since gap 2 the view adapts (see below).
+- **Multiplayer is BETA.** A lost connection rejoins the same room (three tries in about 15 s); if the room closed meanwhile, it says so. Rejoining takes a fresh copy of the table from the host. The room server is a free host that sleeps: the panel says when it is waking up.
+- **Autosave** keeps the clay and loose creations in this browser only (IndexedDB); clearing site data or a private window loses them. Not while in a multiplayer room.
+- **Performance governor** decisions come from desktop measurements; the 55 fps threshold and foveation levels are not tuned on a Quest. About 130 draw calls with the room: a risk on Quest.
+- **Scripted throw in a room** missed the blocks in 3 of 5 runs (both pages at about 22-25 fps; the release speed from the emulated hand varies). Alone it scores; real throws need a Quest.
+- The headset's own **Enter** button now opens **VR** (it opened mixed reality before); mixed reality stays on the second button.
+
+## V6 Stage D (2026-10-29)
+- **Daily challenge** goals are checked from simple measures (height, piece count, materials, release speed, game result); it does not judge what a creation looks like. The streak lives in this browser only. A "hard throw" (2 m/s) is tuned in the emulator, not on a Quest.
+- **Large text** makes panels bigger, not the palm menu's buttons (already about 3.6 cm).
+- **The live site is still V5** until the V6 branches are pushed and merged; the smoke test against it fails on purpose (unpkg, mixed reality default, no build id).
+
+## Gap 1: movable panels (2026-10-29)
+- In the headset a small bar sits above each panel: pinch it and drag; the panel stays where it is let go, relative to its own place (it still follows the clay), up to 60 cm away. Recenter puts every panel back. The browser keeps fixed panels. Moved places last for the session only.
+- A keypad moves with its panel. Pop-up cards (delete, download, confirm) have bars too but are short-lived.
+- Moved panels may overlap others if the player puts them there (the no-overlap check is for where the game places them).
+- Full e2e with this change: 68/70 (r2 "grabs again" and the g "shared clay pull" failed once each; r passed 8/8 in three other runs, and the g pull is the one that failed once before in Stage C). Not tried on a Quest.
+
+## Gap 2: seated height (2026-10-29)
+- On entering VR (after 1 s) and on Recenter, the player's rig is raised or lowered so the eyes are 45 cm above the virtual table (within 5 cm nothing changes; at most 60 cm). Table higher / lower nudge 3 cm and are saved. The table and everything on it stay where they are, so physics is untouched.
+- Not in mixed reality and not on a detected real table: the real room must line up.
+- The 45 cm is a desk-and-chair average, not measured on people; the e2e checks it with an emulated head only. Not tried on a Quest.

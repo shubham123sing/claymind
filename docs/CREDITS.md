@@ -11,3 +11,6 @@
 - Multiplayer avatars (head and hands) are original low-poly shapes made in code; snapshots are compressed with the browser's built-in CompressionStream.
 - three.js / IWSDK (Meta, MIT), Havok physics through IWSDK, Khronos glTF validator (tests only).
 - Everything in a GLB or kit download is the player's own creation; no third-party asset is included.
+- **Sounds** are all procedural (Web Audio oscillators and filtered noise made in code, no audio files): the clay squish while pulling, material impact sounds, and the UI sounds (grab pop, let-go, score ding, join chime, fanfare). Nothing to license.
+- **Hand models:** `client/public/input-profiles/generic-hand` (left.glb, right.glb) from `@webxr-input-profiles/assets` 1.0.20, MIT (licence file alongside).
+- **The VR room** (walls, window view, shelf, rug) is drawn in code; no textures or image files.

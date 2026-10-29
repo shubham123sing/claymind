@@ -5,7 +5,7 @@
  */
 import type { World } from '@iwsdk/core';
 import type { Handedness } from '../../core/event-bus.js';
-import type { HandState, InputProvider, Vec3 } from './hand-state.js';
+import { xrOrigin, type HandState, type InputProvider, type Vec3 } from './hand-state.js';
 import { OneEuroFilter3 } from './one-euro.js';
 import { PinchDetector } from './pinch-detector.js';
 
@@ -13,6 +13,57 @@ const TIPS = ['index-finger-tip', 'middle-finger-tip', 'ring-finger-tip', 'pinky
 /** A teleport larger than this between frames is treated as a tracking glitch. */
 const MAX_JUMP = 0.12;
 export const HAND_BETA = 4;
+
+/**
+ * QA only (set from the test driver): disturb the tracked hands like a bad tracking day (V6, section 6).
+ * `jitter`: the whole hand wanders up to this far (m), to a new random offset every `wobbleMs` (0 = a
+ * new offset every frame: white noise, much harsher than real tracking); `jointJitter`: each joint moves
+ * on its own up to this far every frame (the pinch distance gets noisy); `dropEvery` / `dropFor` (ms
+ * ranges): the hand vanishes now and then. All zero = off, the normal path.
+ */
+export const handNoise = {
+  jitter: 0,
+  wobbleMs: 100,
+  jointJitter: 0,
+  dropEvery: [0, 0] as [number, number],
+  dropFor: [0, 0] as [number, number],
+  /** Force a hand out of tracking until this time (ms), e.g. mid-grab. */
+  dropUntil: { left: 0, right: 0 } as Record<Handedness, number>,
+  drops: 0,
+  next: { left: 0, right: 0 } as Record<Handedness, number>,
+};
+
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+/** The whole-hand offset (QA noise): eases toward a new random target every wobbleMs. */
+const wobble: Record<Handedness, { at: number; from: number[]; to: number[]; now: number[] }> = {
+  left: { at: 0, from: [0, 0, 0], to: [0, 0, 0], now: [0, 0, 0] },
+  right: { at: 0, from: [0, 0, 0], to: [0, 0, 0], now: [0, 0, 0] },
+};
+function handOffset(side: Handedness, t: number): number[] {
+  const n = handNoise, w = wobble[side], j = n.jitter;
+  if (!n.wobbleMs) return (w.now = [rand(-j, j), rand(-j, j), rand(-j, j)]);
+  if (t - w.at > n.wobbleMs) {
+    w.at = t;
+    w.from = w.now;
+    w.to = [rand(-j, j), rand(-j, j), rand(-j, j)];
+  }
+  const k = Math.min(1, (t - w.at) / n.wobbleMs), e = k * k * (3 - 2 * k);
+  return (w.now = w.from.map((v, i) => v + (w.to[i] - v) * e));
+}
+
+/** A dropped-out hand this frame (QA noise)? Schedules the next dropout. */
+function droppedOut(side: Handedness, now: number): boolean {
+  const n = handNoise;
+  if (now < n.dropUntil[side]) return true;
+  if (!n.dropEvery[1]) return false;
+  if (!n.next[side]) n.next[side] = now + rand(n.dropEvery[0], n.dropEvery[1]);
+  if (now < n.next[side]) return false;
+  n.dropUntil[side] = now + rand(n.dropFor[0], n.dropFor[1]);
+  n.next[side] = n.dropUntil[side] + rand(n.dropEvery[0], n.dropEvery[1]);
+  n.drops++;
+  return true;
+}
 
 interface HandFilters {
   pinch: PinchDetector;
@@ -54,6 +105,7 @@ export class XrHandsProvider implements InputProvider {
       for (const source of this.world.session.inputSources) {
         const side = source.handedness as Handedness;
         if (!source.hand || (side !== 'left' && side !== 'right')) continue;
+        if (droppedOut(side, performance.now())) continue;
         if (this.read(source.hand, frame, ref, hands[side], dt)) this.seen[side] = true;
       }
     }
@@ -74,10 +126,24 @@ export class XrHandsProvider implements InputProvider {
   }
 
   private read(hand: XRHand, frame: XRFrame, ref: XRReferenceSpace, h: HandState, dt: number): boolean {
-    const pose = (name: XRHandJoint) => {
+    const raw = (name: XRHandJoint) => {
       const space = hand.get(name);
       return space ? frame.getJointPose?.(space, ref) ?? null : null;
     };
+    const n = handNoise;
+    const pose = n.jitter > 0 || n.jointJitter > 0 || xrOrigin.y !== 0
+      ? (() => {
+        const noisy = n.jitter > 0 || n.jointJitter > 0;
+        const [ox, oy0, oz] = noisy ? handOffset(h.side, performance.now()) : [0, 0, 0], j = noisy ? n.jointJitter : 0;
+        const oy = oy0 + xrOrigin.y; // the rig's seated-height offset (the camera gets it through the rig)
+        return (name: XRHandJoint) => {
+          const p = raw(name);
+          if (!p) return null;
+          const q = p.transform.position;
+          return { transform: { position: { x: q.x + ox + rand(-j, j), y: q.y + oy + rand(-j, j), z: q.z + oz + rand(-j, j) } } };
+        };
+      })()
+      : raw;
     const wrist = pose('wrist'), thumb = pose('thumb-tip'), index = pose('index-finger-tip');
     const idxMeta = pose('index-finger-metacarpal'), pinkyMeta = pose('pinky-finger-metacarpal');
     const midProx = pose('middle-finger-phalanx-proximal');

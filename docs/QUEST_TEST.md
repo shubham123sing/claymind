@@ -1,4 +1,8 @@
-# Quest test checklist (Phase 10)
+# Quest test checklist (Phase 10, updated V6 Stage C)
+
+> **Status (2026-10-28): no Quest has been available yet.** Nothing in ClayMind is verified on a real
+> headset; every number in `docs/PERF.md` comes from a desktop browser with the XR emulator. Fill this
+> in the first time a Quest (even a Quest 2) can be borrowed, then fix the top three problems.
 
 What only a real Quest 3 / 3S can tell us. About 20 minutes. Open the public
 link in **Quest Browser** with `?debug` at the end (shows the frame-time HUD;
@@ -7,8 +11,8 @@ press nothing else), sitting at a real table.
 Write down for each line: OK / problem (what you saw).
 
 ## 1. Start (first five minutes)
-- [ ] The page loads; "Start in mixed reality" enters passthrough.
-- [ ] The clay lump sits on your **real table** (not floating, not inside it).
+- [ ] The page loads; **Enter VR** opens the studio room (the headset's own Enter button does the same).
+- [ ] Mixed reality (second button) shows your room; the clay lump sits on your **real table** (not floating, not inside it).
 - [ ] The tutorial card appears above the clay and is easy to read.
 - [ ] Follow it to the end. Time shown at the end: ______ (target: under 2 minutes).
 
@@ -17,6 +21,10 @@ Write down for each line: OK / problem (what you saw).
 - [ ] Point a finger into it: it dents. Open palm on it: it smooths.
 - [ ] Left palm up: the menu opens; poking buttons with the right index works every time.
 - [ ] Colour picker and material ring: pokes select the right button.
+- [ ] Poke intent (V6): brushing past a panel or reaching through it from the side presses nothing; a deliberate push from the front always works. Count misses in 20 presses: ____
+- [ ] A hand near an object makes it glow faintly (it can be grabbed); a grab pops and flashes.
+- [ ] Hide one hand behind your back while holding an object: it is let go, nothing sticks.
+- [ ] Frame rate in the `?debug` HUD while sculpting: ____ fps. Did "Keeping it smooth" appear?
 
 ## 3. Physics
 - [ ] Bring to life: the object flies to your right hand. Turn the hand over: it drops.

@@ -130,7 +130,6 @@ export class LibrarySystem extends createSystem({}) {
   private armedAt = -Infinity;
   private ray = new Raycaster();
   private ndc = new Vector2();
-  private tip = new Vector3();
   private v = new Vector3();
   private at = new Vector3();
   private toEye = new Vector3();
@@ -407,8 +406,7 @@ export class LibrarySystem extends createSystem({}) {
     if (now - this.openedAt > IDLE_CLOSE_MS) return this.close();
     this.place();
     if (input.xr) {
-      const h = input.hands.right.tracked ? input.hands.right : input.hands.left;
-      const id = this.panel.poke(h.tracked ? this.tip.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, now);
+      const id = this.panel.pokeHands(input.both, now);
       if (id) this.press(id);
     }
     this.panel.draw();
