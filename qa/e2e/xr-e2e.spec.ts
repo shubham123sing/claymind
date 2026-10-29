@@ -153,7 +153,7 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
     const [sa, sb] = [await sync(A), await sync(B)];
     record('B', 'g', 'shared clay: A pulls, B sees the same clay', sa.seq > 0 && sa.seq === sb.seq && sa.sum === sb.sum, `edits applied A ${sa.seq}, B ${sb.seq}; checksums ${sa.sum === sb.sum ? 'equal' : `differ (${sa.sum} / ${sb.sum})`}; B volume ${before} -> ${vb.rawVolume} cm3 (a pull moves clay, it adds little)`);
     await shot(B, 'B', 'g-shared-clay');
-    // play one turn: the host starts Knock-down, throws one ball; B mirrors it
+    // play one turn: the host starts Knock-down and throws (up to the turn's 3 shots); B mirrors it
     const started = await A.evaluate(() => (window as any).qaFlows.startKnockDown());
     await B.evaluate(() => (window as any).qa.frames(60));
     const mirror = await B.evaluate(() => ({ mirror: (window as any).__sys.playkit.mirror, game: (window as any).__sys.playkit.gameName }));
