@@ -16,7 +16,7 @@ import { withEmulator } from './iwer';
 
 const STAMP = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 const OUT = join(__dirname, '..', 'recordings', `${process.env.QA_LABEL ?? 'run'}-${STAMP}`);
-const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,x,g').split(',');
+const ONLY = (process.env.QA_STEPS ?? 'h,a,b,c,d,e,f,r,x,m,g').split(',');
 const BACKEND = 'http://127.0.0.1:8790';
 
 interface StepResult { step: string; name: string; pass: boolean; detail: string; at: number; shot?: string; fps?: number; page: string }
@@ -106,6 +106,7 @@ test('ClayMind by hand, recorded', async ({ browser }) => {
   if (ONLY.includes('f')) await flow(A, 'A', 'f', 'playGame');
   if (ONLY.includes('r')) await flow(A, 'A', 'r', 'robust');
   if (ONLY.includes('x')) await flow(A, 'A', 'x', 'extras');
+  if (ONLY.includes('m')) await flow(A, 'A', 'm', 'panelMove');
   if (ONLY.includes('e')) {
     // the backend off: every call to it fails, as when the server is down
     await A.route(`${BACKEND}/**`, (r) => r.abort());

@@ -21,12 +21,13 @@ Quest** (no device).
 - **Captions:** the app does not speak; all messages are on-screen text.
 - **Comfort:** no artificial locomotion, no camera motion, an opaque VR room by default (mixed reality
   optional); Recenter (Bring to life -> Recenter) puts the clay back in front of you.
+- **Movable panels** (gap 1): pinch the small bar above any panel and drag it where it is easier to
+  reach (up to 60 cm from its place); Recenter puts every panel back.
 - **Performance mode** (Settings): simpler effects for a steadier frame rate.
 - **Autosave:** a crash or a closed page loses nothing.
 
 ## Not supported (honest)
 - No seated-height calibration: the table height is fixed.
-- Panels cannot be grabbed and moved; they follow the clay.
 - No controller fallback, no voice, no switch access, no screen reader.
 - Colour-blind palettes for the clay colours themselves are not offered (the player chooses colours).
 - Text size, reach and target size are not checked on a real headset.

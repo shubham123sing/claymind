@@ -6,6 +6,7 @@
   const qa = window.qa, w = window, F = w.qaFlows;
   const sys = () => w.__sys;
   const dev = () => w.IWER_DEVICE;
+  const V = () => w.__world.camera.position.constructor; // the app's Vector3
   const r3 = (x) => Math.round(x * 1000) / 1000;
 
   // ---------- objects: grab, carry, throw ----------
@@ -707,5 +708,55 @@
     return out;
   }
 
-  Object.assign(F, { robust, extras, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
+  // ---------- m. movable panels (V6 gap 1): pinch a panel's grab bar, drag, poke it where it is ----------
+
+  async function panelMove() {
+    const out = [], set = sys().settings, mv = sys().panels, V3 = V();
+    if (sys().playkit.playMode !== 'off' && qa.region('hud:end')) await qa.panelPress('hud:end');
+    await F.menuPath('settings');
+    await qa.frames(15);
+    const pn = set.panel, bar = mv.bars.get(pn)?.mesh;
+    const sum0 = await sys().sculpt.sculptClient.checksum();
+    const p0 = pn.mesh.getWorldPosition(new V3()).toArray();
+    let ok = false;
+    if (bar?.visible) {
+      const b = bar.getWorldPosition(new V3()), eye = w.__world.camera.getWorldPosition(new V3());
+      const toEye = eye.clone().sub(b).normalize();
+      await qa.moveTo('right', b.clone().addScaledVector(toEye, 0.08).toArray(), 'pinch', 0.03);
+      await qa.pinchAt('right', b.toArray());
+      await qa.frames(4);
+      ok = mv.drag?.panel === pn;
+      // drag 15 cm to the player's left and 5 cm up, slowly, then let go
+      const side = new V3(toEye.z, 0, -toEye.x).normalize();
+      const h = dev().hands.right;
+      for (let i = 0; i < 20; i++) {
+        h.position.set(h.position.x + side.x * 0.0075, h.position.y + 0.0025, h.position.z + side.z * 0.0075);
+        await qa.frames(1);
+      }
+      await qa.frames(6);
+      await qa.pinch('right', false);
+      await qa.rest('right');
+    }
+    await qa.frames(10);
+    const p1 = pn.mesh.getWorldPosition(new V3()).toArray(), d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+    const sum1 = await sys().sculpt.sculptClient.checksum();
+    out.push({ name: 'm1. pinch the grab bar and drag: Settings moves about 15 cm and stays; the clay is not touched', pass: ok && d > 0.1 && d < 0.25 && pn.moved.length() > 0.1 && sum1 === sum0 && !mv.drag, detail: `grabbed ${ok}, moved ${d.toFixed(3)} m, clay ${sum1 === sum0 ? 'same' : 'changed'}` });
+    // poke a button on the panel where it is now
+    const a = await qa.panelPress('about');
+    await qa.frames(10);
+    out.push({ name: 'm2. a button on the moved panel works by poke', pass: a.ok && pn.page === 'about', detail: `page ${pn.page}` });
+    await qa.panelPress('close');
+    await qa.frames(10);
+    // it opens again where it was left; Recenter puts it back
+    await F.menuPath('settings');
+    await qa.frames(10);
+    const p2 = pn.mesh.getWorldPosition(new V3()).toArray(), kept = pn.moved.length() > 0.1;
+    await qa.panelPress('close');
+    await F.menuPath('physics', 'recenter');
+    await qa.frames(10);
+    out.push({ name: 'm3. it opens again where it was moved; Recenter puts every panel back', pass: kept && pn.moved.length() === 0, detail: `reopened at ${p2.map((v) => v.toFixed(2))}, after Recenter moved ${pn.moved.length().toFixed(3)}` });
+    return out;
+  }
+
+  Object.assign(F, { robust, extras, panelMove, throwAt, scoreOf, openPlayKit, obj, grab, swing, waitFor, physicsPush, bringToLife, libraryAndKit, openGameAgent, waitAnswer, backToGames, gameFromCard, pointAt, typeOnKeypad, describeGame, gameOffline, hud, playGame, roomCreate, roomJoin, startKnockDown, throwOne, firstFive });
 })();

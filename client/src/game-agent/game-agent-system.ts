@@ -67,6 +67,8 @@ export class GameAgentSystem extends createSystem({}) {
   private lastCreation: string | null = null;
 
   init(): void {
+    // the keypads stay under the panel when the player moves it (gap 1)
+    this.keypad.follows = this.panel;
     for (const [m, order] of [[this.panel.mesh, 24], [this.keypad.mesh, 26]] as const) {
       m.visible = false;
       m.renderOrder = order;

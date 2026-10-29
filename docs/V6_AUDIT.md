@@ -129,3 +129,11 @@ Evidence: scripted emulated hands (IWER), release build; not a real Quest. Full 
   unpkg, offers mixed reality, no build id), because none of the V6 branches are on GitHub yet.
 - **Evidence:** full e2e 64/66 (x2 was a test bug, fixed and re-run with f,x: 10/10; the room throw
   is the known flaky one); unit tests 157; smoke 4/4 locally.
+
+## Gap 1: movable panels (2026-10-29)
+- `PanelMoverSystem` (after the panels are placed, before objects and sculpting): a grab bar above each
+  panel; a pinch on it is claimed ('panel'), so it never sculpts or grabs. `CanvasPanel.applyMove()`
+  puts the panel at its owner's place plus the player's offset, also right before a poke, so buttons
+  work where the panel is. Recenter clears every offset.
+- e2e step m: drag Settings 16 cm (clay untouched), poke About on it there, reopen where it was
+  left, Recenter back: 5/5. Full run 68/70 (see KNOWN_LIMITS).

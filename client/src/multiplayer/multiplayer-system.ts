@@ -40,6 +40,9 @@ export class MultiplayerSystem extends createSystem({}) {
   private attempt = 0;
 
   init(): void {
+    // the keypads stay under the panel when the player moves it (gap 1)
+    this.keypad.follows = this.panel;
+    this.codePad.follows = this.panel;
     this.panel.name = savedName();
     this.codePad.upper = true;
     this.codePad.max = 5;

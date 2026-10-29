@@ -27,6 +27,18 @@ export abstract class CanvasPanel {
   private dirty = true;
   /** Poke intent per hand (and one for a bare fingertip point), see PokeGate. */
   private gates = { left: new PokeGate(), right: new PokeGate(), tip: new PokeGate() };
+  /** Gap 1: the player can move it by its grab bar (PanelMoverSystem); `moved` is how far (world m) from where its owner puts it. */
+  movable = true;
+  readonly moved = new Vector3();
+  /** Moves with this panel instead of on its own (a keypad under its panel). */
+  follows: CanvasPanel | null = null;
+  /** Set each frame by PanelMoverSystem: the eye (moved panels face it) and whether moving is on (headset). */
+  static readonly eye = new Vector3();
+  static moving = false;
+  /** Where its owner put it (local to the parent) and where it was left after moving. */
+  private base = new Vector3();
+  private left = new Vector3(NaN, 0, 0);
+  private moveV = new Vector3();
   private local = new Vector3();
   private uv = new Vector2();
   private tipV = new Vector3();
@@ -65,6 +77,7 @@ export abstract class CanvasPanel {
 
   /** XR: returns the region id pressed this frame by a fingertip crossing the panel (with intent, see PokeGate). */
   poke(tip: Vector3 | null, now: number): string | null {
+    this.applyMove();
     const r = this.sample(tip, this.gates.tip, now, false);
     this.setHover(r.hover);
     return r.pressed;
@@ -75,6 +88,7 @@ export abstract class CanvasPanel {
    * (it is grabbing or sculpting). Returns the region pressed this frame.
    */
   pokeHands(hands: readonly HandState[], now: number): string | null {
+    this.applyMove(); // a poke must meet the panel where the player moved it
     let hover: string | null = null, pressed: string | null = null;
     for (const h of hands) {
       const r = this.sample(h.tracked ? this.tipV.set(h.indexTip[0], h.indexTip[1], h.indexTip[2]) : null, this.gates[h.side], now, h.pinching);
@@ -83,6 +97,31 @@ export abstract class CanvasPanel {
     }
     this.setHover(hover);
     return pressed;
+  }
+
+  /**
+   * Put the panel where the player moved it: its owner's place plus `moved` (or its leader's), facing
+   * the eye. Safe to call more than once a frame: a position its owner did not set again keeps the base.
+   */
+  applyMove(): void {
+    const m = this.mesh;
+    if (!m.position.equals(this.left)) this.base.copy(m.position);
+    const moved = (this.follows ?? this).moved;
+    if (this.movable && CanvasPanel.moving && moved.lengthSq() > 0) {
+      const w = this.moveV.copy(this.base);
+      if (m.parent) m.parent.localToWorld(w);
+      w.add(moved);
+      if (m.parent) m.parent.worldToLocal(w);
+      m.position.copy(w);
+      m.lookAt(CanvasPanel.eye);
+      m.updateMatrixWorld();
+    } else m.position.copy(this.base);
+    this.left.copy(m.position);
+  }
+
+  /** Hidden: the next place its owner sets is the new base. */
+  forgetPlace(): void {
+    this.left.set(NaN, 0, 0);
   }
 
   private sample(tip: Vector3 | null, gate: PokeGate, now: number, blocked: boolean): { hover: string | null; pressed: string | null } {

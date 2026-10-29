@@ -43,5 +43,5 @@ supported).
 "make it a game" works from shape and size, not from what a creation depicts
 (`docs/KNOWN_LIMITS.md`).
 
-**Next.** Testing on Quest hardware, panels you can grab and move, seated-height calibration, and
+**Next.** Testing on Quest hardware, seated-height calibration, and
 sharing creations between players' Libraries.

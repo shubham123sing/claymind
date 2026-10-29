@@ -17,6 +17,7 @@ import { DownloadSystem } from './ui/download-dialog.js';
 import { SceneActionsSystem } from './ui/scene-actions.js';
 import { AutosaveSystem } from './storage/autosave-system.js';
 import { DailyChallengeSystem } from './ui/daily-challenge-system.js';
+import { PanelMoverSystem } from './ui/panel-mover.js';
 import { ColorPickerSystem } from './ui/color-picker.js';
 import { LibrarySystem } from './ui/library.js';
 import { PlayKitSystem } from './playkit/playkit-system.js';
@@ -56,6 +57,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
     world.registerSystem(SettingsSystem);
     world.registerSystem(TextEntrySystem); // the pinch keypad for names (hands only)
     world.registerSystem(TutorialSystem);
+    world.registerSystem(PanelMoverSystem); // grab bars: after the panels are placed, before objects and sculpting take a pinch
     world.registerSystem(ObjectSystem);
     world.registerSystem(ImpactSystem);
     world.registerSystem(SculptSystem);
@@ -69,7 +71,7 @@ World.create(document.getElementById('scene-container') as HTMLDivElement, proje
       Object.assign(window, {
         __sys: {
           sculpt: world.getSystem(SculptSystem), objects: world.getSystem(ObjectSystem), library: world.getSystem(LibrarySystem), playkit: world.getSystem(PlayKitSystem), gameAgent: world.getSystem(GameAgentSystem), pointSay: world.getSystem(PointSaySystem), multiplayer: world.getSystem(MultiplayerSystem),
-          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem),
+          coach: world.getSystem(TutorialSystem), settings: world.getSystem(SettingsSystem), autosave: world.getSystem(AutosaveSystem), daily: world.getSystem(DailyChallengeSystem), panels: world.getSystem(PanelMoverSystem),
         },
       });
     }

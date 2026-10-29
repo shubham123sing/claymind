@@ -314,7 +314,7 @@ Other findings:
 - **No Quest test yet** (no device). Poke intent, grab radius, hover glow, sounds and text sizes are tuned in the emulator with scripted hands; how they feel on a real headset is unknown. `docs/QUEST_TEST.md` is ready for the first borrowed Quest.
 - **Noisy hands:** with 1 cm of tracking noise a menu press occasionally lands on the wrong button (1 in 18 in our runs) or is missed; with hands dropping out of tracking about half the presses need a second try. Nothing breaks, sticks or is lost (e2e step r).
 - **A creation resting inside the clay** (dropped onto the lump) takes a pinch there before the clay does; move it aside to sculpt. Library "Use" and recalled creations now land beside the clay, not in it.
-- **Panels still cannot be grabbed and moved**; they follow the clay. No seated-height calibration (the virtual table is 0.72 m high).
+- ~~Panels still cannot be grabbed and moved~~ Since gap 1 a grab bar above each panel moves it (headset only). No seated-height calibration (the virtual table is 0.72 m high).
 - **Multiplayer is BETA.** A lost connection rejoins the same room (three tries in about 15 s); if the room closed meanwhile, it says so. Rejoining takes a fresh copy of the table from the host. The room server is a free host that sleeps: the panel says when it is waking up.
 - **Autosave** keeps the clay and loose creations in this browser only (IndexedDB); clearing site data or a private window loses them. Not while in a multiplayer room.
 - **Performance governor** decisions come from desktop measurements; the 55 fps threshold and foveation levels are not tuned on a Quest. About 130 draw calls with the room: a risk on Quest.
@@ -325,3 +325,9 @@ Other findings:
 - **Daily challenge** goals are checked from simple measures (height, piece count, materials, release speed, game result); it does not judge what a creation looks like. The streak lives in this browser only. A "hard throw" (2 m/s) is tuned in the emulator, not on a Quest.
 - **Large text** makes panels bigger, not the palm menu's buttons (already about 3.6 cm).
 - **The live site is still V5** until the V6 branches are pushed and merged; the smoke test against it fails on purpose (unpkg, mixed reality default, no build id).
+
+## Gap 1: movable panels (2026-10-29)
+- In the headset a small bar sits above each panel: pinch it and drag; the panel stays where it is let go, relative to its own place (it still follows the clay), up to 60 cm away. Recenter puts every panel back. The browser keeps fixed panels. Moved places last for the session only.
+- A keypad moves with its panel. Pop-up cards (delete, download, confirm) have bars too but are short-lived.
+- Moved panels may overlap others if the player puts them there (the no-overlap check is for where the game places them).
+- Full e2e with this change: 68/70 (r2 "grabs again" and the g "shared clay pull" failed once each; r passed 8/8 in three other runs, and the g pull is the one that failed once before in Stage C). Not tried on a Quest.
