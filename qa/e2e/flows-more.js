@@ -350,7 +350,20 @@
       await swing('right', R.map((v, i) => v - u[i] * 0.2), 0.012);
       await qa.sleep(250);
       await swing('right', R.map((v, i) => v + u[i] * 0.1), s, 0.2 / 0.3);
-    } else await swing('right', [aim[0], aim[1] + 0.05, aim[2]], speed, 0.6);
+    } else {
+      // straight at the targets, as a player throws: draw back, pause, then a full swing that lets go late. A hand
+      // that jumps from rest to full speed and lets go after 2-3 frames reads as half the speed at a low frame
+      // rate (the game takes the fastest ~40 ms, which then spans a still frame): 1.1 m/s balls from 2.5 m/s
+      const R = obj(ball).p, to = [aim[0], aim[1] + 0.05, aim[2]];
+      const d = Math.hypot(to[0] - R[0], to[1] - R[1], to[2] - R[2]), u = to.map((v, i) => (v - R[i]) / d);
+      await swing('right', R.map((v, i) => v - u[i] * 0.2), 0.012);
+      await qa.sleep(250);
+      let rel = null;
+      const off = w.__bus.on('toy:released', (e) => (rel = e));
+      await swing('right', R.map((v, i) => v + u[i] * 0.15), speed, 0.3 / 0.35);
+      off?.();
+      console.info(`[throwAt] from ${R.map((v) => v.toFixed(2))} aim ${aim.map((v) => v.toFixed(2))} hand ${speed} m/s, ball ${rel?.v ? Math.hypot(...rel.v).toFixed(2) : '?'} m/s ${JSON.stringify(rel?.v?.map((v) => +v.toFixed(2)))}, fps ${w.__quality.fps}`);
+    }
     await qa.rest('right');
     return true;
   }
@@ -421,20 +434,27 @@
     return p.ok && sys().playkit.playMode === 'play';
   }
 
+  /** One turn of Knock-down: up to its 3 shots, as a player takes them, until a block falls. */
   async function throwOne() {
     const pk = sys().playkit;
-    const ball = pk.pieces.find((p) => p.role === 'ball')?.toyId;
+    const balls = pk.pieces.filter((p) => p.role === 'ball').map((p) => p.toyId);
     const targets = pk.pieces.filter((p) => p.role === 'block').map((p) => obj(p.toyId)?.p).filter(Boolean);
-    if (!ball || !targets.length) return false;
+    if (!balls.length || !targets.length) return false;
     const aim = [0, 1, 2].map((i) => targets.reduce((s, t) => s + t[i], 0) / targets.length);
-    let rel = null;
-    const off = w.__bus.on('toy:released', (e) => (rel = e));
-    const b0 = obj(ball)?.p;
-    const ok = await throwAt(ball, aim);
-    await qa.frames(180);
-    off?.();
-    console.info(`[throwOne] ball ${b0?.map((v) => v.toFixed(2))} -> ${obj(ball)?.p.map((v) => v.toFixed(2))}, aim ${aim.map((v) => v.toFixed(2))}, release ${JSON.stringify(rel)}, fps ${w.__quality.fps}`);
-    return ok;
+    const h0 = scoreOf(hud().lines);
+    let thrown = 0;
+    for (const [k, ball] of balls.slice(0, 3).entries()) {
+      let rel = null;
+      const off = w.__bus.on('toy:released', (e) => (rel = e));
+      const b0 = obj(ball)?.p;
+      const ok = await throwAt(ball, aim, false, [2.5, 2.8, 2.2][k]);
+      await qa.frames(180);
+      off?.();
+      console.info(`[throwOne] ball ${b0?.map((v) => v.toFixed(2))} -> ${obj(ball)?.p.map((v) => v.toFixed(2))}, aim ${aim.map((v) => v.toFixed(2))}, release ${JSON.stringify(rel)}, fps ${w.__quality.fps}`);
+      if (ok) thrown++;
+      if (scoreOf(hud().lines) > h0) break;
+    }
+    return thrown > 0;
   }
 
   // ---------- h. first five minutes (V6, 4.1): the card on first launch, hands only ----------
